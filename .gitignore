@@ -1,0 +1,25 @@
+# Ignore anything that ends with .pkl
+
+```bash
+*.pdb
+*.ckpt
+*.yaml
+*.pkl
+*.pyc
+*.out
+*.log
+*.pickle
+*.json
+*.sh
+*.mol
+*.pth
+*.pt
+*.sdf
+*.mol2
+wandb*
+*L_sidechain*
+*pdbbind*
+*.png
+*.csv
+*.npz
+```
