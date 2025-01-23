@@ -18,12 +18,12 @@ from pytorch_lightning.callbacks import (
     ModelSummary,
     TQDMProgressBar,
 )
-from uaag.data.uaag_dataset import UAAG2DataModule, UAAG2Dataset, Dataset_Info
+from uaag.data.uaag_dataset import UAAG2DataModule, UAAG2Dataset, UAAG2Dataset_sampling, Dataset_Info
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 
 from uaag.callbacks.ema import ExponentialMovingAverage
 from uaag.equivariant_diffusion import Trainer
-
+from uaag.utils import load_data, load_model
 from pytorch_lightning.plugins.environments import LightningEnvironment
 
 warnings.filterwarnings(
@@ -43,11 +43,20 @@ def main(hparams):
         save_last=True,
     )
     lr_logger = LearningRateMonitor()
-    wandb_logger = WandbLogger(log_model="all")
+    wandb_logger = WandbLogger(
+        log_model="all",
+        project="uaag2",
+        name=f"run{hparams.id}",
+        )
     tb_logger = TensorBoardLogger(
             hparams.save_dir + f"/run{hparams.id}/", default_hp_metric=False
         )
-    
+    if hparams.logger_type == "wandb":
+        logger = wandb_logger
+    elif hparams.logger_type == "tensorboard":
+        logger = tb_logger
+    else:
+        raise ValueError("Logger type not recognized")
     
     root_pdb_path = "/home/qcx679/hantang/UAAG2/data/full_graph/data"
     pdb_list = os.listdir(root_pdb_path)
@@ -57,21 +66,24 @@ def main(hparams):
     naa_list = os.listdir(root_naa_path)
     naa_list = [os.path.join(root_naa_path, naa) for naa in naa_list]
     
-    pdbbind_path = "/home/qcx679/hantang/UAAG2/data/full_graph/pdbbind/pdbbind_data.pt"
+    pdbbind_path = "/home/qcx679/hantang/UAAG2/data/full_graph/pdbbind/pdbbind_data_adj.pt"
     
     # combine three parts of the data
     data = []
-    for pdb in pdb_list[:40]:
+    for pdb in pdb_list[:10]:
         data.append(pdb)
     for naa in naa_list:
         data.append(naa)
     # data.append(pdbbind_path)
     
+    train_data, val_data, test_data = load_data(hparams, data, pdb_list[:10])
     
     
     print("Loading DataModule")
-    dataset = UAAG2Dataset(data)
-    datamodule = UAAG2DataModule(hparams, dataset)
+    train_data = UAAG2Dataset(train_data)
+    val_data = UAAG2Dataset(val_data)
+    test_data = UAAG2Dataset_sampling(test_data)
+    datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data)
     
     dataset_info = Dataset_Info(hparams.data_info_path)
     
@@ -101,7 +113,7 @@ def main(hparams):
         strategy=strategy,
         plugins=LightningEnvironment(),
         num_nodes=1,
-        logger=wandb_logger,
+        logger=logger,
         enable_checkpointing=True,
         accumulate_grad_batches=hparams.accum_batch,
         val_check_interval=hparams.eval_freq,
@@ -144,9 +156,13 @@ def main(hparams):
 
 
 if __name__ == "__main__":
+    
     DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "3DcoordsAtomsBonds_0")
     parser = ArgumentParser()
     # parser = add_arguments(parser)
+    
+    parser.add_argument("--logger-type", default="wandb", type=str)
+    
     parser.add_argument('--dataset', type=str, default='drugs')
     
     parser.add_argument('--data_info_path', type=str, default="/home/qcx679/hantang/UAAG2/data/full_graph/statistic.pkl")
@@ -169,9 +185,9 @@ if __name__ == "__main__":
     parser.add_argument("--use-adaptive-loader", default=True, action="store_true")
     parser.add_argument("--remove-hs", default=False, action="store_true")
     parser.add_argument("--select-train-subset", default=False, action="store_true")
-    parser.add_argument("--train-size", default=0.8, type=float)
-    parser.add_argument("--val-size", default=0.1, type=float)
-    parser.add_argument("--test-size", default=0.1, type=float)
+    parser.add_argument("--train-size", default=0.99, type=float)
+    parser.add_argument("--val-size", default=0.01, type=float)
+    parser.add_argument("--test-size", default=40, type=int)
 
     parser.add_argument("--dropout-prob", default=0.3, type=float)
 
@@ -349,7 +365,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-test-graphs", default=10000, type=int)
     parser.add_argument("--calculate-energy", default=False, action="store_true")
     parser.add_argument("--save-xyz", default=False, action="store_true")
-
+    parser.add_argument("--variational-sampling", default=False)
     
     args = parser.parse_args()
     

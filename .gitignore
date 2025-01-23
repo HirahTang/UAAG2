@@ -18,6 +18,7 @@
 *.mol2
 wandb*
 *L_sidechain*
+*3DcoordsAtomsBonds*
 *pdbbind*
 *.png
 *.csv

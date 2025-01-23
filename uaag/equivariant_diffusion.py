@@ -57,7 +57,7 @@ class Trainer(pl.LightningModule):
         self.dataset_info = dataset_info
         self.prop_norm = prop_norm
         self.prop_dist = prop_dist
-        # from IPython import embed; embed()
+        
         atom_types_distribution = dataset_info.atom_types.float()
         bond_types_distribution = dataset_info.bond_types.float()
         charge_types_distribution = dataset_info.charge_types.float()
@@ -111,7 +111,7 @@ class Trainer(pl.LightningModule):
             #     if i < num_params // 2:
             #         param.requires_grad = False
         else:
-            # from IPython import embed; embed()
+            
             self.model = DenoisingEdgeNetwork(
                 hn_dim=(hparams.sdim, hparams.vdim),
                 num_layers=hparams.num_layers,
@@ -320,7 +320,7 @@ class Trainer(pl.LightningModule):
         )
     
     def step_fnc(self, batch, batch_idx, stage):
-        
+
         batch_size = int(batch.batch.max()) + 1
         
         t = torch.randint(
@@ -399,7 +399,7 @@ class Trainer(pl.LightningModule):
             "hybridization": hybridization_pred,
             "degree": degree_pred,
         }
-        # from IPython import embed; embed()
+
         loss = self.diffusion_loss(
             pred_data=pred_data,
             true_data=true_data,
@@ -586,7 +586,7 @@ class Trainer(pl.LightningModule):
         )
         
         
-        # from IPython import embed; embed()
+
         out = self.model(
             x=atom_feats_in_perturbed,
             t=temb,
@@ -601,7 +601,7 @@ class Trainer(pl.LightningModule):
             edge_mask=batch.edge_ligand.long(),
             batch_lig=batch.batch[pocket_mask==0],
         )
-        # from IPython import embed; embed()
+
         
         
         out["coords_perturbed"] = pos_perturbed[ligand_mask==1]
@@ -624,23 +624,25 @@ class Trainer(pl.LightningModule):
         out["degree_true"] = degree_feat.argmax(dim=-1)
         out["bond_aggregation_index"] = bond_edge_index[1][batch.edge_ligand==1]
         out['edge_batch'] = batch.batch[bond_edge_index[0]][batch.edge_ligand==1]
-        # from IPython import embed; embed()
+
         return out
     
-    # def on_validation_epoch_end(self):
-        
-    #     final_res = self.run_evaluation(
-    #         step=self.i,
-    #             device="cuda" if self.hparams.gpus > 1 else "cpu",
-    #             dataset_info=self.dataset_info,
-    #             ngraphs=64,
-    #             bs=self.hparams.inference_batch_size,
-    #             verbose=True,
-    #             inner_verbose=False,
-    #             eta_ddim=1.0,
-    #             ddpm=True,
-    #             every_k_step=1,
-    #     )
+    def on_validation_epoch_end(self):
+        if (self.current_epoch + 1) % self.hparams.test_interval == 0:
+            if self.local_rank == 0:
+                print(f"Running evaluation in epoch {self.current_epoch + 1}")
+            final_res = self.run_evaluation(
+                step=self.i,
+                device="cuda" if self.hparams.gpus > 1 else "cpu",
+                dataset_info=self.dataset_info,
+                ngraphs=64,
+                bs=self.hparams.inference_batch_size,
+                verbose=True,
+                inner_verbose=False,
+                eta_ddim=1.0,
+                ddpm=True,
+                every_k_step=1,
+            )
            
          
     
@@ -658,76 +660,74 @@ class Trainer(pl.LightningModule):
     # ):
     #     pass
     
-    # @torch.no_grad()
-    # def run_evaluation(
-    #     self,
-    #     step: int,
-    #     dataset_info,
-    #     ngraphs: int = 4000,
-    #     bs: int = 500,
-    #     save_dir: str = None,
-    #     return_molecules: bool = False,
-    #     verbose: bool = False,
-    #     inner_verbose=False,
-    #     ddpm: bool = True,
-    #     eta_ddim: float = 1.0,
-    #     every_k_step: int = 1,
-    #     run_test_eval: bool = False,
-    #     save_traj: bool = False,
-    #     device: str = "cpu",
-    #     **kwargs,
-    # ):
-    #     b = ngraphs // bs
-    #     l = [bs] * b
-    #     if sum(l) != ngraphs:
-    #         l.append(ngraphs - sum(l))
-    #     assert sum(l) == ngraphs
+    @torch.no_grad()
+    def run_evaluation(
+        self,
+        step: int,
+        dataset_info,
+        ngraphs: int = 4000,
+        bs: int = 500,
+        save_dir: str = None,
+        return_molecules: bool = False,
+        verbose: bool = False,
+        inner_verbose=False,
+        ddpm: bool = True,
+        eta_ddim: float = 1.0,
+        every_k_step: int = 1,
+        run_test_eval: bool = False,
+        save_traj: bool = False,
+        device: str = "cpu",
+        **kwargs,
+    ):
+        dataloader = self.trainer.datamodule.test_dataloader()
         
-    #     molecule_list = []
-    #     start = datetime.now()
+        molecule_list = []
+        start = datetime.now()
         
-    #     if verbose:
-    #         if self.local_rank == 0:
-    #             print(f"Creating {ngraphs} graphs in {l} batches")
+        for i, batch in enumerate(dataloader):
+            
+            num_graphs = len(batch.batch.bincount())
+            if not self.hparams.variational_sampling:
+                num_nodes_lig = batch.ligand_size
+            else:
+                # TODO: Implement sampling from empirical distribution
+                # Sampling from empirical distribution, not implemented yet
+                num_nodes_lig = torch.randint(
+                    low=dataset_info.min_num_nodes,
+                    high=dataset_info.max_num_nodes + 1,
+                    size=(num_graphs,),
+                )
                 
-    #     for _, num_graphs in enumerate(l):
-    #         (
-    #             pos_splits,
-    #             atom_types_integer_split,
-    #             charge_types_integer_split,
-    #             aromatic_feat_integer_split,
-    #             hybridization_feat_integer_split,
-    #             edge_types,
-    #             edge_index_global,
-    #             batch_num_nodes,
-    #             trajs,
-    #             context_split,
-    #         ) = self.generate_graphs(
-    #             num_graphs=num_graphs,
-    #             verbose=inner_verbose,
-    #             device=self.device,
-    #             empirical_distribution_num_nodes=self.empirical_num_nodes,
-    #             save_traj=save_traj,
-    #             ddpm=ddpm,
-    #             eta_ddim=eta_ddim,
-    #             every_k_step=every_k_step,
-    #         )
-    
-    
-    # def reverse_sampling(
-    #     self, 
-    #     num_graphs: int,
-    #     empirical_distribution_num_nodes: Tensor,
-    #     device: torch.device,
-    #     verbose: bool = False,
-    #     save_traj: bool = False,
-    #     ddpm: bool = True,
-    #     eta_ddim: float = 1.0,
-    #     every_k_step: int = 1,
-    #     ):
-    #     pass
-    
-    
+            molecules = self.reverse_sampling(
+                batch=batch,
+                num_graphs=num_graphs,
+                empirical_distribution_num_nodes=num_nodes_lig,
+                device=device,
+                verbose=verbose,
+                save_traj=save_traj,
+                ddpm=ddpm,
+                eta_ddim=eta_ddim,
+                every_k_step=every_k_step,
+            )
+    def reverse_sampling(
+        self, 
+        batch,
+        num_graphs: int,
+        empirical_distribution_num_nodes: Tensor,
+        device: torch.device,
+        verbose: bool = False,
+        save_traj: bool = False,
+        ddpm: bool = True,
+        eta_ddim: float = 1.0,
+        every_k_step: int = 1,
+        ):
+        from IPython import embed; embed()
+        # implement empirical_distribution_num_nodes of ligand node (randomly initiated)
+        # back to the graph, with fully connected edges
+        
+        
+        
+        
     def configure_optimizers(self):
         if self.hparams.optimizer == "adam":
             optimizer = torch.optim.AdamW(

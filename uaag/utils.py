@@ -16,7 +16,40 @@ from torch_geometric.utils.num_nodes import maybe_num_nodes
 from torch_geometric.utils.sort_edge_index import sort_edge_index
 from torch_geometric.utils.subgraph import subgraph
 from torch_scatter import scatter_add, scatter_mean
+from tqdm import tqdm
 # from torch_sparse import coalesces
+
+def load_data(hparams, data_path: list, pdb_list: list) -> Data:
+    data = []
+    pdb_list = []
+    for file in tqdm(data_path):
+        print(f"Loading {file} \n")
+        data_file = torch.load(file)
+        data.extend(data_file)
+    
+    for file in tqdm(pdb_list):
+        print(f"Loading {file} \n")
+        pdb_file = torch.load(file)
+        pdb_list.extend(pdb_file)
+    
+    # randomly split data into train, val, test
+    np.random.seed(hparams.seed)
+    np.random.shuffle(data)
+    np.random.shuffle(pdb_list)
+    num_data = len(data)
+    num_train = math.floor(num_data * hparams.train_size)
+    num_val = math.floor(num_data * hparams.val_size)
+    num_test = hparams.test_size
+    
+    train_data = data[:num_train]
+    val_data = data[num_train:]
+    test_data = pdb_list[:num_test]
+    
+    # test_data = data[:num_test]
+    # val_data = data[num_test:num_test + num_val]
+    # train_data = data[num_test + num_val:]
+    
+    return train_data, val_data, test_data
 
 def create_model(hparams, num_atom_features, num_bond_classes):
     from e3moldiffusion.coordsatomsbonds import DenoisingEdgeNetwork

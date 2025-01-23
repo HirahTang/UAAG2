@@ -1,3 +1,4 @@
+from operator import is_
 from os.path import join
 from typing import Optional
 import sys
@@ -25,24 +26,25 @@ import pickle
 class UAAG2Dataset(torch.utils.data.Dataset):
     def __init__(
         self, 
-        root,
+        data,
     ):
         super(UAAG2Dataset, self).__init__()
         # self.statistics = Statistic()
-        self.root = root
-        self.data = []
-        self.load_dataset()
+
+        self.data = data
+        # self.load_dataset()
         self.charge_emb = {
             -1: 0,
             0: 1,
             1: 2,
         }
-    def load_dataset(self):
-        for file in tqdm(self.root):
-            print(f"Loading {file} \n")
-            data_file = torch.load(file)
-            self.data.extend(data_file)
-        self.data
+    # def load_dataset(self):
+    #     for file in tqdm(self.root):
+    #         print(f"Loading {file} \n")
+    #         data_file = torch.load(file)
+    #         self.data.extend(data_file)
+    #     self.data
+        
     def __len__(self):
         return len(self.data)
     
@@ -57,6 +59,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         pos = pos - pocket_mean
         batch.pos = pos
         return batch
+    
     def __getitem__(self, idx):
         
         # TODO zero center the positions by the mean of the pocket atoms
@@ -68,14 +71,14 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         # if graph_data.edge_ligand
         
         # check if graph_data.edge_ligand exists
-        if not hasattr(graph_data, 'componud_id'):
-            graph_data.componud_id = graph_data.compound_id
-        if not hasattr(graph_data, 'edge_ligand'):
-            graph_data.edge_ligand = torch.ones(graph_data.edge_attr.size(0))
         if not hasattr(graph_data, 'compound_id'):
             graph_data.compound_id = graph_data.componud_id
+        if not hasattr(graph_data, 'edge_ligand'):
+            graph_data.edge_ligand = torch.ones(graph_data.edge_attr.size(0))
+        # if not hasattr(graph_data, 'compound_id'):
+        #     graph_data.compound_id = graph_data.componud_id
         if not hasattr(graph_data, 'id'):
-            graph_data.id = graph_data.componud_id
+            graph_data.id = graph_data.compound_id
         graph_data.x = graph_data.x.float()
         graph_data.pos = graph_data.pos.float()
         graph_data.edge_attr = graph_data.edge_attr.float()
@@ -84,7 +87,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         
         charges_np = graph_data.charges.numpy()
         mapped_np = np.vectorize(self.charge_emb.get)(charges_np)
-        graph_data.charges = torch.from_numpy(mapped_np)
+        charges = torch.from_numpy(mapped_np)
         
         
         # graph_data.charges = graph_data.charges.long()
@@ -105,8 +108,8 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             pos=graph_data.pos,
             edge_index=graph_data.edge_index,
             edge_attr=graph_data.edge_attr,
-            edge_ligand = graph_data.edge_ligand,
-            charges=graph_data.charges,
+            edge_ligand = graph_data.edge_ligand.float(),
+            charges=charges,
             degree=graph_data.degree,
             is_aromatic=graph_data.is_aromatic,
             is_in_ring=graph_data.is_in_ring,
@@ -117,41 +120,188 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         )
         
         return batch_graph_data
+
+
+class UAAG2Dataset_sampling(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        data,
+        fix_size=False,
+        sample_size: int = 10,
+    ):
+        super(UAAG2Dataset_sampling, self).__init__()
+        # self.statistics = Statistic()
+
+        self.fix_size = fix_size
+        self.sample_size = sample_size
+        
+        self.data = data
+        # self.load_dataset()
+        self.charge_emb = {
+            -1: 0,
+            0: 1,
+            1: 2,
+        }
+        
+    def __len__(self):
+        return len(self.data)
+    
+    def pocket_centering(self, batch):
+        # graph_data = self.data[idx]
+        pos = batch.pos
+        if batch.is_ligand.sum() == len(batch.is_ligand):
+            pocket_mean = pos.mean(dim=0)
+        else:
+            pocket_pos = batch.pos[batch.is_ligand==0]
+            pocket_mean = pocket_pos.mean(dim=0)
+        pos = pos - pocket_mean
+        batch.pos = pos
+        return batch
+    
+    def __getitem__(self, idx):
+        graph_data = self.data[idx]
+        graph_data = self.pocket_centering(graph_data)
+        #. aligning dtype
+        
+        # if graph_data.edge_ligand
+        
+        # check if graph_data.edge_ligand exists
+        # if not hasattr(graph_data, 'componud_id'):
+        #     graph_data.componud_id = graph_data.compound_id
+        if not hasattr(graph_data, 'edge_ligand'):
+            graph_data.edge_ligand = torch.ones(graph_data.edge_attr.size(0))
+        if not hasattr(graph_data, 'compound_id'):
+            graph_data.compound_id = graph_data.componud_id
+        if not hasattr(graph_data, 'id'):
+            graph_data.id = graph_data.compound_id
+        graph_data.x = graph_data.x.float()
+        graph_data.pos = graph_data.pos.float()
+        graph_data.edge_attr = graph_data.edge_attr.float()
+        graph_data.edge_index = graph_data.edge_index.long()
+        # from IPython import embed; embed()
+        
+        charges_np = graph_data.charges.numpy()
+        mapped_np = np.vectorize(self.charge_emb.get)(charges_np)
+        charges = torch.from_numpy(mapped_np)
         
         
+        # graph_data.charges = graph_data.charges.long()
+        # graph_data.charges = torch.tensor(self.charge_emb[i] for i in graph_data.charges).float()
+        # map the value of charges by {-1: 0, 0: 1, 1: 2}
+        
+        
+        
+        graph_data.degree = graph_data.degree.float()
+        graph_data.is_aromatic = graph_data.is_aromatic.float()
+        graph_data.is_in_ring = graph_data.is_in_ring.float()
+        graph_data.hybridization = graph_data.hybridization.float()
+        graph_data.is_backbone = graph_data.is_backbone.float()
+        graph_data.is_ligand = graph_data.is_ligand.float()
+        
+        batch_graph_data = Data(
+            x=graph_data.x,
+            pos=graph_data.pos,
+            edge_index=graph_data.edge_index,
+            edge_attr=graph_data.edge_attr,
+            edge_ligand = graph_data.edge_ligand.float(),
+            charges=charges,
+            degree=graph_data.degree,
+            is_aromatic=graph_data.is_aromatic,
+            is_in_ring=graph_data.is_in_ring,
+            hybridization=graph_data.hybridization,
+            is_backbone=graph_data.is_backbone,
+            is_ligand=graph_data.is_ligand,
+            id=graph_data.compound_id,
+        )
+        
+        # convert batch_graph_data to remove the non-pocket information
+        
+        is_pocket = 1 - batch_graph_data.is_ligand + batch_graph_data.is_backbone
+        is_reconstruct = 1 - is_pocket
+        ids = torch.tensor(range(len(batch_graph_data.x)))
+        new_ids = ids[is_pocket==1]
+        
+        map_ids = {int(new_ids[i]): i for i in range(len(new_ids))}
+        map_keys = torch.tensor(list(map_ids.keys()))
+        map_values = torch.tensor(list(map_ids.values()))
+        
+        start_in_index = torch.isin(batch_graph_data.edge_index[0], new_ids)
+        end_in_index = torch.isin(batch_graph_data.edge_index[1], new_ids)
+        edge_mask = start_in_index & end_in_index
+        edge_index = batch_graph_data.edge_index[:, edge_mask]
+        
+        new_edge_index = torch.stack([
+            map_values[(edge_index[0].unsqueeze(-1)==map_keys).nonzero(as_tuple=True)[1]],
+            map_values[(edge_index[1].unsqueeze(-1)==map_keys).nonzero(as_tuple=True)[1]],
+        ])
+        new_edge_attr = batch_graph_data.edge_attr[edge_mask]
+        new_edge_ligand = batch_graph_data.edge_ligand[edge_mask]
+        new_x = batch_graph_data.x[is_pocket==1]
+        new_pos = batch_graph_data.pos[is_pocket==1]
+        new_charges = batch_graph_data.charges[is_pocket==1]
+        new_degree = batch_graph_data.degree[is_pocket==1]
+        new_is_aromatic = batch_graph_data.is_aromatic[is_pocket==1]
+        new_is_in_ring = batch_graph_data.is_in_ring[is_pocket==1]
+        new_hybridization = batch_graph_data.hybridization[is_pocket==1]
+        
+        # Adding prior noise to the graph
+        
+        
+        
+        graph_ligand_removed = Data(
+            x=new_x.float(),
+            pos=new_pos.float(),
+            edge_index=new_edge_index.long(),
+            edge_attr=new_edge_attr.float(),
+            edge_ligand = new_edge_ligand.float(),
+            charges=new_charges.float(),
+            degree=new_degree.float(),
+            is_aromatic=new_is_aromatic.float(),
+            is_in_ring=new_is_in_ring.float(),
+            hybridization=new_hybridization.float(),
+            is_backbone=graph_data.is_backbone[is_pocket==1].float(),
+            is_ligand=graph_data.is_ligand[is_pocket==1].float(),
+            ligand_size=torch.tensor(len(batch_graph_data.x[is_pocket==0])).long(),
+            id=graph_data.compound_id,
+        )
+
+        return graph_ligand_removed
+    
 class UAAG2DataModule(pl.LightningDataModule):
-    def __init__(self, cfg, dataset, **kwargs):
+    def __init__(self, cfg, train_data, val_data, test_data, **kwargs):
         super().__init__()
         self.kwargs = kwargs
         self.cfg = cfg
-        self.dataset = dataset
         # split into train, val, test with test & valid consisting 2000 samples each
         # self._log_hyperparams = True
         self.pin_memory = True
+        self.train_data = train_data
+        self.val_data = val_data
+        self.test_data = test_data
         # self.setup(stage='fit')
         
     # def prepare_data(self):
     #     pass
+    
+    # def load_dataset(self):
+    #     for file in tqdm(self.root):
+    #         print(f"Loading {file} \n")
+    #         data_file = torch.load(file)
+    #         self.data.extend(data_file)
+        # self.data
+    
     
     def setup(self, stage):
         
         # TODO
         # Construct the dictionary & distributions for the dataset
         
-        full_length = len(self.dataset)
-        random_idx = torch.randperm(full_length)
-        valid_idx = random_idx[:2000]
-        test_idx = random_idx[2000:4000]
-        train_idx = random_idx[40:]
-        self.train_dataset = Subset(self.dataset, train_idx)
-        self.val_dataset = Subset(self.dataset, valid_idx)
-        self.test_dataset = Subset(self.dataset, test_idx)
-        self.pred_dataset = Subset(self.dataset, valid_idx)
+        full_length = len(self.train_data) + len(self.val_data) + len(self.test_data)
+        
 
     def train_dataloader(self, shuffle=True):
-        shuffle = False
         dataloader = DataLoader(
-            dataset=self.train_dataset,
+            dataset=self.train_data,
             batch_size=self.cfg.batch_size,
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
@@ -162,7 +312,7 @@ class UAAG2DataModule(pl.LightningDataModule):
     
     def val_dataloader(self):
         dataloader = DataLoader(
-            dataset=self.val_dataset,
+            dataset=self.val_data,
             batch_size=self.cfg.batch_size,
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
@@ -173,7 +323,7 @@ class UAAG2DataModule(pl.LightningDataModule):
     
     def test_dataloader(self):
         dataloader = DataLoader(
-            dataset=self.test_dataset,
+            dataset=self.test_data,
             batch_size=self.cfg.batch_size,
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,

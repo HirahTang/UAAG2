@@ -12,12 +12,16 @@ import torch.nn.functional as F
 from torch_geometric.data import Data
 from IPython import embed
 import pickle
+
 atom_encoder = {
     "C": 0,
     "N": 1,
     "O": 2,
     "S": 3,
     "P": 4,
+    "Cl": 5,
+    "F": 6,
+    "Br": 7,
 }
 
 hybridization_encoder = {
@@ -33,7 +37,18 @@ bond_encoder = {
     'SINGLE': 1,
     'DOUBLE': 2,
     'AROMATIC': 3,
+    "TRIPLE": 4,
 }
+
+charge_encoder = {
+  -1, 0, 1
+}
+
+degree_set = {
+    0, 1, 2, 3, 4
+}
+
+
 bond_aromatic_encoder = {}
 
 def dictionary_to_data(data, compound_id, radius=8):
@@ -43,7 +58,8 @@ def dictionary_to_data(data, compound_id, radius=8):
     ligand_bonds = ligand[1]
     pocket_atoms = pocket[0]
     pocket_bonds = pocket[1]
-    
+    if len(ligand_atoms) <= 4:
+        return None
     num_atoms = len(ligand_atoms) + len(pocket_atoms)
     
     all_ids = [ligand_atoms[i]['idx'] for i in range(len(ligand_atoms))] + [pocket_atoms[i]['idx'] for i in range(len(pocket_atoms))]
@@ -64,6 +80,7 @@ def dictionary_to_data(data, compound_id, radius=8):
     
     
     backbone_count = 0
+    
     for atom in ligand_atoms:
         new_id = id_mapping[atom['idx']]
         atom_types[new_id] = atom_encoder[atom['Atoms']]
@@ -81,13 +98,17 @@ def dictionary_to_data(data, compound_id, radius=8):
             is_backbone[new_id] = 0
         
         # construct full connected edge_index for ligand
+
     ligand_idx = [id_mapping[atom['idx']] for atom in ligand_atoms]
     edge_index = []
+    edge_ligand = []
     for i in range(len(ligand_idx)):
         for j in range(i+1, len(ligand_idx)):
             edge_index.append([ligand_idx[i], ligand_idx[j]])
             edge_index.append([ligand_idx[j], ligand_idx[i]])
-                
+            edge_ligand.append(1)
+            edge_ligand.append(1)
+
     for atom in pocket_atoms:
         new_id = id_mapping[atom['idx']]
         atom_types[new_id] = atom_encoder[atom['Atoms']]
@@ -99,7 +120,7 @@ def dictionary_to_data(data, compound_id, radius=8):
         position[new_id] = torch.tensor(atom['coords'])
         is_ligand[new_id] = 0
         is_backbone[new_id] = 0
-    
+        
     protein_atom_dict = {atom['idx']: atom for atom in pocket_atoms}
     # protein_idx = [atom['idx'] for atom in pocket_atoms]
     protein_atom_dict_keys = list(protein_atom_dict.keys())
@@ -112,43 +133,55 @@ def dictionary_to_data(data, compound_id, radius=8):
             if dist < radius:
                 edge_index.append([id_mapping[atom_i['idx']], id_mapping[atom_j['idx']]])
                 edge_index.append([id_mapping[atom_j['idx']], id_mapping[atom_i['idx']]])
+                edge_ligand.append(0)
+                edge_ligand.append(0)
+    
+    for i in range(len(ligand_idx)):
+        for j in range(len(protein_atom_dict_keys)):
+            atom_i = ligand_atoms[i]
+            atom_j = protein_atom_dict[protein_atom_dict_keys[j]]
+            edge_index.append([ligand_idx[i], id_mapping[atom_j['idx']]])
+            edge_index.append([id_mapping[atom_j['idx']], ligand_idx[i]])
+            edge_ligand.append(1)
+            edge_ligand.append(1)
+    
     edge_index = torch.tensor(edge_index).t().contiguous()
     edge_type = torch.zeros(edge_index.size(1))
-    edge_ligand = torch.zeros(edge_index.size(1))
-    
-    ligand_index = torch.where(is_ligand == 1)[0]
-    
-    for bond_idx in range(edge_index.size(1)):
-        idx_i = edge_index[0, bond_idx]
-        idx_j = edge_index[1, bond_idx]
-        
-        if idx_i in ligand_index and idx_j in ligand_index:
-            edge_ligand[bond_idx] = 1
-            
-        
+
+
+    ligand_bonds_dict = {}
     for atom_bond in ligand_bonds:
         idx_i = id_mapping[atom_bond[0][0]]
         idx_j = id_mapping[atom_bond[0][1]]
         bond_type = atom_bond[1]['Type']
-        # search for [id_i, idx_j] in edge_index
+        ligand_bonds_dict[(idx_i, idx_j)] = bond_type
         
-        for i in range(edge_index.size(1)):
-            if edge_index[0][i] == idx_i and edge_index[1][i] == idx_j:
-                edge_type[i] = bond_encoder[bond_type]
-            if edge_index[0][i] == idx_j and edge_index[1][i] == idx_i:
-                edge_type[i] = bond_encoder[bond_type]
-    
+    pocket_bonds_dict = {}
     for atom_bond in pocket_bonds:
         idx_i = id_mapping[atom_bond[0][0]]
         idx_j = id_mapping[atom_bond[0][1]]
         bond_type = atom_bond[1]['Type']
-        # search for [id_i, idx_j] in edge_index
-        
-        for i in range(edge_index.size(1)):
-            if edge_index[0][i] == idx_i and edge_index[1][i] == idx_j:
-                edge_type[i] = bond_encoder[bond_type]
-            if edge_index[0][i] == idx_j and edge_index[1][i] == idx_i:
-                edge_type[i] = bond_encoder[bond_type]
+        pocket_bonds_dict[(idx_i, idx_j)] = bond_type
+    
+    
+    # get edge_type
+
+    for i in range(edge_index.size(1)):
+        current_bond = (int(edge_index[0][i]), int(edge_index[1][i]))
+        current_bond_rev = (int(edge_index[1][i]), int(edge_index[0][i]))
+        if current_bond in ligand_bonds_dict or current_bond_rev in ligand_bonds_dict:
+            if current_bond in ligand_bonds_dict:
+                edge_type[i] = bond_encoder[ligand_bonds_dict[current_bond]]
+            elif current_bond_rev in ligand_bonds_dict:
+                edge_type[i] = bond_encoder[ligand_bonds_dict[current_bond_rev]]
+        elif current_bond in pocket_bonds_dict or current_bond_rev in pocket_bonds_dict:
+            if current_bond in pocket_bonds_dict:
+                edge_type[i] = bond_encoder[pocket_bonds_dict[current_bond]]
+            elif current_bond_rev in pocket_bonds_dict:
+                edge_type[i] = bond_encoder[pocket_bonds_dict[current_bond_rev]]
+        else:
+            continue
+
     
     compound_graph = Data(
         x=atom_types,
@@ -168,6 +201,7 @@ def dictionary_to_data(data, compound_id, radius=8):
         compound_id=compound_id,
         
     )
+    # embed()
     return compound_graph
     # save the compound graph
     # torch.save(compound_graph, f"/home/qcx679/hantang/UAAG2/data/full_graph/{compound_id}_test.pt")
@@ -199,17 +233,18 @@ def json_to_torch_geometric_data(args):
     # compound = data[compound_id_list[0]]
     # dictionary_to_data(compound)
     # split compound_id_list to 20 parts
-    new_compound_list = split_list(compound_id_list)
-    new_compound_list = new_compound_list[args.split_num]
-    for compound_id in tqdm(new_compound_list):
+    # new_compound_list = split_list(compound_id_list)
+    # new_compound_list = new_compound_list[args.split_num]
+    for compound_id in tqdm(compound_id_list):
         compound = data[compound_id]
         compound_graph = dictionary_to_data(compound, compound_id)
-        data_list.append(compound_graph)
+        if compound_graph is not None:
+            data_list.append(compound_graph)
         
         
     # save the data_list
     # embed()
-    torch.save(data_list, f"/home/qcx679/hantang/UAAG2/data/full_graph/data/{args.output_name}_{args.split_num}.pt")
+    torch.save(data_list, f"/home/qcx679/hantang/UAAG2/data/full_graph/data_2/{args.output_name}.pt")
 
 def main(args):
 

@@ -196,7 +196,7 @@ def loop_over_mol(mol2file, pdb_file):
         hybridization=torch.tensor(hybridization), 
         is_backbone=torch.tensor(is_backbone),
         is_ligand=torch.ones(len(x)),
-        componud_id=compound_id
+        compound_id=compound_id
         )
     # embed()
     return graph_data
