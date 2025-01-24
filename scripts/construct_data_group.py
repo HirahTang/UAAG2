@@ -142,8 +142,8 @@ def dictionary_to_data(data, compound_id, radius=8):
             atom_j = protein_atom_dict[protein_atom_dict_keys[j]]
             edge_index.append([ligand_idx[i], id_mapping[atom_j['idx']]])
             edge_index.append([id_mapping[atom_j['idx']], ligand_idx[i]])
-            edge_ligand.append(1)
-            edge_ligand.append(1)
+            edge_ligand.append(0)
+            edge_ligand.append(0)
     
     edge_index = torch.tensor(edge_index).t().contiguous()
     edge_type = torch.zeros(edge_index.size(1))

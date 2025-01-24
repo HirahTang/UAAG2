@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 def load_data(hparams, data_path: list, pdb_list: list) -> Data:
     data = []
-    pdb_list = []
+    pdb_list_readout = []
     for file in tqdm(data_path):
         print(f"Loading {file} \n")
         data_file = torch.load(file)
@@ -30,7 +30,7 @@ def load_data(hparams, data_path: list, pdb_list: list) -> Data:
     for file in tqdm(pdb_list):
         print(f"Loading {file} \n")
         pdb_file = torch.load(file)
-        pdb_list.extend(pdb_file)
+        pdb_list_readout.extend(pdb_file)
     
     # randomly split data into train, val, test
     np.random.seed(hparams.seed)
@@ -43,7 +43,7 @@ def load_data(hparams, data_path: list, pdb_list: list) -> Data:
     
     train_data = data[:num_train]
     val_data = data[num_train:]
-    test_data = pdb_list[:num_test]
+    test_data = pdb_list_readout[:num_test]
     
     # test_data = data[:num_test]
     # val_data = data[num_test:num_test + num_val]
@@ -105,6 +105,44 @@ def load_model(filepath, num_atom_features, num_bond_classes, device="cpu", **kw
 def zero_mean(x, batch, dim_size: int, dim=0):
     out = x - scatter_mean(x, index=batch, dim=dim, dim_size=dim_size)[batch]
     return out
+
+def initialize_edge_attrs_reverse(
+    edge_index_global, n, bonds_prior, num_bond_classes, device
+):
+    # edge types for FC graph
+    j, i = edge_index_global
+    mask = j < i
+    mask_i = i[mask]
+    mask_j = j[mask]
+    nE = len(mask_i)
+    edge_attr_triu = torch.multinomial(bonds_prior, num_samples=nE, replacement=True)
+    
+    j = torch.concat([mask_j, mask_i])
+    i = torch.concat([mask_i, mask_j])
+    edge_index_global = torch.stack([j, i], dim=0)
+    edge_attr_global = torch.concat([edge_attr_triu, edge_attr_triu], dim=0)
+    
+    edge_index_global, edge_attr_global = sort_edge_index(
+        edge_index=edge_index_global, edge_attr=edge_attr_global, sort_by_row=False
+    )
+    j, i = edge_index_global
+    mask = j < i
+    mask_i = i[mask]
+    mask_j = j[mask]
+
+    # some assert
+    # from IPython import embed; embed()
+    
+    # edge_attr_global_dense = torch.zeros(size=(n, n), device=device, dtype=torch.long)
+    # edge_attr_global_dense[
+    #     edge_index_global[0], edge_index_global[1]
+    # ] = edge_attr_global
+    # from IPython import embed; embed()
+    # assert (edge_attr_global_dense - edge_attr_global_dense.T).sum().float() == 0.0
+
+    edge_attr_global = F.one_hot(edge_attr_global, num_bond_classes).float()
+
+    return edge_attr_global, edge_index_global, mask, mask_i
 
 class Statistics:
     def __init__(

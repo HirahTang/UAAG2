@@ -1,3 +1,4 @@
+from calendar import c
 import logging
 from math import e
 import os
@@ -6,6 +7,7 @@ import json
 import pickle
 from platform import architecture
 from re import L, S
+import re
 import wandb
 import sys
 
@@ -24,7 +26,7 @@ from uaag.e3moldiffusion.coordsatomsbonds import DenoisingEdgeNetwork
 from uaag.diffusion.continuous import DiscreteDDPM
 
 from uaag.diffusion.categorical import CategoricalDiffusionKernel
-from uaag.utils import load_model
+from uaag.utils import load_model, initialize_edge_attrs_reverse
 
 from uaag.losses import DiffusionLoss
 
@@ -679,6 +681,7 @@ class Trainer(pl.LightningModule):
         device: str = "cpu",
         **kwargs,
     ):
+        
         dataloader = self.trainer.datamodule.test_dataloader()
         
         molecule_list = []
@@ -721,11 +724,112 @@ class Trainer(pl.LightningModule):
         eta_ddim: float = 1.0,
         every_k_step: int = 1,
         ):
-        from IPython import embed; embed()
+        # from IPython import embed; embed()
         # implement empirical_distribution_num_nodes of ligand node (randomly initiated)
         # back to the graph, with fully connected edges
+        batch = batch.to(device)
+        reconstruct_mask = batch.is_ligand - batch.is_backbone
+        
+        pos_ligand = batch.pos[reconstruct_mask==1]
+        
+        pos_noise = torch.randn_like(pos_ligand)
+        n = pos_ligand.size(0)
+        
+        compound_pos = batch.pos
+        compound_pos[reconstruct_mask==1] = pos_noise
+        
+        atom_types_noise = torch.multinomial(
+            self.atoms_prior, num_samples=n, replacement=True
+        ).to(self.device)
+        atom_types_ligand = batch.x[reconstruct_mask==1]
+        
+        compound_atom_types = batch.x.long().to(self.device)
+        # from IPython import embed; embed()
+        compound_atom_types[reconstruct_mask==1] = atom_types_noise
+        compound_atom_types = F.one_hot(compound_atom_types, num_classes=self.num_atom_types).float()
+        
+        charge_types_noise = torch.multinomial(
+            self.charges_prior, num_samples=n, replacement=True
+        ).to(self.device)
+        charge_types_ligand = batch.charges[reconstruct_mask==1]
+        
+        compound_charges = batch.charges.long().to(self.device)
+        compound_charges[reconstruct_mask==1] = charge_types_noise
+        compound_charges = F.one_hot(compound_charges, num_classes=self.num_charge_classes).float()
+        
+        # ring
+        ring_feat_noise = torch.multinomial(
+            self.is_in_ring_prior, num_samples=n, replacement=True
+        ).to(self.device)
+        ring_feat_ligand = batch.is_in_ring[reconstruct_mask==1]
+        
+        compound_ring_feat = batch.is_in_ring.long().to(self.device)
+        compound_ring_feat[reconstruct_mask==1] = ring_feat_noise
+        compound_ring_feat = F.one_hot(compound_ring_feat, num_classes=self.num_is_in_ring).float()
         
         
+        # aromatic
+        aromatic_feat_noise = torch.multinomial(
+            self.is_aromatic_prior, num_samples=n, replacement=True
+        ).to(self.device)
+        aromatic_feat_ligand = batch.is_aromatic[reconstruct_mask==1]
+        
+        compound_aromatic_feat = batch.is_aromatic.long().to(self.device)
+        compound_aromatic_feat[reconstruct_mask==1] = aromatic_feat_noise
+        compound_aromatic_feat = F.one_hot(compound_aromatic_feat, num_classes=self.num_is_aromatic).float()
+        
+        # hybridization
+        hybridization_feat_noise = torch.multinomial(
+            self.hybridization_prior, num_samples=n, replacement=True
+        ).to(self.device)
+        hybridization_feat_ligand = batch.hybridization[reconstruct_mask==1]
+        
+        compound_hybridization_feat = batch.hybridization.long().to(self.device)
+        compound_hybridization_feat[reconstruct_mask==1] = hybridization_feat_noise
+        compound_hybridization_feat = F.one_hot(compound_hybridization_feat, num_classes=self.num_hybridization).float()
+        
+        # degree
+        degree_feat_noise = torch.multinomial(
+            self.degree_prior, num_samples=n, replacement=True
+        ).to(self.device)
+        degree_feat_ligand = batch.degree[reconstruct_mask==1]
+        
+        compound_degree_feat = batch.degree.long().to(self.device)
+        compound_degree_feat[reconstruct_mask==1] = degree_feat_noise
+        compound_degree_feat = F.one_hot(compound_degree_feat, num_classes=self.num_degree).float()
+        
+        
+        edge_index_ligand = batch.edge_index.t()[batch.edge_ligand==1].t()
+        edge_attr_ligand = batch.edge_attr[batch.edge_ligand==1]
+        
+        (
+            edge_attr_global_lig,
+            edge_index_global_lig,
+            mask,
+            mask_i,
+        ) = initialize_edge_attrs_reverse(
+            edge_index_ligand,
+            n,
+            self.bonds_prior,
+            self.num_bond_classes,
+            self.device,
+        )
+        batch_is_ligand = batch.is_ligand.unsqueeze(1).to(self.device)
+        from IPython import embed; embed()
+        atoms_feats_in_perturbed = torch.cat(
+            [
+                compound_atom_types,
+                compound_charges,
+                compound_ring_feat,
+                compound_aromatic_feat,
+                compound_hybridization_feat,
+                compound_degree_feat,
+                batch_is_ligand,
+            ],
+            dim=-1,
+        )
+        
+        from IPython import embed; embed()
         
         
     def configure_optimizers(self):

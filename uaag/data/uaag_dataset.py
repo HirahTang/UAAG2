@@ -116,6 +116,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             hybridization=graph_data.hybridization,
             is_backbone=graph_data.is_backbone,
             is_ligand=graph_data.is_ligand,
+            ligand_size=torch.tensor(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
             id=graph_data.compound_id,
         )
         
@@ -126,8 +127,9 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
     def __init__(
         self,
         data,
+        dataset_info,
         fix_size=False,
-        sample_size: int = 10,
+        sample_size=10,
     ):
         super(UAAG2Dataset_sampling, self).__init__()
         # self.statistics = Statistic()
@@ -142,6 +144,24 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             0: 1,
             1: 2,
         }
+        self.dataset_info = dataset_info
+        
+        atom_types_distribution = dataset_info.atom_types.float()
+        bond_types_distribution = dataset_info.bond_types.float()
+        charge_types_distribution = dataset_info.charge_types.float()
+        is_aromatic_distribution = dataset_info.is_aromatic.float()
+        is_ring_distribution = dataset_info.is_ring.float()
+        hybridization_distribution = dataset_info.hybridization.float()
+        degree_distribution = dataset_info.degree.float()
+        
+        
+        self.register_buffer("atoms_prior", atom_types_distribution.clone())
+        self.register_buffer("bonds_prior", bond_types_distribution.clone())
+        self.register_buffer("charges_prior", charge_types_distribution.clone())
+        self.register_buffer("is_aromatic_prior", is_aromatic_distribution.clone())
+        self.register_buffer("is_in_ring_prior", is_ring_distribution.clone())
+        self.register_buffer("hybridization_prior", hybridization_distribution.clone())
+        self.register_buffer("degree_prior", degree_distribution.clone())
         
     def __len__(self):
         return len(self.data)
@@ -173,7 +193,8 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         if not hasattr(graph_data, 'compound_id'):
             graph_data.compound_id = graph_data.componud_id
         if not hasattr(graph_data, 'id'):
-            graph_data.id = graph_data.compound_id
+            graph_data.id = graph_data.compound_id    
+        
         graph_data.x = graph_data.x.float()
         graph_data.pos = graph_data.pos.float()
         graph_data.edge_attr = graph_data.edge_attr.float()
@@ -246,6 +267,15 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         
         # Adding prior noise to the graph
         
+        reconstruct_size = is_reconstruct.sum() if not self.fix_size else self.sample_size
+        
+        sampled_x = torch.multinomial(self.atoms_prior, reconstruct_size, replacement=True)
+        sampled_charge = torch.multinomial(self.charges_prior, reconstruct_size, replacement=True)
+        sampled_degree = torch.multinomial(self.degree_prior, reconstruct_size, replacement=True)
+        sampled_aromatic = torch.multinomial(self.is_aromatic_prior, reconstruct_size, replacement=True)
+        sampled_ring = torch.multinomial(self.is_in_ring_prior, reconstruct_size, replacement=True)
+        sampled_hybrid = torch.multinomial(self.hybridization_prior, reconstruct_size, replacement=True)
+        sampled_pos = torch.randn(reconstruct_size, 3)
         
         
         graph_ligand_removed = Data(

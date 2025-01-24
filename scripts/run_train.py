@@ -80,12 +80,15 @@ def main(hparams):
     
     
     print("Loading DataModule")
-    train_data = UAAG2Dataset(train_data)
-    val_data = UAAG2Dataset(val_data)
-    test_data = UAAG2Dataset_sampling(test_data)
-    datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data)
     
     dataset_info = Dataset_Info(hparams.data_info_path)
+    
+    train_data = UAAG2Dataset(train_data)
+    val_data = UAAG2Dataset(val_data)
+    test_data = UAAG2Dataset(test_data)
+    datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data)
+    
+
     
     model = Trainer(
         hparams=hparams,
@@ -187,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument("--select-train-subset", default=False, action="store_true")
     parser.add_argument("--train-size", default=0.99, type=float)
     parser.add_argument("--val-size", default=0.01, type=float)
-    parser.add_argument("--test-size", default=40, type=int)
+    parser.add_argument("--test-size", default=100, type=int)
 
     parser.add_argument("--dropout-prob", default=0.3, type=float)
 
