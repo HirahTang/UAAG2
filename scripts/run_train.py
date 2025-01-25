@@ -6,7 +6,6 @@ import torch
 
 sys.path.append('.')
 sys.path.append('..')
-from IPython import embed
 import warnings
 from argparse import ArgumentParser
 import numpy as np
@@ -58,7 +57,7 @@ def main(hparams):
     else:
         raise ValueError("Logger type not recognized")
     
-    root_pdb_path = "/home/qcx679/hantang/UAAG2/data/full_graph/data"
+    root_pdb_path = "/home/qcx679/hantang/UAAG2/data/full_graph/data_2"
     pdb_list = os.listdir(root_pdb_path)
     pdb_list = [os.path.join(root_pdb_path, pdb) for pdb in pdb_list]
     
@@ -70,11 +69,11 @@ def main(hparams):
     
     # combine three parts of the data
     data = []
-    for pdb in pdb_list[:5]:
+    for pdb in pdb_list[:2]:
         data.append(pdb)
-    # for naa in naa_list:
-    #     data.append(naa)
-    # data.append(pdbbind_path)
+    for naa in naa_list:
+        data.append(naa)
+    data.append(pdbbind_path)
     
     train_data, val_data, test_data = load_data(hparams, data, [pdb_list[0]])
     
@@ -345,7 +344,7 @@ if __name__ == "__main__":
     parser.add_argument("-g", "--gpus", default=1, type=int)
     parser.add_argument("-e", "--num-epochs", default=300, type=int)
     parser.add_argument("--eval-freq", default=1.0, type=float)
-    parser.add_argument("--test-interval", default=1, type=int)
+    parser.add_argument("--test-interval", default=5, type=int)
     parser.add_argument("-nh", "--no_h", default=False, action="store_true")
     parser.add_argument("--precision", default=32, type=int)
     parser.add_argument("--detect-anomaly", default=False, action="store_true")

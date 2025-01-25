@@ -648,15 +648,15 @@ class Trainer(pl.LightningModule):
 
             self.i += 1
             self.log(
-                name="validity",
-                value=final_res["validity"],
+                "validity",
+                final_res["validity"],
                 on_epoch=True,
                 sync_dist=True,
             )
             
             self.log(
-                name="connectivity",
-                value=final_res["connectivity"],
+                "connectivity",
+                final_res["connectivity"],
                 on_epoch=True,
                 sync_dist=True,
             )
@@ -1089,7 +1089,7 @@ class Trainer(pl.LightningModule):
                     atom_type=compound_atom_types,
                     batch=batch.batch,
                     atom_decoder=atom_decoder,
-                    path=os.path.join(self.save_dir, f"iter_{iteration}"),
+                    path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
                     i=i,
                 )
                 
@@ -1110,7 +1110,7 @@ class Trainer(pl.LightningModule):
         
         connected_list, sanitized_list = get_molecules(
             out_dict=out_dict,
-            path=os.path.join(self.save_dir, f"iter_{iteration}"),
+            path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
             batch=batch.batch,  
             reconstruct_mask=reconstruct_mask, 
             backbone_mask=batch.is_backbone,
