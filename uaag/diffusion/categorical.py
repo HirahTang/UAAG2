@@ -210,12 +210,17 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         batch: Tensor,
         edge_index_global: Tensor,
         num_classes: int,
-    ):
-        x0 = edges_pred[mask]
-        xt = edge_attr_global[mask]
-        t = t[batch[mask_i]]
-
+    ):  
+        
+        # x0 = edges_pred[mask]
+        # xt = edge_attr_global[mask]
+        x0 = edges_pred
+        xt = edge_attr_global
+        
+        # t = t[batch[mask_i]]
+        t = t[batch]
         reverse = self.reverse_posterior_for_every_x0(xt=xt, t=t)
+        reverse = self.reverse_posterior_for_every_x0(xt=edge_attr_global, t=t[batch])
         # Eq. 4 in Austin et al. (2023) "Structured Denoising Diffusion Models in Discrete State-Spaces"
         # (N, a_0, a_t-1)
         unweighted_probs = (reverse * x0.unsqueeze(-1)).sum(1)
@@ -228,7 +233,7 @@ class CategoricalDiffusionKernel(torch.nn.Module):
             ).squeeze(),
             num_classes=num_classes,
         ).float()
-
+        # from IPython import embed; embed()
         j, i = edge_index_global
         mask = j < i
         mask_i = i[mask]

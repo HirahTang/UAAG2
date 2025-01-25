@@ -66,17 +66,17 @@ def main(hparams):
     naa_list = os.listdir(root_naa_path)
     naa_list = [os.path.join(root_naa_path, naa) for naa in naa_list]
     
-    pdbbind_path = "/home/qcx679/hantang/UAAG2/data/full_graph/pdbbind/pdbbind_data_adj.pt"
+    pdbbind_path = "/home/qcx679/hantang/UAAG2/data/full_graph/pdbbind/pdbbind_data.pt"
     
     # combine three parts of the data
     data = []
-    for pdb in pdb_list[:10]:
+    for pdb in pdb_list[:5]:
         data.append(pdb)
-    for naa in naa_list:
-        data.append(naa)
+    # for naa in naa_list:
+    #     data.append(naa)
     # data.append(pdbbind_path)
     
-    train_data, val_data, test_data = load_data(hparams, data, pdb_list[:10])
+    train_data, val_data, test_data = load_data(hparams, data, [pdb_list[0]])
     
     
     print("Loading DataModule")

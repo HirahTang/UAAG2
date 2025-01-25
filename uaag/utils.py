@@ -2,7 +2,9 @@ import argparse
 import math
 from os.path import dirname, exists, join
 from typing import Tuple
-
+import os
+import networkx as nx
+import networkx.algorithms.isomorphism as iso
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -17,7 +19,15 @@ from torch_geometric.utils.sort_edge_index import sort_edge_index
 from torch_geometric.utils.subgraph import subgraph
 from torch_scatter import scatter_add, scatter_mean
 from tqdm import tqdm
+from uaag import bond_analyze
 # from torch_sparse import coalesces
+
+BOND_ORDER_TO_EDGE_TYPE = {
+    1: Chem.BondType.SINGLE,
+    2: Chem.BondType.DOUBLE,
+    3: Chem.BondType.TRIPLE,
+    4: Chem.BondType.AROMATIC,
+}
 
 def load_data(hparams, data_path: list, pdb_list: list) -> Data:
     data = []
@@ -143,6 +153,171 @@ def initialize_edge_attrs_reverse(
     edge_attr_global = F.one_hot(edge_attr_global, num_bond_classes).float()
 
     return edge_attr_global, edge_index_global, mask, mask_i
+
+def write_xyz_file(coords, atom_types, filename):
+    out = f"{len(coords)}\n\n"
+    assert len(coords) == len(atom_types)
+    for i in range(len(coords)):
+        out += f"{atom_types[i]} {coords[i, 0]:.3f} {coords[i, 1]:.3f} {coords[i, 2]:.3f}\n"
+    with open(filename, "w") as f:
+        f.write(out)
+
+def write_xyz_file_from_batch(
+    pos, 
+    atom_type,
+    batch,
+    atom_decoder=None,
+    path=".",
+    i=0,
+    ):
+    
+    if not os.path.exists(path):
+        os.makedirs(path)
+    
+    atomsxmol = batch.bincount()
+    num_atoms_prev = 0
+    for k, num_atoms in enumerate(atomsxmol):
+        save_dir = os.path.join(path, f"batch_{k}")
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+            
+        ats = torch.argmax(atom_type[num_atoms_prev : num_atoms_prev + num_atoms], dim=1)
+        types = [atom_decoder[int(a)] for a in ats]
+        positions = pos[num_atoms_prev : num_atoms_prev + num_atoms]
+        
+        write_xyz_file(positions, types, os.path.join(save_dir, f"mol_{i}.xyz"))
+
+        num_atoms_prev += num_atoms
+
+def is_connected_molecule(atom_list, edge_list):
+    G = nx.Graph()
+    G.add_nodes_from(atom_list)
+    for (i, j) in edge_list:
+        G.add_edge(i, j)
+    return nx.is_connected(G)  
+
+def visualize_mol(atom_sets, val_check=False):
+    pos, atoms = atom_sets
+
+    x = pos[:, 0]
+    y = pos[:, 1]
+    z = pos[:, 2]
+    
+    edge_list = []
+        
+    for i in range(len(x)):
+        for j in range(i + 1, len(x)):
+            p1 = np.array([x[i], y[i], z[i]])
+            p2 = np.array([x[j], y[j], z[j]])
+            dist = np.sqrt(np.sum((p1 - p2) ** 2))
+            atom1, atom2 = atoms[i], atoms[j]
+
+
+            draw_edge_int = bond_analyze.get_bond_order(atom1, atom2, dist)
+            if draw_edge_int:
+                edge_list.append(([i, j], draw_edge_int))
+    if val_check:
+        connected_mol = is_connected_molecule(list(range(len(x))), [i[0] for i in edge_list])
+    
+    molB = Chem.RWMol()
+    
+    for atom in atoms:
+        molB.AddAtom(Chem.Atom(atom))
+        
+    for bond in edge_list:
+        molB.AddBond(bond[0][0], bond[0][1], BOND_ORDER_TO_EDGE_TYPE[bond[1]])
+    conf = Chem.Conformer()
+    for idx, (x_pos, y_pos, z_pos) in enumerate(list(zip(x, y, z))):
+
+        conf.SetAtomPosition(idx, (float(x_pos), float(y_pos), float(z_pos)))
+        
+    molB.AddConformer(conf)
+    
+    final_mol = molB.GetMol()
+    
+    # Santize the molecule
+    try:
+        Chem.SanitizeMol(final_mol)
+        sanitized = True
+    except:
+        sanitized = False
+        
+    mol_block = Chem.MolToMolBlock(final_mol)    
+    
+    if val_check:
+        return mol_block, (connected_mol, sanitized)
+    else:
+        return mol_block
+
+def get_molecules(
+    out_dict,
+    path,
+    batch,
+    reconstruct_mask,
+    backbone_mask,
+    pocket_mask,
+    atom_decoder,
+):
+    connected_list = []
+    sanitized_list = []
+    backbone_size = batch[backbone_mask==1].bincount()
+    ligand_size = batch[reconstruct_mask==1].bincount()
+    pocket_size = batch[pocket_mask==0].bincount()
+    
+    ligand_pos = out_dict["coords_pred"]
+    ligand_atom_type = out_dict["atoms_pred"]
+    
+    backbone_pos = out_dict['coords_backbone']
+    backbone_atom_type = out_dict['atoms_backbone']
+    
+    pocket_pos = out_dict['coords_pocket']
+    pocket_atom_type = out_dict['atoms_pocket']
+
+    start_idx_ligand = 0
+    start_idx_backbone = 0
+    start_idx_pocket = 0
+    for i in range(len(ligand_size)):
+        end_idx_ligand = start_idx_ligand + ligand_size[i]
+        ligand_pos_i = ligand_pos[start_idx_ligand:end_idx_ligand]
+        ligand_atom_type_i = ligand_atom_type[start_idx_ligand:end_idx_ligand]
+        ligand_atom_type_i = [atom_decoder[int(a)] for a in ligand_atom_type_i.argmax(dim=1)]
+        
+        end_idx_backbone = start_idx_backbone + backbone_size[i]
+        backbone_pos_i = backbone_pos[start_idx_backbone:end_idx_backbone]
+        backbone_atom_type_i = backbone_atom_type[start_idx_backbone:end_idx_backbone]
+        backbone_atom_type_i = [atom_decoder[int(a)] for a in backbone_atom_type_i.argmax(dim=1)]
+        
+        end_idx_pocket = start_idx_pocket + pocket_size[i]
+        pocket_pos_i = pocket_pos[start_idx_pocket:end_idx_pocket]
+        pocket_atom_type_i = pocket_atom_type[start_idx_pocket:end_idx_pocket]
+        # from IPython import embed; embed()
+        pocket_atom_type_i = [atom_decoder[int(a)] for a in pocket_atom_type_i.argmax(dim=1)]
+        
+        # from IPython import embed; embed()
+        ligand_pos_all = torch.cat([ligand_pos_i, backbone_pos_i], dim=0)
+        ligand_atom_type_all = ligand_atom_type_i + backbone_atom_type_i
+        atom_set = (ligand_pos_all.cpu().detach(), ligand_atom_type_all)
+        mol_block, (connected, sanitized) = visualize_mol(atom_set, val_check=True)
+        
+        connected_list.append(connected)
+        sanitized_list.append(sanitized)
+        
+        pocket_pos_i = pocket_pos_i.cpu().detach()
+        pocket_set = (pocket_pos_i, pocket_atom_type_i)
+        pocket_mol_block = visualize_mol(pocket_set, val_check=False)
+        
+        path_batch = os.path.join(path, f"batch_{i}", "final")
+        if not os.path.exists(path_batch):
+            os.makedirs(path_batch)
+        with open(os.path.join(path_batch, "ligand.mol"), "w") as f:
+            f.write(mol_block)
+        with open(os.path.join(path_batch, "pocket.mol"), "w") as f:
+            f.write(pocket_mol_block)
+        
+        start_idx_ligand = end_idx_ligand
+        start_idx_backbone = end_idx_backbone
+        start_idx_pocket = end_idx_pocket
+    return connected_list, sanitized_list
 
 class Statistics:
     def __init__(

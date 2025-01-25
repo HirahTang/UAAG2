@@ -26,7 +26,7 @@ from uaag.e3moldiffusion.coordsatomsbonds import DenoisingEdgeNetwork
 from uaag.diffusion.continuous import DiscreteDDPM
 
 from uaag.diffusion.categorical import CategoricalDiffusionKernel
-from uaag.utils import load_model, initialize_edge_attrs_reverse
+from uaag.utils import load_model, initialize_edge_attrs_reverse, write_xyz_file_from_batch, get_molecules
 
 from uaag.losses import DiffusionLoss
 
@@ -52,9 +52,9 @@ class Trainer(pl.LightningModule):
         self.save_hyperparameters(hparams)
         self.i = 0
         self.connected_components = 0.0
+        self.validity = 0.0
         
-        
-        
+        self.save_dir = hparams.save_dir
         self.qed = 0.0
         self.dataset_info = dataset_info
         self.prop_norm = prop_norm
@@ -587,7 +587,7 @@ class Trainer(pl.LightningModule):
             dim=-1,
         )
         
-        
+
 
         out = self.model(
             x=atom_feats_in_perturbed,
@@ -645,7 +645,21 @@ class Trainer(pl.LightningModule):
                 ddpm=True,
                 every_k_step=1,
             )
-           
+
+            self.i += 1
+            self.log(
+                name="validity",
+                value=final_res["validity"],
+                on_epoch=True,
+                sync_dist=True,
+            )
+            
+            self.log(
+                name="connectivity",
+                value=final_res["connectivity"],
+                on_epoch=True,
+                sync_dist=True,
+            )
          
     
     # @torch.no_grad()
@@ -669,7 +683,6 @@ class Trainer(pl.LightningModule):
         dataset_info,
         ngraphs: int = 4000,
         bs: int = 500,
-        save_dir: str = None,
         return_molecules: bool = False,
         verbose: bool = False,
         inner_verbose=False,
@@ -685,6 +698,8 @@ class Trainer(pl.LightningModule):
         dataloader = self.trainer.datamodule.test_dataloader()
         
         molecule_list = []
+        connected_list = []
+        sanitized_list = []
         start = datetime.now()
         
         for i, batch in enumerate(dataloader):
@@ -701,7 +716,7 @@ class Trainer(pl.LightningModule):
                     size=(num_graphs,),
                 )
                 
-            molecules = self.reverse_sampling(
+            molecules, connected_ele, sanitized_ele = self.reverse_sampling(
                 batch=batch,
                 num_graphs=num_graphs,
                 empirical_distribution_num_nodes=num_nodes_lig,
@@ -711,7 +726,47 @@ class Trainer(pl.LightningModule):
                 ddpm=ddpm,
                 eta_ddim=eta_ddim,
                 every_k_step=every_k_step,
+                iteration=i,
             )
+            
+            molecule_list.extend(molecules)
+            connected_list.extend(connected_ele)
+            sanitized_list.extend(sanitized_ele)
+        connect_rate = torch.tensor(connected_list).sum().item() / len(connected_list)
+        sanitize_rate = torch.tensor(sanitized_list).sum().item() / len(sanitized_list)
+        
+        if not run_test_eval:
+            save_cond = (
+                self.validity < sanitize_rate
+                and self.connected_components < connect_rate
+            )
+        else:
+            save_cond = False
+            
+        if save_cond:
+            self.validity = sanitize_rate
+            self.connected_components = connect_rate
+            save_path = os.path.join(self.hparams.save_dir, "best_valid.ckpt")
+            self.trainer.save_checkpoint(save_path)
+            
+        run_time = datetime.now() - start
+        
+        if verbose:
+            if self.local_rank == 0:
+                print(f"Run time={run_time}")
+            
+        total_res = {"validity": sanitize_rate, "connectivity": connect_rate}
+        if self.local_rank == 0:
+            print(total_res)
+            
+        total_res["step"] = str(step)
+        total_res["epoch"] = str(self.current_epoch)
+        total_res["run_time"] = str(run_time)
+        
+        if return_molecules:
+            return molecule_list, total_res
+        else:
+            return total_res
     def reverse_sampling(
         self, 
         batch,
@@ -723,81 +778,88 @@ class Trainer(pl.LightningModule):
         ddpm: bool = True,
         eta_ddim: float = 1.0,
         every_k_step: int = 1,
+        iteration: int = 0,
         ):
         # from IPython import embed; embed()
         # implement empirical_distribution_num_nodes of ligand node (randomly initiated)
         # back to the graph, with fully connected edges
-        batch = batch.to(device)
+        batch = batch.to(self.device)
         reconstruct_mask = batch.is_ligand - batch.is_backbone
         
         pos_ligand = batch.pos[reconstruct_mask==1]
         
-        pos_noise = torch.randn_like(pos_ligand)
+        pos = torch.randn_like(pos_ligand)
         n = pos_ligand.size(0)
         
         compound_pos = batch.pos
-        compound_pos[reconstruct_mask==1] = pos_noise
+        compound_pos[reconstruct_mask==1] = pos
+        compound_pos = compound_pos.to(self.device)
         
-        atom_types_noise = torch.multinomial(
+        atom_types = torch.multinomial(
             self.atoms_prior, num_samples=n, replacement=True
         ).to(self.device)
         atom_types_ligand = batch.x[reconstruct_mask==1]
         
         compound_atom_types = batch.x.long().to(self.device)
         # from IPython import embed; embed()
-        compound_atom_types[reconstruct_mask==1] = atom_types_noise
+        compound_atom_types[reconstruct_mask==1] = atom_types
         compound_atom_types = F.one_hot(compound_atom_types, num_classes=self.num_atom_types).float()
+        atom_types = F.one_hot(atom_types, num_classes=self.num_atom_types).float()
         
-        charge_types_noise = torch.multinomial(
+        
+        charge_types = torch.multinomial(
             self.charges_prior, num_samples=n, replacement=True
         ).to(self.device)
         charge_types_ligand = batch.charges[reconstruct_mask==1]
         
         compound_charges = batch.charges.long().to(self.device)
-        compound_charges[reconstruct_mask==1] = charge_types_noise
+        compound_charges[reconstruct_mask==1] = charge_types
         compound_charges = F.one_hot(compound_charges, num_classes=self.num_charge_classes).float()
+        charge_types = F.one_hot(charge_types, num_classes=self.num_charge_classes).float()
         
         # ring
-        ring_feat_noise = torch.multinomial(
+        ring_feat = torch.multinomial(
             self.is_in_ring_prior, num_samples=n, replacement=True
         ).to(self.device)
         ring_feat_ligand = batch.is_in_ring[reconstruct_mask==1]
         
         compound_ring_feat = batch.is_in_ring.long().to(self.device)
-        compound_ring_feat[reconstruct_mask==1] = ring_feat_noise
+        compound_ring_feat[reconstruct_mask==1] = ring_feat
         compound_ring_feat = F.one_hot(compound_ring_feat, num_classes=self.num_is_in_ring).float()
-        
+        ring_feat = F.one_hot(ring_feat, num_classes=self.num_is_in_ring).float()
         
         # aromatic
-        aromatic_feat_noise = torch.multinomial(
+        aromatic_feat = torch.multinomial(
             self.is_aromatic_prior, num_samples=n, replacement=True
         ).to(self.device)
         aromatic_feat_ligand = batch.is_aromatic[reconstruct_mask==1]
         
         compound_aromatic_feat = batch.is_aromatic.long().to(self.device)
-        compound_aromatic_feat[reconstruct_mask==1] = aromatic_feat_noise
+        compound_aromatic_feat[reconstruct_mask==1] = aromatic_feat
         compound_aromatic_feat = F.one_hot(compound_aromatic_feat, num_classes=self.num_is_aromatic).float()
+        aromatic_feat = F.one_hot(aromatic_feat, num_classes=self.num_is_aromatic).float()
         
         # hybridization
-        hybridization_feat_noise = torch.multinomial(
+        hybridization_feat = torch.multinomial(
             self.hybridization_prior, num_samples=n, replacement=True
         ).to(self.device)
         hybridization_feat_ligand = batch.hybridization[reconstruct_mask==1]
         
         compound_hybridization_feat = batch.hybridization.long().to(self.device)
-        compound_hybridization_feat[reconstruct_mask==1] = hybridization_feat_noise
+        compound_hybridization_feat[reconstruct_mask==1] = hybridization_feat
         compound_hybridization_feat = F.one_hot(compound_hybridization_feat, num_classes=self.num_hybridization).float()
+        hybridization_feat = F.one_hot(hybridization_feat, num_classes=self.num_hybridization).float()
         
         # degree
-        degree_feat_noise = torch.multinomial(
+        degree_feat = torch.multinomial(
             self.degree_prior, num_samples=n, replacement=True
         ).to(self.device)
         degree_feat_ligand = batch.degree[reconstruct_mask==1]
         
         compound_degree_feat = batch.degree.long().to(self.device)
-        compound_degree_feat[reconstruct_mask==1] = degree_feat_noise
+        compound_degree_feat[reconstruct_mask==1] = degree_feat
         compound_degree_feat = F.one_hot(compound_degree_feat, num_classes=self.num_degree).float()
-        
+        degree_feat = F.one_hot(degree_feat, num_classes=self.num_degree).float()
         
         edge_index_ligand = batch.edge_index.t()[batch.edge_ligand==1].t()
         edge_attr_ligand = batch.edge_attr[batch.edge_ligand==1]
@@ -814,8 +876,16 @@ class Trainer(pl.LightningModule):
             self.num_bond_classes,
             self.device,
         )
+        
+        edge_attr_full = batch.edge_attr.long().to(self.device)
+        edge_attr_full = F.one_hot(edge_attr_full, num_classes=self.num_bond_classes).float()
+        edge_attr_full[batch.edge_ligand==1] = edge_attr_global_lig
+        
+        
+        edge_index_global = batch.edge_index.to(self.device)
+        
         batch_is_ligand = batch.is_ligand.unsqueeze(1).to(self.device)
-        from IPython import embed; embed()
+        # from IPython import embed; embed()
         atoms_feats_in_perturbed = torch.cat(
             [
                 compound_atom_types,
@@ -829,8 +899,231 @@ class Trainer(pl.LightningModule):
             dim=-1,
         )
         
-        from IPython import embed; embed()
+        pocket_mask = (1 - batch.is_ligand + batch.is_backbone).long()
         
+        pos_traj = []
+        atom_type_traj = []
+        charge_type_traj = []
+        edge_type_traj = []
+        
+        if self.hparams.continuous_param == "data":
+            chain = range(0, self.hparams.timesteps)
+        elif self.hparams.continuous_param == "noise":
+            chain = range(0, self.hparams.timesteps - 1)
+
+        chain = chain[::every_k_step]
+        
+        iterator = (
+            tqdm(reversed(chain), total=len(chain)) if verbose else reversed(chain)
+        )
+        batch_lig = batch.batch[pocket_mask==0]
+        for i, timestep in enumerate(iterator):
+            s = torch.full(
+                size=(n,), fill_value=timestep, dtype=torch.long, device=compound_pos.device
+            )
+            t = s + 1
+
+            temb = t / self.hparams.timesteps
+            temb = temb.unsqueeze(dim=1)
+            
+            out = self.model(
+                x=atoms_feats_in_perturbed,
+                t=temb,
+                pos=compound_pos,
+                edge_index_local=None,
+                edge_index_global=edge_index_global,
+                edge_attr_global=edge_attr_full,
+                batch=batch.batch,
+                batch_edge_global=batch.edge_ligand.long(),
+                context=None,
+                pocket_mask=pocket_mask.unsqueeze(1),
+                edge_mask=batch.edge_ligand.long(),
+                batch_lig=batch.batch[pocket_mask==0],
+            )
+            
+            coords_pred = out["coords_pred"].squeeze()
+            
+            (
+                atoms_pred,
+                charges_pred,
+                ring_pred,
+                aromatic_pred,
+                hybridization_pred,
+                degree_pred,
+                _
+            ) = out["atoms_pred"].split(
+                [
+                    self.num_atom_types,
+                    self.num_charge_classes,
+                    self.num_is_in_ring,
+                    self.num_is_aromatic,
+                    self.num_hybridization,
+                    self.num_degree,
+                    self.is_ligand,
+                ],
+                dim=-1,
+            )
+            
+            atoms_pred = atoms_pred.softmax(dim=-1)
+            
+            edges_pred = out["bonds_pred"].softmax(dim=-1)
+            
+            charges_pred = charges_pred.softmax(dim=-1)
+            ring_pred = ring_pred.softmax(dim=-1)
+            aromatic_pred = aromatic_pred.softmax(dim=-1)
+            hybridization_pred = hybridization_pred.softmax(dim=-1)
+            degree_pred = degree_pred.softmax(dim=-1)
+            
+            if ddpm:
+                if self.hparams.noise_scheduler == "adaptive":
+                    # positions
+                    pos = self.sde_pos.sample_reverse_adaptive(
+                        s, t, pos, coords_pred, batch_lig, cog_proj=False, eta_ddim=eta_ddim
+                    )  # here is cog_proj false as it will be downprojected later
+                else:
+                    # positions
+                    # from IPython import embed; embed()
+                    pos = self.sde_pos.sample_reverse(
+                        t, pos, coords_pred, batch_lig, cog_proj=False, eta_ddim=eta_ddim
+                    )  # here is cog_proj false as it will be downprojected later
+            else:
+                pos = self.sde_pos.sample_reverse_ddim(
+                    t, pos, coords_pred, batch_lig, cog_proj=False, eta_ddim=eta_ddim
+                )  # here is cog_proj false as it will be downprojected later
+
+            # atoms
+            
+            atom_types = self.cat_atoms.sample_reverse_categorical(
+                xt=atom_types,
+                x0=atoms_pred,
+                t=t[batch_lig],
+                num_classes=self.num_atom_types,
+            )
+            
+           
+            
+            # charges
+            charge_types = self.cat_charges.sample_reverse_categorical(
+                xt=charge_types,
+                x0=charges_pred,
+                t=t[batch_lig],
+                num_classes=self.num_charge_classes,
+            )
+
+            # additional feats
+            ring_feat = self.cat_ring.sample_reverse_categorical(
+                xt=ring_feat,
+                x0=ring_pred,
+                t=t[batch_lig],
+                num_classes=self.num_is_in_ring,
+            )
+
+            aromatic_feat = self.cat_aromatic.sample_reverse_categorical(
+                xt=aromatic_feat,
+                x0=aromatic_pred,
+                t=t[batch_lig],
+                num_classes=self.num_is_aromatic,
+            )
+            hybridization_feat = self.cat_hybridization.sample_reverse_categorical(
+                xt=hybridization_feat,
+                x0=hybridization_pred,
+                t=t[batch_lig],
+                num_classes=self.num_hybridization,
+            )
+            
+            degree_feat = self.cat_degree.sample_reverse_categorical(
+                xt=degree_feat,
+                x0=degree_pred,
+                t=t[batch_lig],
+                num_classes=self.num_degree,
+            )
+            
+            (
+                edge_attr_global_lig,
+                edge_index_global_lig,
+                mask,
+                mask_i,
+            ) = self.cat_bonds.sample_reverse_edges_categorical(
+                edge_attr_global_lig,
+                edges_pred,
+                t,
+                mask,
+                mask_i,
+                batch=batch.batch[edge_index_ligand[0]],
+                edge_index_global=edge_index_global_lig,
+                num_classes=self.num_bond_classes,
+            )
+            # from IPython import embed; embed()
+            
+            # combine the denoised features with the pocket features
+            
+            compound_atom_types[reconstruct_mask==1] = atom_types
+            compound_charges[reconstruct_mask==1] = charge_types
+            compound_ring_feat[reconstruct_mask==1] = ring_feat
+            compound_aromatic_feat[reconstruct_mask==1] = aromatic_feat
+            compound_hybridization_feat[reconstruct_mask==1] = hybridization_feat
+            compound_degree_feat[reconstruct_mask==1] = degree_feat
+            
+            compound_pos[reconstruct_mask==1] = pos
+            
+            edge_attr_full[batch.edge_ligand==1] = edge_attr_global_lig
+            
+            atoms_feats_in_perturbed = torch.cat(
+                [
+                    compound_atom_types,
+                    compound_charges,
+                    compound_ring_feat,
+                    compound_aromatic_feat,
+                    compound_hybridization_feat,
+                    compound_degree_feat,
+                    batch_is_ligand,
+                ],
+                dim=-1,
+            )
+            # from IPython import embed; embed()
+            if save_traj:
+                # from IPython import embed; embed()
+                atom_decoder = self.dataset_info.atom_decoder
+                write_xyz_file_from_batch(
+                    pos=compound_pos,
+                    atom_type=compound_atom_types,
+                    batch=batch.batch,
+                    atom_decoder=atom_decoder,
+                    path=os.path.join(self.save_dir, f"iter_{iteration}"),
+                    i=i,
+                )
+                
+        out_dict = {
+            "coords_pred": pos,
+            "atoms_pred": atom_types,
+            "charges_pred": charge_types,
+            "bonds_pred": edge_attr_global_lig,
+            "coords_pocket": compound_pos[batch.is_ligand==0],
+            "atoms_pocket": compound_atom_types[batch.is_ligand==0],
+            "arpmatic_pred": aromatic_feat,
+            "hybridization_pred": hybridization_feat,
+            "coords_backbone": compound_pos[batch.is_backbone==1],
+            "atoms_backbone": compound_atom_types[batch.is_backbone==1],
+        }
+        
+        
+        
+        connected_list, sanitized_list = get_molecules(
+            out_dict=out_dict,
+            path=os.path.join(self.save_dir, f"iter_{iteration}"),
+            batch=batch.batch,  
+            reconstruct_mask=reconstruct_mask, 
+            backbone_mask=batch.is_backbone,
+            pocket_mask=batch.is_ligand,
+            atom_decoder=self.dataset_info.atom_decoder,
+            
+        )
+        
+        return out_dict, connected_list, sanitized_list
+        
+            # create the input to the network of the next timestep
+            
+            
         
     def configure_optimizers(self):
         if self.hparams.optimizer == "adam":

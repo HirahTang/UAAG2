@@ -108,7 +108,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             pos=graph_data.pos,
             edge_index=graph_data.edge_index,
             edge_attr=graph_data.edge_attr,
-            edge_ligand = graph_data.edge_ligand.float(),
+            edge_ligand=torch.tensor(graph_data.edge_ligand).float(),
             charges=charges,
             degree=graph_data.degree,
             is_aromatic=graph_data.is_aromatic,
@@ -367,7 +367,7 @@ class Dataset_Info:
     def __init__(self, info_path):
         self.info_path = info_path
         self.process()
-    
+        self.get_decoder()
     def process(self):
         # read from the info_path, a pickle file
         
@@ -446,9 +446,21 @@ class Dataset_Info:
         self.degree = torch.tensor(self.degree)
             # print(self.degree[int(key)], key, data_info['degree'][key])
             
-        
+    def get_decoder(self):
+        atom_encoder = {
+            "C": 0,
+            "N": 1,
+            "O": 2,
+            "S": 3,
+            "P": 4,
+            "Cl": 5,
+            "F": 6,
+            "Br": 7,
+        }
+        atom_decoder  = {v: k for k, v in atom_encoder.items()}
+        self.atom_decoder = atom_decoder
             
-        
+    
         
         
         
