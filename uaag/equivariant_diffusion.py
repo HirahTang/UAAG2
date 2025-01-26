@@ -54,7 +54,7 @@ class Trainer(pl.LightningModule):
         self.connected_components = 0.0
         self.validity = 0.0
         
-        self.save_dir = hparams.save_dir
+        self.save_dir = os.path.join(hparams.save_dir, f'run{hparams.id}')
         self.qed = 0.0
         self.dataset_info = dataset_info
         self.prop_norm = prop_norm
@@ -221,6 +221,7 @@ class Trainer(pl.LightningModule):
         )
         
     def training_step(self, batch, batch_idx):
+        torch.cuda.empty_cache()
         return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
     def validation_step(self, batch, batch_idx):
         return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="val")
@@ -1104,6 +1105,8 @@ class Trainer(pl.LightningModule):
             "hybridization_pred": hybridization_feat,
             "coords_backbone": compound_pos[batch.is_backbone==1],
             "atoms_backbone": compound_atom_types[batch.is_backbone==1],
+            "coords_true": pos_ligand,
+            "atoms_true": atom_types_ligand,
         }
         
         

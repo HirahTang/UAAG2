@@ -264,6 +264,9 @@ def get_molecules(
     ligand_size = batch[reconstruct_mask==1].bincount()
     pocket_size = batch[pocket_mask==0].bincount()
     
+    true_pos = out_dict["coords_true"]
+    true_atom_type = out_dict["atoms_true"]
+    
     ligand_pos = out_dict["coords_pred"]
     ligand_atom_type = out_dict["atoms_pred"]
     
@@ -276,6 +279,7 @@ def get_molecules(
     start_idx_ligand = 0
     start_idx_backbone = 0
     start_idx_pocket = 0
+    start_idx_true = 0
     for i in range(len(ligand_size)):
         end_idx_ligand = start_idx_ligand + ligand_size[i]
         ligand_pos_i = ligand_pos[start_idx_ligand:end_idx_ligand]
@@ -293,6 +297,11 @@ def get_molecules(
         # from IPython import embed; embed()
         pocket_atom_type_i = [atom_decoder[int(a)] for a in pocket_atom_type_i.argmax(dim=1)]
         
+        end_idx_true = start_idx_true + ligand_size[i]
+        true_pos_i = true_pos[start_idx_true:end_idx_true]
+        true_atom_type_i = true_atom_type[start_idx_true:end_idx_true]
+        true_atom_type_i = [atom_decoder[int(a)] for a in true_atom_type_i]
+        
         # from IPython import embed; embed()
         ligand_pos_all = torch.cat([ligand_pos_i, backbone_pos_i], dim=0)
         ligand_atom_type_all = ligand_atom_type_i + backbone_atom_type_i
@@ -306,6 +315,9 @@ def get_molecules(
         pocket_set = (pocket_pos_i, pocket_atom_type_i)
         pocket_mol_block = visualize_mol(pocket_set, val_check=False)
         
+        true_set = (true_pos_i.cpu().detach(), true_atom_type_i)
+        true_mol_block = visualize_mol(true_set, val_check=False)
+        
         path_batch = os.path.join(path, f"batch_{i}", "final")
         if not os.path.exists(path_batch):
             os.makedirs(path_batch)
@@ -313,7 +325,10 @@ def get_molecules(
             f.write(mol_block)
         with open(os.path.join(path_batch, "pocket.mol"), "w") as f:
             f.write(pocket_mol_block)
-        
+        with open(os.path.join(path_batch, "true.mol"), "w") as f:
+            f.write(true_mol_block)
+            
+        start_idx_true = end_idx_true
         start_idx_ligand = end_idx_ligand
         start_idx_backbone = end_idx_backbone
         start_idx_pocket = end_idx_pocket
