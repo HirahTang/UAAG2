@@ -1,4 +1,3 @@
-
 import os
 import sys
 import wandb
@@ -58,6 +57,10 @@ def main(hparams):
         raise ValueError("Logger type not recognized")
     
     root_pdb_path = "/home/qcx679/hantang/UAAG2/data/full_graph/data_2"
+    
+    # root_pdb_path_test = "/home/qcx679/hantang/UAAG2/data/full_graph/data"
+    # root_pdb_path = root_pdb_path_test
+    
     pdb_list = os.listdir(root_pdb_path)
     pdb_list = [os.path.join(root_pdb_path, pdb) for pdb in pdb_list]
     
@@ -340,7 +343,7 @@ if __name__ == "__main__":
     parser.add_argument("--latent-detach", default=False, action="store_true")
 
     # GENERAL
-    parser.add_argument("-i", "--id", type=int, default=0)
+    parser.add_argument("-i", "--id", type=str, default=0)
     parser.add_argument("-g", "--gpus", default=1, type=int)
     parser.add_argument("-e", "--num-epochs", default=300, type=int)
     parser.add_argument("--eval-freq", default=1.0, type=float)

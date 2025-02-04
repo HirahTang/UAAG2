@@ -26,7 +26,7 @@ from uaag.e3moldiffusion.coordsatomsbonds import DenoisingEdgeNetwork
 from uaag.diffusion.continuous import DiscreteDDPM
 
 from uaag.diffusion.categorical import CategoricalDiffusionKernel
-from uaag.utils import load_model, initialize_edge_attrs_reverse, write_xyz_file_from_batch, get_molecules
+from uaag.utils import load_model, initialize_edge_attrs_reverse, write_xyz_file_from_batch, get_molecules, convert_edge_to_bond
 
 from uaag.losses import DiffusionLoss
 
@@ -224,6 +224,7 @@ class Trainer(pl.LightningModule):
         torch.cuda.empty_cache()
         return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
     def validation_step(self, batch, batch_idx):
+        torch.cuda.empty_cache()
         return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="val")
     def on_test_epoch_end(self):
         pass
@@ -630,7 +631,9 @@ class Trainer(pl.LightningModule):
 
         return out
     
+    
     def on_validation_epoch_end(self):
+        torch.cuda.empty_cache()
         if (self.current_epoch + 1) % self.hparams.test_interval == 0:
             if self.local_rank == 0:
                 print(f"Running evaluation in epoch {self.current_epoch + 1}")
@@ -685,7 +688,7 @@ class Trainer(pl.LightningModule):
         ngraphs: int = 4000,
         bs: int = 500,
         return_molecules: bool = False,
-        verbose: bool = False,
+        verbose: bool = True,
         inner_verbose=False,
         ddpm: bool = True,
         eta_ddim: float = 1.0,
@@ -768,6 +771,7 @@ class Trainer(pl.LightningModule):
             return molecule_list, total_res
         else:
             return total_res
+        
     def reverse_sampling(
         self, 
         batch,
@@ -1093,7 +1097,7 @@ class Trainer(pl.LightningModule):
                     path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
                     i=i,
                 )
-                
+        
         out_dict = {
             "coords_pred": pos,
             "atoms_pred": atom_types,
@@ -1109,9 +1113,16 @@ class Trainer(pl.LightningModule):
             "atoms_true": atom_types_ligand,
         }
         
+        connected_list, sanitized_list = convert_edge_to_bond(
+            batch=batch, 
+            out_dict=out_dict, 
+            path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
+            reconstruct_mask=reconstruct_mask,
+            atom_decoder=self.dataset_info.atom_decoder,
+            edge_decoder=self.dataset_info.bond_decoder,
+            )
         
-        
-        connected_list, sanitized_list = get_molecules(
+        _, _ = get_molecules(
             out_dict=out_dict,
             path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
             batch=batch.batch,  

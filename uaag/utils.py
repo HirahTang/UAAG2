@@ -196,6 +196,73 @@ def is_connected_molecule(atom_list, edge_list):
         G.add_edge(i, j)
     return nx.is_connected(G)  
 
+def visualize_mol_bond(
+    pos,
+    atoms,
+    bonds,
+    edge_index,
+    edge_decoder,
+    val_check=False
+    ):
+    # from IPython import embed; embed()
+    x = pos[:, 0]
+    y = pos[:, 1]
+    z = pos[:, 2]
+    
+    edge_dict = {}
+    
+    for i in range(edge_index.size(1)):
+        start, end = edge_index[:, i].tolist()
+        attr = bonds[i].item()
+        edge_key = tuple(sorted((start, end)))
+        
+        if edge_key in edge_dict:
+            if edge_dict[edge_key] != attr:
+                print(f"Warning: Edge {edge_key} has conflicting attributes {edge_dict[edge_key]} and {attr}")
+        else:
+            edge_dict[edge_key] = attr
+
+    edge_list = []
+    for (start, end), attr in edge_dict.items():
+        if attr in edge_decoder:
+            edge_list.append(([start, end], edge_decoder[attr]))
+
+
+    if val_check:
+        connected_mol = is_connected_molecule(list(range(len(x))), [i[0] for i in edge_list])
+    
+    molB = Chem.RWMol()
+    
+    for atom in atoms:
+        molB.AddAtom(Chem.Atom(atom))
+        
+    for bond in edge_list:
+        molB.AddBond(bond[0][0], bond[0][1], bond[1])
+    conf = Chem.Conformer()
+    
+    for idx, (x_pos, y_pos, z_pos) in enumerate(list(zip(x, y, z))):
+
+        conf.SetAtomPosition(idx, (float(x_pos), float(y_pos), float(z_pos)))
+        
+    molB.AddConformer(conf)
+    
+    final_mol = molB.GetMol()
+    
+    try:
+        Chem.SanitizeMol(final_mol)
+        sanitized = True
+    except:
+        sanitized = False
+        
+    mol_block = Chem.MolToMolBlock(final_mol)    
+    
+    if val_check:
+        return mol_block, (connected_mol, sanitized)
+    else:
+        return mol_block
+    
+
+
 def visualize_mol(atom_sets, val_check=False):
     pos, atoms = atom_sets
 
@@ -249,6 +316,89 @@ def visualize_mol(atom_sets, val_check=False):
     else:
         return mol_block
 
+def convert_edge_to_bond(
+    batch, 
+    out_dict, 
+    path,
+    reconstruct_mask, 
+    atom_decoder,
+    edge_decoder,
+):
+
+    ''' Convert edge_attr_global to bond type '''
+    # batch: the input batch 
+    # edge_attr_global_ligand: Tensor (num_of_ligand_edges, num_bond_classes=5)
+    
+    connected_list = []
+    sanitized_list = []
+    
+    ligand_pos = out_dict["coords_pred"]
+    ligand_atom_type = out_dict["atoms_pred"].argmax(dim=-1)
+    
+    batch_pos = batch.pos
+    batch_pos[reconstruct_mask==1] = ligand_pos
+    
+    batch_atom_type = batch.x
+    batch_atom_type[reconstruct_mask==1] = ligand_atom_type.float()
+    
+    ligand_edge_batches = batch.batch[batch.edge_index[0]][batch.edge_ligand==1]
+    ligand_edge_index = batch.edge_index[:, batch.edge_ligand==1]
+    batch_atom_idx = torch.tensor(range(len(batch.x)), device=batch.x.device)
+    batch_atom_idx_ligand = batch_atom_idx[batch.is_ligand==1]
+    
+    backbone_size = batch.batch[batch.is_backbone==1].bincount()
+    ligand_size = batch.batch[batch.is_ligand==1].bincount()
+    edge_size = ligand_edge_batches.bincount()
+    
+    ligand_edge_attr = out_dict["bonds_pred"].argmax(dim=-1)
+    
+    
+    start_idx_ligand = 0
+    start_idx_backbone = 0
+    start_idx_edge = 0
+    
+    for i in range(len(backbone_size)):
+        
+        end_idx_ligand_atom = start_idx_ligand + ligand_size[i]
+        end_idx_ligand_edge = start_idx_edge + edge_size[i]
+
+
+        ligand_atom_idx = batch_atom_idx_ligand[start_idx_ligand:end_idx_ligand_atom]
+        ligand_bond_idx = ligand_edge_index[:, start_idx_edge:end_idx_ligand_edge]
+        ligand_bond_attr = ligand_edge_attr[start_idx_edge:end_idx_ligand_edge]
+        
+        ligand_pos_batch = batch_pos[ligand_atom_idx]
+        ligand_atom_batch = batch_atom_type[ligand_atom_idx]
+        
+        idx_map = {idx.detach().cpu().item(): i for i, idx in enumerate(ligand_atom_idx)}
+        
+        ligand_bond_idx = torch.stack([torch.tensor([idx_map[idx.detach().cpu().item()] for idx in ligand_bond_idx[0]]), 
+                                    torch.tensor([idx_map[idx.detach().cpu().item()] for idx in ligand_bond_idx[1]])], dim=0)
+        
+            
+        mol_block, (connected, sanitized) = visualize_mol_bond(
+            ligand_pos_batch, 
+            [atom_decoder[int(a)] for a in ligand_atom_batch],
+            ligand_bond_attr,
+            ligand_bond_idx,
+            edge_decoder,
+            val_check=True
+            )
+        connected_list.append(connected)
+        sanitized_list.append(sanitized)
+        path_batch = os.path.join(path, f"batch_{i}", "final")
+        if not os.path.exists(path_batch):
+            os.makedirs(path_batch)
+        
+        # from IPython import embed; embed()
+        
+        with open(os.path.join(path_batch, "ligand.mol"), "w") as f:
+            f.write(mol_block)
+        start_idx_ligand = end_idx_ligand_atom
+        start_idx_edge = end_idx_ligand_edge
+        
+    return connected_list, sanitized_list
+        
 def get_molecules(
     out_dict,
     path,
@@ -321,8 +471,8 @@ def get_molecules(
         path_batch = os.path.join(path, f"batch_{i}", "final")
         if not os.path.exists(path_batch):
             os.makedirs(path_batch)
-        with open(os.path.join(path_batch, "ligand.mol"), "w") as f:
-            f.write(mol_block)
+        # with open(os.path.join(path_batch, "ligand.mol"), "w") as f:
+        #     f.write(mol_block)
         with open(os.path.join(path_batch, "pocket.mol"), "w") as f:
             f.write(pocket_mol_block)
         with open(os.path.join(path_batch, "true.mol"), "w") as f:

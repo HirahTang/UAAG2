@@ -6,6 +6,8 @@ import numpy as np
 sys.path.append('.')
 sys.path.append('..')
 
+from rdkit import Chem
+
 import torch
 
 from torch.utils.data import Subset
@@ -460,8 +462,14 @@ class Dataset_Info:
         atom_decoder  = {v: k for k, v in atom_encoder.items()}
         self.atom_decoder = atom_decoder
             
-    
-        
+        bond_encoder = {
+            Chem.BondType.SINGLE: 1,
+            Chem.BondType.DOUBLE: 2,
+            Chem.BondType.AROMATIC: 3,
+            Chem.BondType.TRIPLE: 4,
+        }
+        bond_decoder = {v: k for k, v in bond_encoder.items()}
+        self.bond_decoder = bond_decoder
         
         
         
