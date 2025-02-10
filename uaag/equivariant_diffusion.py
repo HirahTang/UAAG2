@@ -722,8 +722,6 @@ class Trainer(pl.LightningModule):
                 
             molecules, connected_ele, sanitized_ele = self.reverse_sampling(
                 batch=batch,
-                num_graphs=num_graphs,
-                empirical_distribution_num_nodes=num_nodes_lig,
                 device=device,
                 verbose=verbose,
                 save_traj=save_traj,
@@ -731,6 +729,7 @@ class Trainer(pl.LightningModule):
                 eta_ddim=eta_ddim,
                 every_k_step=every_k_step,
                 iteration=i,
+                show_pocket=True,
             )
             
             molecule_list.extend(molecules)
@@ -772,11 +771,73 @@ class Trainer(pl.LightningModule):
         else:
             return total_res
         
+    @torch.no_grad()
+    def generate_ligand(
+        self,
+        loader,
+        verbose: bool = False,
+        save_traj: bool = False,
+        ddpm: bool = True,
+        eta_ddim: float = 1.0,
+        every_k_step: int = 1,
+        show_pocket: bool = False,
+        device: str = "cpu",
+        ):
+        
+        print("Number of graphs: ", len(loader))
+        molecule_list = []
+        connected_list = []
+        sanitized_list = []
+        start = datetime.now()
+
+        
+        for i, batch in enumerate(loader):
+            reconstruct_mask = batch.is_ligand - batch.is_backbone
+            molecules = self.reverse_sampling(
+                batch=batch,
+                device=device,
+                verbose=verbose,
+                save_traj=save_traj,
+                ddpm=ddpm,
+                eta_ddim=eta_ddim,
+                every_k_step=every_k_step,
+                iteration=i,
+                show_pocket=False,
+            )
+
+            connected_list_batch, sanitized_list_batch = convert_edge_to_bond(
+                batch=batch,
+                out_dict=molecules,
+                path=os.path.join(self.save_dir, f"iter_{i}"),
+                reconstruct_mask=reconstruct_mask,
+                atom_decoder=self.dataset_info.atom_decoder,
+                edge_decoder=self.dataset_info.bond_decoder,
+            )
+            
+            molecule_list.extend(molecules)
+            connected_list.extend(connected_list_batch)
+            sanitized_list.extend(sanitized_list_batch)
+            
+        connect_rate = torch.tensor(connected_list).sum().item() / len(connected_list)
+        sanitize_rate = torch.tensor(sanitized_list).sum().item() / len(sanitized_list)
+        
+        run_time = datetime.now() - start
+        
+        if verbose:
+            print(f"Run time={run_time}")
+                
+        # save connect_rate and sanitize_rate to a json file
+        total_res = {"validity": sanitize_rate, "connectivity": connect_rate}
+        print(total_res)
+        
+        with open(os.path.join(self.save_dir, "results.json"), "w") as f:
+            json.dump(total_res, f)
+        
+            
+    
     def reverse_sampling(
         self, 
         batch,
-        num_graphs: int,
-        empirical_distribution_num_nodes: Tensor,
         device: torch.device,
         verbose: bool = False,
         save_traj: bool = False,
@@ -784,6 +845,7 @@ class Trainer(pl.LightningModule):
         eta_ddim: float = 1.0,
         every_k_step: int = 1,
         iteration: int = 0,
+        show_pocket: bool = False,
         ):
         # from IPython import embed; embed()
         # implement empirical_distribution_num_nodes of ligand node (randomly initiated)
@@ -1113,28 +1175,33 @@ class Trainer(pl.LightningModule):
             "atoms_true": atom_types_ligand,
         }
         
-        connected_list, sanitized_list = convert_edge_to_bond(
-            batch=batch, 
-            out_dict=out_dict, 
-            path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
-            reconstruct_mask=reconstruct_mask,
-            atom_decoder=self.dataset_info.atom_decoder,
-            edge_decoder=self.dataset_info.bond_decoder,
+        
+        
+        if show_pocket:
+            
+            connected_list, sanitized_list = convert_edge_to_bond(
+                batch=batch, 
+                out_dict=out_dict, 
+                path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
+                reconstruct_mask=reconstruct_mask,
+                atom_decoder=self.dataset_info.atom_decoder,
+                edge_decoder=self.dataset_info.bond_decoder,
+                )
+            
+            _, _ = get_molecules(
+                out_dict=out_dict,
+                path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
+                batch=batch.batch,  
+                reconstruct_mask=reconstruct_mask, 
+                backbone_mask=batch.is_backbone,
+                pocket_mask=batch.is_ligand,
+                atom_decoder=self.dataset_info.atom_decoder,
+                
             )
         
-        _, _ = get_molecules(
-            out_dict=out_dict,
-            path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
-            batch=batch.batch,  
-            reconstruct_mask=reconstruct_mask, 
-            backbone_mask=batch.is_backbone,
-            pocket_mask=batch.is_ligand,
-            atom_decoder=self.dataset_info.atom_decoder,
-            
-        )
-        
-        return out_dict, connected_list, sanitized_list
-        
+            return out_dict, connected_list, sanitized_list
+        else:
+            return out_dict
             # create the input to the network of the next timestep
             
             

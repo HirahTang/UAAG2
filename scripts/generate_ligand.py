@@ -1,37 +1,36 @@
+import argparse
 import os
-import sys
-import wandb
-import torch
+import warnings
+from datetime import datetime
+from pathlib import Path
+from time import time
 
+import numpy as np
+import pandas as pd
+import torch
+from Bio.PDB import PDBParser
+from tqdm import tqdm
+import sys
 sys.path.append('.')
 sys.path.append('..')
-import warnings
-from argparse import ArgumentParser
-import numpy as np
-import pytorch_lightning as pl
-import torch.nn.functional as F
+
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
     ModelCheckpoint,
     ModelSummary,
     TQDMProgressBar,
 )
+
+import pytorch_lightning as pl
+import torch.nn.functional as F
+
 from uaag.data.uaag_dataset import UAAG2DataModule, UAAG2Dataset, UAAG2Dataset_sampling, Dataset_Info
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-
+from argparse import ArgumentParser
 from uaag.callbacks.ema import ExponentialMovingAverage
-from uaag.equivariant_diffusion import Trainer
-from uaag.utils import load_data, load_model
-from pytorch_lightning.plugins.environments import LightningEnvironment
-
-warnings.filterwarnings(
-    "ignore", category=UserWarning, message="TypedStorage is deprecated"
-)
-
-# from eqgat_diff.experiments.data.distributions import DistributionProperty
-# from eqgat_diff.experiments.hparams import add_arguments
 
 def main(hparams):
+    
     
     ema_callback = ExponentialMovingAverage(decay=hparams.ema_decay)
     checkpoint_callback = ModelCheckpoint(
@@ -57,112 +56,19 @@ def main(hparams):
         raise ValueError("Logger type not recognized")
     
     root_pdb_path = "/home/qcx679/hantang/UAAG2/data/full_graph/data_2"
-    
-    # root_pdb_path_test = "/home/qcx679/hantang/UAAG2/data/full_graph/data"
-    # root_pdb_path = root_pdb_path_test
-    
     pdb_list = os.listdir(root_pdb_path)
     pdb_list = [os.path.join(root_pdb_path, pdb) for pdb in pdb_list]
+    print("Loading data from: ", pdb_list[-1])
+    data_file = torch.load(pdb_list[-1])
+    graph = data_file[20]
     
-    root_naa_path = "/home/qcx679/hantang/UAAG2/data/full_graph/naa"
-    naa_list = os.listdir(root_naa_path)
-    naa_list = [os.path.join(root_naa_path, naa) for naa in naa_list]
-    
-    pdbbind_path = "/home/qcx679/hantang/UAAG2/data/full_graph/pdbbind/pdbbind_data.pt"
-    
-    # combine three parts of the data
-    data = []
-    for pdb in pdb_list[:2]:
-        data.append(pdb)
-    for naa in naa_list:
-        data.append(naa)
-    data.append(pdbbind_path)
-    
-    train_data, val_data, test_data = load_data(hparams, data, [pdb_list[-1]])
-    
-    
-    print("Loading DataModule")
-    
+    dataset = UAAG2Dataset_sampling(graph, sample_size=10, sample_length=1000)
     dataset_info = Dataset_Info(hparams.data_info_path)
+    from IPython import embed; embed()
     
-    train_data = UAAG2Dataset(train_data)
-    val_data = UAAG2Dataset(val_data)
-    test_data = UAAG2Dataset(test_data)
-    datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data)
+if __name__ == '__main__':
     
-
-    
-    model = Trainer(
-        hparams=hparams,
-        dataset_info=dataset_info,
-    )
-    
-    
-    strategy = "ddp" if hparams.gpus > 1 else "auto"
-    # strategy = 'ddp_find_unused_parameters_true'
-    callbacks = [
-        ema_callback,
-        lr_logger,
-        checkpoint_callback,
-        TQDMProgressBar(refresh_rate=5),
-        ModelSummary(max_depth=2),
-    ]
-
-    if hparams.ema_decay == 1.0:
-        callbacks = callbacks[1:]
-
-    
-    trainer = pl.Trainer(
-        accelerator="gpu" if hparams.gpus else "cpu",
-        devices=hparams.gpus if hparams.gpus else 1,
-        strategy=strategy,
-        plugins=LightningEnvironment(),
-        num_nodes=1,
-        logger=logger,
-        enable_checkpointing=True,
-        accumulate_grad_batches=hparams.accum_batch,
-        val_check_interval=hparams.eval_freq,
-        gradient_clip_val=hparams.grad_clip_val,
-        callbacks=callbacks,
-        precision=hparams.precision,
-        num_sanity_val_steps=2,
-        max_epochs=hparams.num_epochs,
-        detect_anomaly=hparams.detect_anomaly,
-    )
-    
-    pl.seed_everything(seed=hparams.seed, workers=hparams.gpus > 1)
-    
-    ckpt_path = None
-    if hparams.load_ckpt is not None:
-        print("Loading from checkpoint ...")
-        
-
-        ckpt_path = hparams.load_ckpt
-        ckpt = torch.load(ckpt_path)
-        if ckpt["optimizer_states"][0]["param_groups"][0]["lr"] != hparams.lr:
-            print("Changing learning rate ...")
-            ckpt["optimizer_states"][0]["param_groups"][0]["lr"] = hparams.lr
-            ckpt["optimizer_states"][0]["param_groups"][0]["initial_lr"] = hparams.lr
-            ckpt_path = (
-                "lr" + "_" + str(hparams.lr) + "_" + os.path.basename(hparams.load_ckpt)
-            )
-            ckpt_path = os.path.join(
-                os.path.dirname(hparams.load_ckpt),
-                f"retraining_with_lr{hparams.lr}.ckpt",
-            )
-            if not os.path.exists(ckpt_path):
-                torch.save(ckpt, ckpt_path)
-
-    trainer.fit(
-        model=model,
-        datamodule=datamodule,
-        ckpt_path=ckpt_path if hparams.load_ckpt is not None else None,
-    )
-
-
-if __name__ == "__main__":
-    
-    DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "3DcoordsAtomsBonds_0")
+    DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "ProteinGymSampling")
     parser = ArgumentParser()
     # parser = add_arguments(parser)
     

@@ -20,6 +20,9 @@ from torch_geometric.utils.subgraph import subgraph
 from torch_scatter import scatter_add, scatter_mean
 from tqdm import tqdm
 from uaag import bond_analyze
+import openbabel as ob
+obConversion = ob.OBConversion()
+obConversion.SetInAndOutFormats("xyz", "mol")
 # from torch_sparse import coalesces
 
 BOND_ORDER_TO_EDGE_TYPE = {
@@ -196,7 +199,23 @@ def is_connected_molecule(atom_list, edge_list):
         G.add_edge(i, j)
     return nx.is_connected(G)  
 
-def visualize_mol_bond(
+def check_sanitize_connectivity(
+    mol_file
+):
+    # read the molecule and convert it to a list of atoms and bonds
+    mol = Chem.MolFromMolFile(mol_file)
+    atoms = [atom.GetIdx() for atom in mol.GetAtoms()]
+    bonds = [(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) for bond in mol.GetBonds()]
+    connected_mol = is_connected_molecule(atoms, bonds)
+    try:
+        Chem.SanitizeMol(mol)
+        sanitized = True
+    except:
+        sanitized = False
+
+    return connected_mol, sanitized
+
+def visualize_mol_bond_abandoned(
     pos,
     atoms,
     bonds,
@@ -359,6 +378,10 @@ def convert_edge_to_bond(
     
     for i in range(len(backbone_size)):
         
+        path_batch = os.path.join(path, f"batch_{i}", "final")
+        if not os.path.exists(path_batch):
+            os.makedirs(path_batch)
+            
         end_idx_ligand_atom = start_idx_ligand + ligand_size[i]
         end_idx_ligand_edge = start_idx_edge + edge_size[i]
 
@@ -375,25 +398,29 @@ def convert_edge_to_bond(
         ligand_bond_idx = torch.stack([torch.tensor([idx_map[idx.detach().cpu().item()] for idx in ligand_bond_idx[0]]), 
                                     torch.tensor([idx_map[idx.detach().cpu().item()] for idx in ligand_bond_idx[1]])], dim=0)
         
-            
-        mol_block, (connected, sanitized) = visualize_mol_bond(
-            ligand_pos_batch, 
-            [atom_decoder[int(a)] for a in ligand_atom_batch],
-            ligand_bond_attr,
-            ligand_bond_idx,
-            edge_decoder,
-            val_check=True
-            )
+        ligand_path = os.path.join(path_batch, "ligand.xyz")
+        
+        write_xyz_file(ligand_pos_batch.cpu().detach(), [atom_decoder[int(a)] for a in ligand_atom_batch], ligand_path)
+        ob_mol = ob.OBMol()
+        obConversion.ReadFile(ob_mol, ligand_path)
+        obConversion.WriteFile(ob_mol, os.path.join(path_batch, "ligand.mol"))
+        connected, sanitized = check_sanitize_connectivity(os.path.join(path_batch, "ligand.mol"))
+        # mol_block, (connected, sanitized) = visualize_mol_bond(
+        #     ligand_pos_batch, 
+        #     [atom_decoder[int(a)] for a in ligand_atom_batch],
+        #     ligand_bond_attr,
+        #     ligand_bond_idx,
+        #     edge_decoder,
+        #     val_check=True
+        #     )
         connected_list.append(connected)
         sanitized_list.append(sanitized)
-        path_batch = os.path.join(path, f"batch_{i}", "final")
-        if not os.path.exists(path_batch):
-            os.makedirs(path_batch)
+        
+       
         
         # from IPython import embed; embed()
         
-        with open(os.path.join(path_batch, "ligand.mol"), "w") as f:
-            f.write(mol_block)
+        
         start_idx_ligand = end_idx_ligand_atom
         start_idx_edge = end_idx_ligand_edge
         
