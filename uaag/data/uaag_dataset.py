@@ -1,5 +1,6 @@
 from operator import is_
 from os.path import join
+import os
 from typing import Optional
 import sys
 import numpy as np
@@ -20,6 +21,11 @@ from tqdm import tqdm
 from uaag.data.abstract_dataset import (
     AbstractDataModule,
 )
+
+from torch_geometric.utils import sort_edge_index
+
+from uaag.utils import visualize_mol
+
 import pytorch_lightning as pl
 import pickle
 # from experiments.data.geom.geom_dataset_adaptive import GeomDrugsDataset
@@ -129,12 +135,17 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
     def __init__(
         self,
         data,
+        hparams,
+        dataset_info,
         sample_size=10,
         sample_length=1000,
     ):
         super(UAAG2Dataset_sampling, self).__init__()
         # self.statistics = Statistic()
-
+        self.save_dir = os.path.join(hparams.save_dir, f'run{hparams.id}')
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
+        
         self.sample_size = sample_size
         self.sample_length = sample_length
         self.data = data
@@ -145,9 +156,24 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             1: 2,
         }
         
+        self.dataset_info = dataset_info
+        self.atom_decoder = self.dataset_info.atom_decoder
         self.data = self.preprocess(data)
         
-    
+        ligand_pos_true = self.data.pos[self.data.is_ligand==1].cpu().detach()
+        ligand_atom_true = [self.atom_decoder[int(a)] for a in self.data.x[self.data.is_ligand==1]]
+        
+        true_molblock = visualize_mol((ligand_pos_true, ligand_atom_true), val_check=False)
+        # save the true ligand molblock
+        with open(os.path.join(self.save_dir, 'ligand_true.mol'), 'w') as f:
+            f.write(true_molblock)
+        
+        pocket_pos_true = self.data.pos[self.data.is_ligand==0].cpu().detach()
+        pocket_atom_true = [self.atom_decoder[int(a)] for a in self.data.x[self.data.is_ligand==0]]
+        pocket_molblock = visualize_mol((pocket_pos_true, pocket_atom_true), val_check=False)
+        with open(os.path.join(self.save_dir, 'pocket_true.mol'), 'w') as f:
+            f.write(pocket_molblock)
+        self.adj = False
         
     def __len__(self):
         return self.sample_length
@@ -172,11 +198,47 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             graph_data.edge_ligand = torch.ones(graph_data.edge_attr.size(0))
         if not hasattr(graph_data, 'id'):
             graph_data.id = graph_data.compound_id
-           
-        return graph_data
+        graph_data.x = graph_data.x.float()
+        graph_data.pos = graph_data.pos.float()
+        graph_data.edge_attr = graph_data.edge_attr.float()
+        graph_data.edge_index = graph_data.edge_index.long()
+        # from IPython import embed; embed()
         
+        charges_np = graph_data.charges.numpy()
+        mapped_np = np.vectorize(self.charge_emb.get)(charges_np)
+        charges = torch.from_numpy(mapped_np)
+        
+        graph_data.degree = graph_data.degree.float()
+        graph_data.is_aromatic = graph_data.is_aromatic.float()
+        graph_data.is_in_ring = graph_data.is_in_ring.float()
+        graph_data.hybridization = graph_data.hybridization.float()
+        graph_data.is_backbone = graph_data.is_backbone.float()
+        graph_data.is_ligand = graph_data.is_ligand.float()
+        
+        batch_graph_data = Data(
+            x=graph_data.x,
+            pos=graph_data.pos,
+            edge_index=graph_data.edge_index,
+            edge_attr=graph_data.edge_attr,
+            edge_ligand=torch.tensor(graph_data.edge_ligand).float(),
+            charges=charges,
+            degree=graph_data.degree,
+            is_aromatic=graph_data.is_aromatic,
+            is_in_ring=graph_data.is_in_ring,
+            hybridization=graph_data.hybridization,
+            is_backbone=graph_data.is_backbone,
+            is_ligand=graph_data.is_ligand,
+            ligand_size=torch.tensor(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
+            id=graph_data.compound_id,
+            ids=torch.tensor(range(len(graph_data.x))),
+        )
+        
+        return batch_graph_data
     
+
+
     def __getitem__(self, idx):
+
         reconstruct_mask = self.data.is_ligand - self.data.is_backbone
         x = self.data.x[reconstruct_mask==0]
         pos = self.data.pos[reconstruct_mask==0]
@@ -187,125 +249,108 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         hybridization = self.data.hybridization[reconstruct_mask==0]
         is_ligand = self.data.is_ligand[reconstruct_mask==0]
         is_backbone = self.data.is_backbone[reconstruct_mask==0]
-        from IPython import embed; embed()
-        return self.data
-        # graph_data = self.data[idx]
-        # graph_data = self.pocket_centering(graph_data)
-        # #. aligning dtype
+        ids = self.data.ids[reconstruct_mask==0]
         
-        # # if graph_data.edge_ligand
+        # remove the information of current edges connect to ligands
         
-        # # check if graph_data.edge_ligand exists
-        # # if not hasattr(graph_data, 'componud_id'):
-        # #     graph_data.componud_id = graph_data.compound_id
-        # if not hasattr(graph_data, 'edge_ligand'):
-        #     graph_data.edge_ligand = torch.ones(graph_data.edge_attr.size(0))
-        # if not hasattr(graph_data, 'compound_id'):
-        #     graph_data.compound_id = graph_data.componud_id
-        # if not hasattr(graph_data, 'id'):
-        #     graph_data.id = graph_data.compound_id    
+        edge_mask = torch.isin(self.data.edge_index[0], ids) & torch.isin(self.data.edge_index[1], ids)
+        edge_index = self.data.edge_index[:, edge_mask]
+        edge_attr = self.data.edge_attr[edge_mask]
+        edge_ligand = torch.tensor(self.data.edge_ligand)[edge_mask]
         
-        # graph_data.x = graph_data.x.float()
-        # graph_data.pos = graph_data.pos.float()
-        # graph_data.edge_attr = graph_data.edge_attr.float()
-        # graph_data.edge_index = graph_data.edge_index.long()
-        # # from IPython import embed; embed()
+        # recreate the ligand idx to create a new edge indexes
         
-        # charges_np = graph_data.charges.numpy()
-        # mapped_np = np.vectorize(self.charge_emb.get)(charges_np)
-        # charges = torch.from_numpy(mapped_np)
+        map_ids = {int(ids[i]): i for i in range(len(ids))}
         
+        new_edge_index = torch.empty_like(edge_index)
+        for i in range(edge_index.size(1)):
+            new_edge_index[0, i] = map_ids[int(edge_index[0, i])]
+            new_edge_index[1, i] = map_ids[int(edge_index[1, i])]
+        edge_index = new_edge_index
         
-        # # graph_data.charges = graph_data.charges.long()
-        # # graph_data.charges = torch.tensor(self.charge_emb[i] for i in graph_data.charges).float()
-        # # map the value of charges by {-1: 0, 0: 1, 1: 2}
-        
-        
-        
-        # graph_data.degree = graph_data.degree.float()
-        # graph_data.is_aromatic = graph_data.is_aromatic.float()
-        # graph_data.is_in_ring = graph_data.is_in_ring.float()
-        # graph_data.hybridization = graph_data.hybridization.float()
-        # graph_data.is_backbone = graph_data.is_backbone.float()
-        # graph_data.is_ligand = graph_data.is_ligand.float()
-        
-        # batch_graph_data = Data(
-        #     x=graph_data.x,
-        #     pos=graph_data.pos,
-        #     edge_index=graph_data.edge_index,
-        #     edge_attr=graph_data.edge_attr,
-        #     edge_ligand = graph_data.edge_ligand.float(),
-        #     charges=charges,
-        #     degree=graph_data.degree,
-        #     is_aromatic=graph_data.is_aromatic,
-        #     is_in_ring=graph_data.is_in_ring,
-        #     hybridization=graph_data.hybridization,
-        #     is_backbone=graph_data.is_backbone,
-        #     is_ligand=graph_data.is_ligand,
-        #     id=graph_data.compound_id,
-        # )
-        
-        # # convert batch_graph_data to remove the non-pocket information
-        
-        # is_pocket = 1 - batch_graph_data.is_ligand + batch_graph_data.is_backbone
-        # is_reconstruct = 1 - is_pocket
-        # ids = torch.tensor(range(len(batch_graph_data.x)))
-        # new_ids = ids[is_pocket==1]
-        
-        # map_ids = {int(new_ids[i]): i for i in range(len(new_ids))}
-        # map_keys = torch.tensor(list(map_ids.keys()))
-        # map_values = torch.tensor(list(map_ids.values()))
-        
-        # start_in_index = torch.isin(batch_graph_data.edge_index[0], new_ids)
-        # end_in_index = torch.isin(batch_graph_data.edge_index[1], new_ids)
-        # edge_mask = start_in_index & end_in_index
-        # edge_index = batch_graph_data.edge_index[:, edge_mask]
-        
-        # new_edge_index = torch.stack([
-        #     map_values[(edge_index[0].unsqueeze(-1)==map_keys).nonzero(as_tuple=True)[1]],
-        #     map_values[(edge_index[1].unsqueeze(-1)==map_keys).nonzero(as_tuple=True)[1]],
+        # edge_index = torch.stack([
+        #     new_ids[(edge_index[0].unsqueeze(-1)==ids).nonzero(as_tuple=True)[1]],
+        #     new_ids[(edge_index[1].unsqueeze(-1)==ids).nonzero(as_tuple=True)[1]],
         # ])
-        # new_edge_attr = batch_graph_data.edge_attr[edge_mask]
-        # new_edge_ligand = batch_graph_data.edge_ligand[edge_mask]
-        # new_x = batch_graph_data.x[is_pocket==1]
-        # new_pos = batch_graph_data.pos[is_pocket==1]
-        # new_charges = batch_graph_data.charges[is_pocket==1]
-        # new_degree = batch_graph_data.degree[is_pocket==1]
-        # new_is_aromatic = batch_graph_data.is_aromatic[is_pocket==1]
-        # new_is_in_ring = batch_graph_data.is_in_ring[is_pocket==1]
-        # new_hybridization = batch_graph_data.hybridization[is_pocket==1]
         
-        # # Adding prior noise to the graph
+        # Add new nodes based on the assigned sample size
+        # print("Inside the get item function")
+        # from IPython import embed; embed()
         
-        # reconstruct_size = is_reconstruct.sum() if not self.fix_size else self.sample_size
+        x_new = torch.cat([x, torch.zeros(self.sample_size)])
+        pos_new = torch.cat([pos, torch.randn(self.sample_size, 3)])
+        charges_new = torch.cat([charges, torch.multinomial(self.dataset_info.charge_types, self.sample_size, replacement=True)])
+        degree_new = torch.cat([degree, torch.multinomial(self.dataset_info.degree, self.sample_size, replacement=True)])
+        is_aromatic_new = torch.cat([is_aromatic, torch.multinomial(self.dataset_info.is_aromatic, self.sample_size, replacement=True)])
+        is_in_ring_new = torch.cat([is_in_ring, torch.multinomial(self.dataset_info.is_ring, self.sample_size, replacement=True)])
+        hybridization_new = torch.cat([hybridization, torch.multinomial(self.dataset_info.hybridization, self.sample_size, replacement=True)])
+        is_ligand_new = torch.cat([is_ligand, torch.ones(self.sample_size)])
+        is_backbone_new = torch.cat([is_backbone, torch.zeros(self.sample_size)])
         
-        # sampled_x = torch.multinomial(self.atoms_prior, reconstruct_size, replacement=True)
-        # sampled_charge = torch.multinomial(self.charges_prior, reconstruct_size, replacement=True)
-        # sampled_degree = torch.multinomial(self.degree_prior, reconstruct_size, replacement=True)
-        # sampled_aromatic = torch.multinomial(self.is_aromatic_prior, reconstruct_size, replacement=True)
-        # sampled_ring = torch.multinomial(self.is_in_ring_prior, reconstruct_size, replacement=True)
-        # sampled_hybrid = torch.multinomial(self.hybridization_prior, reconstruct_size, replacement=True)
-        # sampled_pos = torch.randn(reconstruct_size, 3)
+        # Add new edges, firstly interaction edge between ligand and pocket (edge_ligand=0)
+        # Then adding the edges inside ligands (edge_ligand=1)
+        
+        ids_new = torch.tensor(range(len(x_new)))
+        ids_new_node = ids_new[-self.sample_size:]
+        ids_existed = ids_new[:-self.sample_size]
+        
+        # adding a new full connected graph of new nodes to existed graph
+        
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_existed)
+        grid1 = grid1.flatten()
+        grid2 = grid2.flatten()
+        # create the new edge index as a bidirectional graph
+        new_edge_index = torch.stack([grid1, grid2])
+        new_edge_index_reverse = torch.stack([grid2, grid1])
+        new_edge_index = torch.cat([new_edge_index, new_edge_index_reverse], dim=1)
+        
+        # print("New interaction edges")
+        # from IPython import embed; embed()
+        
+        # Adding interaction edge information
+        edge_index_new = torch.cat([edge_index, new_edge_index], dim=1)
+        edge_attr_new = torch.cat([edge_attr, torch.zeros(new_edge_index.size(1))])
+        edge_ligand_new = torch.cat([edge_ligand, torch.zeros(new_edge_index.size(1))])
+        
+        # Adding edge information inside the new nodes
+        
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_new_node)
+        mask = grid1 != grid2
+        grid1 = grid1[mask]
+        grid2 = grid2[mask]
+        grid1 = grid1.flatten()
+        grid2 = grid2.flatten()
+        new_ligand_edge_index = torch.stack([grid1, grid2])
+        
+        # print("New edges inside ligand")
+        # from IPython import embed; embed()
+        
+        edge_index_new = torch.cat([edge_index_new, new_ligand_edge_index], dim=1)
+        edge_attr_new = torch.cat([edge_attr_new, torch.zeros(new_ligand_edge_index.size(1))])
+        edge_ligand_new = torch.cat([edge_ligand_new, torch.ones(new_ligand_edge_index.size(1))]).float()
+   
         
         
-        # graph_ligand_removed = Data(
-        #     x=new_x.float(),
-        #     pos=new_pos.float(),
-        #     edge_index=new_edge_index.long(),
-        #     edge_attr=new_edge_attr.float(),
-        #     edge_ligand = new_edge_ligand.float(),
-        #     charges=new_charges.float(),
-        #     degree=new_degree.float(),
-        #     is_aromatic=new_is_aromatic.float(),
-        #     is_in_ring=new_is_in_ring.float(),
-        #     hybridization=new_hybridization.float(),
-        #     is_backbone=graph_data.is_backbone[is_pocket==1].float(),
-        #     is_ligand=graph_data.is_ligand[is_pocket==1].float(),
-        #     ligand_size=torch.tensor(len(batch_graph_data.x[is_pocket==0])).long(),
-        #     id=graph_data.compound_id,
-        # )
+        output_graph = Data(
+            x=x_new,
+            pos=pos_new,
+            edge_index=edge_index_new,
+            edge_attr=edge_attr_new,
+            edge_ligand=edge_ligand_new,
+            charges=charges_new,
+            degree=degree_new,
+            is_aromatic=is_aromatic_new,
+            is_in_ring=is_in_ring_new,
+            hybridization=hybridization_new,
+            is_backbone=is_backbone_new,
+            is_ligand=is_ligand_new,
+            ids=ids_new,
+            id=self.data.id,
+        )
+        
+        return output_graph
 
-        # return graph_ligand_removed
+      
     
 class UAAG2DataModule(pl.LightningDataModule):
     def __init__(self, cfg, train_data, val_data, test_data, **kwargs):

@@ -16,6 +16,7 @@
 *.pt
 *.sdf
 *.mol2
+*.xyz
 wandb*
 *L_sidechain*
 *3DcoordsAtomsBonds*

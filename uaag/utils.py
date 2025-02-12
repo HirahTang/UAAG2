@@ -203,6 +203,7 @@ def check_sanitize_connectivity(
     mol_file
 ):
     # read the molecule and convert it to a list of atoms and bonds
+    # from IPython import embed; embed()
     mol = Chem.MolFromMolFile(mol_file)
     atoms = [atom.GetIdx() for atom in mol.GetAtoms()]
     bonds = [(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) for bond in mol.GetBonds()]

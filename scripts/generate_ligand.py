@@ -29,6 +29,10 @@ from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from argparse import ArgumentParser
 from uaag.callbacks.ema import ExponentialMovingAverage
 
+from torch_geometric.data import Dataset, DataLoader
+
+from uaag.equivariant_diffusion import Trainer
+
 def main(hparams):
     
     
@@ -58,14 +62,35 @@ def main(hparams):
     root_pdb_path = "/home/qcx679/hantang/UAAG2/data/full_graph/data_2"
     pdb_list = os.listdir(root_pdb_path)
     pdb_list = [os.path.join(root_pdb_path, pdb) for pdb in pdb_list]
-    print("Loading data from: ", pdb_list[-1])
-    data_file = torch.load(pdb_list[-1])
-    graph = data_file[20]
+    print("Loading data from: ", pdb_list[-2])
+    data_file = torch.load("/home/qcx679/hantang/UAAG2/data/full_graph/data_2/DN7A_SACS2.pt")
+    # data_file = torch.load(pdb_list[-2])
+    graph = data_file[17]
     
-    dataset = UAAG2Dataset_sampling(graph, sample_size=10, sample_length=1000)
     dataset_info = Dataset_Info(hparams.data_info_path)
-    from IPython import embed; embed()
     
+    dataset = UAAG2Dataset_sampling(graph, hparams, dataset_info, sample_size=4, sample_length=32)
+    dataset.adj = True
+    # from IPython import embed; embed()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(dataset[0])
+    dataloader = DataLoader(
+        dataset=dataset, 
+        batch_size=hparams.batch_size,
+        num_workers=hparams.num_workers,
+        pin_memory=True,
+        shuffle=False)
+    
+    # Load the model and checkpoint
+    print("Loading model from checkpoint: ", hparams.load_ckpt)
+    model = Trainer.load_from_checkpoint(
+        hparams.load_ckpt,
+        hparams=hparams,
+        dataset_info=dataset_info,
+        ).to(device)
+    model = model.eval()
+    # from IPython import embed; embed()
+    model.generate_ligand(dataloader, verbose=True)
 if __name__ == '__main__':
     
     DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "ProteinGymSampling")

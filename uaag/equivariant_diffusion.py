@@ -804,7 +804,7 @@ class Trainer(pl.LightningModule):
                 iteration=i,
                 show_pocket=False,
             )
-
+            # from IPython import embed; embed()
             connected_list_batch, sanitized_list_batch = convert_edge_to_bond(
                 batch=batch,
                 out_dict=molecules,
@@ -944,8 +944,10 @@ class Trainer(pl.LightningModule):
             self.device,
         )
         
+        
         edge_attr_full = batch.edge_attr.long().to(self.device)
         edge_attr_full = F.one_hot(edge_attr_full, num_classes=self.num_bond_classes).float()
+
         edge_attr_full[batch.edge_ligand==1] = edge_attr_global_lig
         
         

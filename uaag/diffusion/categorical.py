@@ -191,6 +191,7 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         unweighted_probs[unweighted_probs.sum(dim=-1) == 0] = 1e-5
         # (N, a_t-1)
         probs = unweighted_probs / (unweighted_probs.sum(-1, keepdims=True) + eps)
+        probs[torch.isnan(probs)] = 1e-5
         x_tm1 = F.one_hot(
             probs.multinomial(
                 1,
@@ -227,13 +228,17 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         unweighted_probs[unweighted_probs.sum(dim=-1) == 0] = 1e-5
         # (N, a_t-1)
         probs = unweighted_probs / unweighted_probs.sum(-1, keepdims=True)
+        # convert the nan values to 1e-5
+        probs[torch.isnan(probs)] = 1e-5
+        
+
         edges_triu = F.one_hot(
             probs.multinomial(
                 1,
             ).squeeze(),
             num_classes=num_classes,
         ).float()
-        # from IPython import embed; embed()
+
         j, i = edge_index_global
         mask = j < i
         mask_i = i[mask]
