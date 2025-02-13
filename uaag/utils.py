@@ -205,7 +205,10 @@ def check_sanitize_connectivity(
     # read the molecule and convert it to a list of atoms and bonds
     # from IPython import embed; embed()
     mol = Chem.MolFromMolFile(mol_file)
-    atoms = [atom.GetIdx() for atom in mol.GetAtoms()]
+    try:
+        atoms = [atom.GetIdx() for atom in mol.GetAtoms()]
+    except:
+        return False, False
     bonds = [(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) for bond in mol.GetBonds()]
     connected_mol = is_connected_molecule(atoms, bonds)
     try:

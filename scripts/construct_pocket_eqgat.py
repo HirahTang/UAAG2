@@ -86,34 +86,37 @@ def main(args):
     file_name2 = '1A1I_tidy_bond.pkl'
     path = "/home/qcx679/hantang/UAAG/data/uaag_data_v2/pdb/1A1I_tidy"
     pdb_path = "/home/qcx679/hantang/UAAG/data/uaag_data_v2/pdb"
-    pdb_dir = os.listdir(pdb_path)
+    # pdb_dir = os.listdir(pdb_path)
     
     save_dict = {}
-    # split pdb_dir into 5 parts
-    random.seed(42)
-    pdb_dir_copy = pdb_dir.copy()
-    random.shuffle(pdb_dir_copy)
-    pdb_dir_copy = np.array_split(pdb_dir_copy, 20)
-    pdb_dir_current = list(pdb_dir_copy[args.split_num])
+    # # split pdb_dir into 5 parts
+    # random.seed(42)
+    # pdb_dir_copy = pdb_dir.copy()
+    # random.shuffle(pdb_dir_copy)
+    # pdb_dir_copy = np.array_split(pdb_dir_copy, 20)
+    # pdb_dir_current = list(pdb_dir_copy[args.split_num])
     # embed()
-    for pdb_name in pdb_dir_current:
-        atom_file = os.path.join(pdb_path, pdb_name, f"{pdb_name}_atom.pkl")
-        bond_file = os.path.join(pdb_path, pdb_name, f"{pdb_name}_bond.pkl")
+    # for pdb_name in pdb_dir_current:
     
-        with open(atom_file, 'rb') as f:
-            atom_features = pickle.load(f)
-        with open(bond_file, 'rb') as f:
-            bond_features = pickle.load(f)
-    
-        protein_object = amino_acid_pocket(atom_features, bond_features)
-        for aa in tqdm(protein_object.residues):
-            if aa['res_name'] in aa_dict.keys() and aa['res_name'] != 'GLY':
-                output_dict = {}
-                output_dict['ligand'] = protein_object.get_atoms(aa)
-                output_dict['pocket'] = protein_object.get_neighbors(aa)
-                save_dict[f'{pdb_name}_'+aa['identity']] = output_dict
+    pdb_path = "/home/qcx679/hantang/UAAG2/data/uaag_data_v2/pdb/DN7A_SACS2_tidy/"
+    pdb_name = "DN7A_SACS2_tidy"
+    atom_file = os.path.join(pdb_path, f"{pdb_name}_atom.pkl")
+    bond_file = os.path.join(pdb_path, f"{pdb_name}_bond.pkl")
+
+    with open(atom_file, 'rb') as f:
+        atom_features = pickle.load(f)
+    with open(bond_file, 'rb') as f:
+        bond_features = pickle.load(f)
+
+    protein_object = amino_acid_pocket(atom_features, bond_features)
+    for aa in tqdm(protein_object.residues):
+        if aa['res_name'] in aa_dict.keys() and aa['res_name'] != 'GLY':
+            output_dict = {}
+            output_dict['ligand'] = protein_object.get_atoms(aa)
+            output_dict['pocket'] = protein_object.get_neighbors(aa)
+            save_dict[f'{pdb_name}_'+aa['identity']] = output_dict
     # embed()
-    with open(f'data/uaag_data_v2/processed/uaag_aa_eqgat_{args.split_num}.json', 'w') as json_file:
+    with open(f'data/uaag_data_v2/{pdb_name}.json', 'w') as json_file:
         json.dump(save_dict, json_file)
         json_file.close()
 if __name__ == "__main__":

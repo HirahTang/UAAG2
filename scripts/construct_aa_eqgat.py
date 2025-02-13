@@ -13,7 +13,8 @@ from IPython import embed
 import os
 pdb_root_path = "/home/qcx679/hantang/UAAG/data/pdb_processed/"
 pdb_list = os.listdir(pdb_root_path)
-
+pdb_root_path = '/home/qcx679/hantang/UAAG/data/DMS/pdb_tidy/'
+pdb_list = ['DN7A_SACS2_tidy.pdb']
 # read the pdb file using rdkit
 
 def loop_over_atoms(rdkit_mol, pdb_mol):

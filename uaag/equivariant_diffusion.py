@@ -775,6 +775,7 @@ class Trainer(pl.LightningModule):
     def generate_ligand(
         self,
         loader,
+        save_path: str = 'somename',
         verbose: bool = False,
         save_traj: bool = False,
         ddpm: bool = True,
@@ -804,11 +805,11 @@ class Trainer(pl.LightningModule):
                 iteration=i,
                 show_pocket=False,
             )
-            # from IPython import embed; embed()
+            
             connected_list_batch, sanitized_list_batch = convert_edge_to_bond(
                 batch=batch,
                 out_dict=molecules,
-                path=os.path.join(self.save_dir, f"iter_{i}"),
+                path=os.path.join(self.save_dir, save_path, f"iter_{i}"),
                 reconstruct_mask=reconstruct_mask,
                 atom_decoder=self.dataset_info.atom_decoder,
                 edge_decoder=self.dataset_info.bond_decoder,
@@ -830,7 +831,7 @@ class Trainer(pl.LightningModule):
         total_res = {"validity": sanitize_rate, "connectivity": connect_rate}
         print(total_res)
         
-        with open(os.path.join(self.save_dir, "results.json"), "w") as f:
+        with open(os.path.join(self.save_dir, save_path, "results.json"), "w") as f:
             json.dump(total_res, f)
         
             

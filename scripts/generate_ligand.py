@@ -65,32 +65,40 @@ def main(hparams):
     print("Loading data from: ", pdb_list[-2])
     data_file = torch.load("/home/qcx679/hantang/UAAG2/data/full_graph/data_2/DN7A_SACS2.pt")
     # data_file = torch.load(pdb_list[-2])
-    graph = data_file[17]
-    
     dataset_info = Dataset_Info(hparams.data_info_path)
-    
-    dataset = UAAG2Dataset_sampling(graph, hparams, dataset_info, sample_size=4, sample_length=32)
-    dataset.adj = True
+    for graph in data_file:
+        seq_position = int(graph.compound_id.split("_")[-3])
+        seq_res = graph.compound_id.split("_")[-4]
+        
+        print("Sampling for: ", seq_res, seq_position)
+
+        for number_of_atom in [1, 2, 3, 4, 5, 6, 7, 8, 10]:
+            
+            save_path = os.path.join('DN7A_SACS2', f"{seq_res}_{seq_position}", f"sample_{number_of_atom}")
+            
+            dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=number_of_atom, sample_length=100)
+
     # from IPython import embed; embed()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(dataset[0])
-    dataloader = DataLoader(
-        dataset=dataset, 
-        batch_size=hparams.batch_size,
-        num_workers=hparams.num_workers,
-        pin_memory=True,
-        shuffle=False)
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            print(dataset[0], number_of_atom)
+            dataloader = DataLoader(
+                dataset=dataset, 
+                batch_size=hparams.batch_size,
+                num_workers=hparams.num_workers,
+                pin_memory=True,
+                shuffle=False)
     
     # Load the model and checkpoint
-    print("Loading model from checkpoint: ", hparams.load_ckpt)
-    model = Trainer.load_from_checkpoint(
-        hparams.load_ckpt,
-        hparams=hparams,
-        dataset_info=dataset_info,
-        ).to(device)
-    model = model.eval()
-    # from IPython import embed; embed()
-    model.generate_ligand(dataloader, verbose=True)
+            print("Loading model from checkpoint: ", hparams.load_ckpt)
+            model = Trainer.load_from_checkpoint(
+                hparams.load_ckpt,
+                hparams=hparams,
+                dataset_info=dataset_info,
+                ).to(device)
+            model = model.eval()
+            # from IPython import embed; embed()
+            model.generate_ligand(dataloader, save_path=save_path, verbose=True)
+        break
 if __name__ == '__main__':
     
     DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "ProteinGymSampling")

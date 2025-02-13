@@ -35,6 +35,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
     def __init__(
         self, 
         data,
+        mask_rate=0,
     ):
         super(UAAG2Dataset, self).__init__()
         # self.statistics = Statistic()
@@ -46,6 +47,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             0: 1,
             1: 2,
         }
+        self.mask_rate = mask_rate
     # def load_dataset(self):
     #     for file in tqdm(self.root):
     #         print(f"Loading {file} \n")
@@ -102,6 +104,21 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         # graph_data.charges = torch.tensor(self.charge_emb[i] for i in graph_data.charges).float()
         # map the value of charges by {-1: 0, 0: 1, 1: 2}
         
+        graph_data.degree = graph_data.degree.float()
+        graph_data.is_aromatic = graph_data.is_aromatic.float()
+        graph_data.is_in_ring = graph_data.is_in_ring.float()
+        graph_data.hybridization = graph_data.hybridization.float()
+        graph_data.is_backbone = graph_data.is_backbone.float()
+        graph_data.is_ligand = graph_data.is_ligand.float()
+        
+        reconstruct_mask = graph_data.is_ligand - graph_data.is_backbone
+        new_backbone = graph_data.is_backbone[reconstruct_mask==1]
+        # randomly change contents in new_backbone to 1 by the prob of 0.5
+        
+        # randomly mask part of the backbone by the mask_rate, 0 - reconstruct everything, 1 - reconstruct nothing
+        new_backbone = torch.bernoulli(torch.ones_like(new_backbone) * self.mask_rate).float()
+        
+        graph_data.is_backbone[reconstruct_mask==1] = new_backbone
         
         
         graph_data.degree = graph_data.degree.float()
@@ -136,15 +153,18 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         self,
         data,
         hparams,
+        save_path,
         dataset_info,
         sample_size=10,
         sample_length=1000,
     ):
         super(UAAG2Dataset_sampling, self).__init__()
         # self.statistics = Statistic()
-        self.save_dir = os.path.join(hparams.save_dir, f'run{hparams.id}')
+        self.save_dir = os.path.join(hparams.save_dir, f'run{hparams.id}', f"{save_path}")
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
+        
+    
         
         self.sample_size = sample_size
         self.sample_length = sample_length
@@ -165,6 +185,9 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         
         true_molblock = visualize_mol((ligand_pos_true, ligand_atom_true), val_check=False)
         # save the true ligand molblock
+        
+        
+        
         with open(os.path.join(self.save_dir, 'ligand_true.mol'), 'w') as f:
             f.write(true_molblock)
         
@@ -173,7 +196,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         pocket_molblock = visualize_mol((pocket_pos_true, pocket_atom_true), val_check=False)
         with open(os.path.join(self.save_dir, 'pocket_true.mol'), 'w') as f:
             f.write(pocket_molblock)
-        self.adj = False
+        
         
     def __len__(self):
         return self.sample_length
