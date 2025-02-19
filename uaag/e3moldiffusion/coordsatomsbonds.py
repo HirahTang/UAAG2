@@ -463,7 +463,7 @@ class DenoisingEdgeNetwork(nn.Module):
             batch_lig=batch_lig,
             pocket_mask=pocket_mask,
         )
-
+        
         out = self.prediction_head(
             x=out,
             batch=batch,

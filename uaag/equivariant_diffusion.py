@@ -225,11 +225,10 @@ class Trainer(pl.LightningModule):
         return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
     def validation_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
+        # from IPython import embed; embed()
         return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="val")
     def on_test_epoch_end(self):
         pass
-    
-    
     
     def _log(
         self,
@@ -634,6 +633,7 @@ class Trainer(pl.LightningModule):
     
     def on_validation_epoch_end(self):
         torch.cuda.empty_cache()
+        # from IPython import embed; embed()
         if (self.current_epoch + 1) % self.hparams.test_interval == 0:
             if self.local_rank == 0:
                 print(f"Running evaluation in epoch {self.current_epoch + 1}")

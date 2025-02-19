@@ -21,9 +21,15 @@ from torch_scatter import scatter_add, scatter_mean
 from tqdm import tqdm
 from uaag import bond_analyze
 import openbabel as ob
+import json
 obConversion = ob.OBConversion()
 obConversion.SetInAndOutFormats("xyz", "mol")
 # from torch_sparse import coalesces
+
+
+with open('data/aa_graph.json', 'rb') as json_file:
+    AA_GRAPH_DICT = json.load(json_file)
+    json_file.close()
 
 BOND_ORDER_TO_EDGE_TYPE = {
     1: Chem.BondType.SINGLE,
@@ -514,6 +520,26 @@ def get_molecules(
         start_idx_backbone = end_idx_backbone
         start_idx_pocket = end_idx_pocket
     return connected_list, sanitized_list
+
+def mol_to_graph(mol): # Convert mol to nx.graph for isomorphism checking
+#    mol = Chem.MolFromMolFile(mol)
+    MolGraph = nx.Graph()
+    for atom in mol.GetAtoms():
+        MolGraph.add_node(atom.GetIdx(), symbol=atom.GetSymbol())
+    for bond in mol.GetBonds():
+        MolGraph.add_edge(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
+    return MolGraph
+
+def aa_check(gen_mol):
+    nm = iso.categorical_node_match('symbol', 'C')
+    gen_aa_graph = mol_to_graph(gen_mol)
+    if not nx.is_connected(gen_aa_graph):
+        return 'INV'  
+    for aa in AA_GRAPH_DICT:
+        aa_graph = nx.node_link_graph(AA_GRAPH_DICT[aa])
+        if nx.is_isomorphic(gen_aa_graph, aa_graph, node_match=nm):
+            return aa
+    return 'UNK'
 
 class Statistics:
     def __init__(

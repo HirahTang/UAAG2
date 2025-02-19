@@ -72,25 +72,25 @@ def main(hparams):
     
     # combine three parts of the data
     data = []
+    
     for pdb in pdb_list[:2]:
         data.append(pdb)
+    
     for naa in naa_list:
         data.append(naa)
+
     data.append(pdbbind_path)
     
     train_data, val_data, test_data = load_data(hparams, data, [pdb_list[-1]])
-    
-    
+
     print("Loading DataModule")
     
     dataset_info = Dataset_Info(hparams.data_info_path)
     
-    train_data = UAAG2Dataset(train_data)
-    val_data = UAAG2Dataset(val_data)
+    train_data = UAAG2Dataset(train_data, mask_rate=0.5)
+    val_data = UAAG2Dataset(val_data, mask_rate=0.5)
     test_data = UAAG2Dataset(test_data)
     datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data)
-    
-
     
     model = Trainer(
         hparams=hparams,

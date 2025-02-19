@@ -98,7 +98,7 @@ def main(hparams):
             model = model.eval()
             # from IPython import embed; embed()
             model.generate_ligand(dataloader, save_path=save_path, verbose=True)
-        break
+
 if __name__ == '__main__':
     
     DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "ProteinGymSampling")

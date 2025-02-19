@@ -214,7 +214,10 @@ class EQGATEdgeGNN(nn.Module):
 
             if context is not None and (i == 1 or i == len(self.convs) - 1):
                 s = s + context
+                
+            # error shows up
             s, v = self.norms[i](x={"s": s, "v": v, "z": z}, batch=batch)
+            
             out = self.convs[i](
                 x=(s, v, p),
                 batch=batch,

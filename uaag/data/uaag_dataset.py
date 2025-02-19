@@ -35,7 +35,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
     def __init__(
         self, 
         data,
-        mask_rate=0,
+        mask_rate: float = 0,
     ):
         super(UAAG2Dataset, self).__init__()
         # self.statistics = Statistic()
@@ -415,6 +415,7 @@ class UAAG2DataModule(pl.LightningDataModule):
             pin_memory=self.pin_memory,
             shuffle=shuffle,
             persistent_workers=False,
+            drop_last=True,
         )
         return dataloader
     
@@ -426,6 +427,7 @@ class UAAG2DataModule(pl.LightningDataModule):
             pin_memory=self.pin_memory,
             shuffle=False,
             persistent_workers=False,
+            drop_last=True,
         )
         return dataloader
     
