@@ -145,7 +145,7 @@ def main(output_path):
     spearman_corr_2, ndcg_score_dict_2, topkrecall_dict_2, spearman_corr_3, \
         ndcg_score_dict_3, topkrecall_dict_3, spearman_corr_4, ndcg_score_dict_4, \
             topkrecall_dict_4 , spearman_corr_5, ndcg_score_dict_5, topkrecall_dict_5, \
-                spearman_corr_6, ndcg_score_dict_6, topkrecall_dict_6 = results
+                spearman_corr_7, ndcg_score_dict_7, topkrecall_dict_7 = results
     
     
    
@@ -167,13 +167,13 @@ def main(output_path):
     ndcg_score_dict_5 = pd.DataFrame.from_dict(ndcg_score_dict_5, orient='index', columns=['ndcg_score_dict_5'])
     topkrecall_dict_5 = pd.DataFrame.from_dict(topkrecall_dict_5, orient='index', columns=['topkrecall_dict_5'])
     
-    spearman_corr_6 = pd.DataFrame.from_dict(spearman_corr_6, orient='index', columns=['spearman_corr_6'])
-    ndcg_score_dict_6 = pd.DataFrame.from_dict(ndcg_score_dict_6, orient='index', columns=['ndcg_score_dict_6'])
-    topkrecall_dict_6 = pd.DataFrame.from_dict(topkrecall_dict_6, orient='index', columns=['topkrecall_dict_6'])
+    spearman_corr_7 = pd.DataFrame.from_dict(spearman_corr_7, orient='index', columns=['spearman_corr_7'])
+    ndcg_score_dict_7 = pd.DataFrame.from_dict(ndcg_score_dict_7, orient='index', columns=['ndcg_score_dict_7'])
+    topkrecall_dict_7 = pd.DataFrame.from_dict(topkrecall_dict_7, orient='index', columns=['topkrecall_dict_7'])
     
     result_df = pd.concat([spearman_corr_2, ndcg_score_dict_2, topkrecall_dict_2, spearman_corr_3, ndcg_score_dict_3, topkrecall_dict_3, \
                             spearman_corr_4, ndcg_score_dict_4, topkrecall_dict_4, spearman_corr_5, ndcg_score_dict_5, topkrecall_dict_5, \
-                            spearman_corr_6, ndcg_score_dict_6, topkrecall_dict_6], axis=1)
+                            spearman_corr_7, ndcg_score_dict_7, topkrecall_dict_7], axis=1)
     
     for model in baseline_models:
 
@@ -182,7 +182,7 @@ def main(output_path):
         spearman_corr_2_baseline, ndcg_score_dict_2_baseline, topkrecall_dict_2_baseline, spearman_corr_3_baseline, \
             ndcg_score_dict_3_baseline, topkrecall_dict_3_baseline, spearman_corr_4_baseline, ndcg_score_dict_4_baseline, \
                 topkrecall_dict_4_baseline , spearman_corr_5_baseline, ndcg_score_dict_5_baseline, topkrecall_dict_5_baseline, \
-                    spearman_corr_6_baseline, ndcg_score_dict_6_baseline, topkrecall_dict_6_baseline = result_baseline
+                    spearman_corr_7_baseline, ndcg_score_dict_7_baseline, topkrecall_dict_7_baseline = result_baseline
                     
         spearman_corr_2_baseline = pd.DataFrame.from_dict(spearman_corr_2_baseline, orient='index', columns=[f'spearman_corr_2_{model}'])
         ndcg_score_dict_2_baseline = pd.DataFrame.from_dict(ndcg_score_dict_2_baseline, orient='index', columns=[f'ndcg_score_dict_2_{model}'])
@@ -200,25 +200,29 @@ def main(output_path):
         ndcg_score_dict_5_baseline = pd.DataFrame.from_dict(ndcg_score_dict_5_baseline, orient='index', columns=[f'ndcg_score_dict_5_{model}'])
         topkrecall_dict_5_baseline = pd.DataFrame.from_dict(topkrecall_dict_5_baseline, orient='index', columns=[f'topkrecall_dict_5_{model}'])
         
-        spearman_corr_6_baseline = pd.DataFrame.from_dict(spearman_corr_6_baseline, orient='index', columns=[f'spearman_corr_6_{model}'])
-        ndcg_score_dict_6_baseline = pd.DataFrame.from_dict(ndcg_score_dict_6_baseline, orient='index', columns=[f'ndcg_score_dict_6_{model}'])
-        topkrecall_dict_6_baseline = pd.DataFrame.from_dict(topkrecall_dict_6_baseline, orient='index', columns=[f'topkrecall_dict_6_{model}'])
+        spearman_corr_7_baseline = pd.DataFrame.from_dict(spearman_corr_7_baseline, orient='index', columns=[f'spearman_corr_7_{model}'])
+        ndcg_score_dict_7_baseline = pd.DataFrame.from_dict(ndcg_score_dict_7_baseline, orient='index', columns=[f'ndcg_score_dict_7_{model}'])
+        topkrecall_dict_7_baseline = pd.DataFrame.from_dict(topkrecall_dict_7_baseline, orient='index', columns=[f'topkrecall_dict_7_{model}'])
         
     # merge all the dataframes
     
         result_df = pd.concat([result_df, spearman_corr_2_baseline, ndcg_score_dict_2_baseline, \
                             topkrecall_dict_2_baseline, spearman_corr_3_baseline, ndcg_score_dict_3_baseline, topkrecall_dict_3_baseline, \
                             spearman_corr_4_baseline, ndcg_score_dict_4_baseline, topkrecall_dict_4_baseline, spearman_corr_5_baseline, \
-                            ndcg_score_dict_5_baseline, topkrecall_dict_5_baseline, spearman_corr_6_baseline, ndcg_score_dict_6_baseline, \
-                            topkrecall_dict_6_baseline], axis=1)
+                            ndcg_score_dict_5_baseline, topkrecall_dict_5_baseline, spearman_corr_7_baseline, ndcg_score_dict_7_baseline, \
+                            topkrecall_dict_7_baseline], axis=1)
     
     output_path = os.path.join(output_path, 'result_df.csv')
-    result_df.to_csv(output_path)
+    result_df.to_csv(output_path, index=True)
+    result_df = pd.read_csv(output_path)
+    # change the column name Unnamed: 0 to position
+    result_df = result_df.rename(columns={'Unnamed: 0': 'position'})
+    result_df.to_csv(output_path, index=False)
     # from IPython import embed; embed()
     
 def eval_2_atoms(df_gt, df_gen, position):
     
-    if df_gen[df_gen['pos'] == position]['aa'].iloc[0] in ['CYS', 'SER']:
+    if df_gen[df_gen['pos'] == position]['aa'].iloc[0] in ['CYS', 'SER', 'PRO']:
         return np.nan, np.nan, np.nan
     
     cys = df_gen[df_gen['pos'] == position][['CYS']].iloc[0]['CYS']
@@ -244,7 +248,7 @@ def eval_2_atoms(df_gt, df_gen, position):
 
 def eval_3_atoms(df_gt, df_gen, position):
     
-    if df_gen[df_gen['pos'] == position]['aa'].iloc[0] in ['THR', 'VAL']:
+    if df_gen[df_gen['pos'] == position]['aa'].iloc[0] in ['THR', 'VAL', 'PRO']:
         return np.nan, np.nan, np.nan
     
     thr = df_gen[df_gen['pos'] == position][['THR']].iloc[0]['THR']
@@ -270,7 +274,7 @@ def eval_3_atoms(df_gt, df_gen, position):
 
 def eval_4_atoms(df_gt, df_gen, position):
     
-    if df_gen[df_gen['pos'] == position]['aa'].iloc[0] in ['ASP', 'ASN', 'LEU', 'ILE', 'MET']:
+    if df_gen[df_gen['pos'] == position]['aa'].iloc[0] in ['ASP', 'ASN', 'LEU', 'ILE', 'MET', 'PRO']:
         return np.nan, np.nan, np.nan
     
     asp = df_gen[df_gen['pos'] == position][['ASP']].iloc[0]['ASP']
@@ -307,7 +311,7 @@ def eval_4_atoms(df_gt, df_gen, position):
 
 def eval_5_atoms(df_gt, df_gen, position):
     
-    if df_gen[df_gen['pos'] == position]['aa'].iloc[0] in ['GLN', 'GLU', 'LYS']:
+    if df_gen[df_gen['pos'] == position]['aa'].iloc[0] in ['GLN', 'GLU', 'LYS', 'PRO']:
         return np.nan, np.nan, np.nan
     
     gln = df_gen[df_gen['pos'] == position][['GLN']].iloc[0]['GLN']
@@ -334,28 +338,28 @@ def eval_5_atoms(df_gt, df_gen, position):
     
     return spearman_score, ndcg_score, topkrecall_score
 
-def eval_6_atoms(df_gt, df_gen, position):
+def eval_7_atoms(df_gt, df_gen, position):
     
-    if df_gen[df_gen['pos'] == position]['aa'].iloc[0] in ['ARG', 'HIS']:
+    if df_gen[df_gen['pos'] == position]['aa'].iloc[0] in ['ARG', 'PHE', 'PRO']:
         return np.nan, np.nan, np.nan
     
     arg = df_gen[df_gen['pos'] == position][['ARG']].iloc[0]['ARG']
-    his = df_gen[df_gen['pos'] == position][['HIS']].iloc[0]['HIS']
+    phe = df_gen[df_gen['pos'] == position][['PHE']].iloc[0]['PHE']
     
     arg = 0 if pd.isna(arg) else arg
-    his = 0 if pd.isna(his) else his
+    phe = 0 if pd.isna(phe) else phe
     
     try:
         arg_gt = df_gt[(df_gt['pos'] == position) & (df_gt['mut'] == 'R')]['DMS_score'].iloc[0]
         
-        his_gt = df_gt[(df_gt['pos'] == position) & (df_gt['mut'] == 'H')]['DMS_score'].iloc[0]
+        phe_gt = df_gt[(df_gt['pos'] == position) & (df_gt['mut'] == 'F')]['DMS_score'].iloc[0]
         
     except:
         return np.nan, np.nan, np.nan
     
-    ndcg_score = calc_ndcg(np.array([arg_gt, his_gt]), np.array([arg, his]), top=1, quantile=False)
-    spearman_score = spearmanr([arg, his], [arg_gt, his_gt]).statistic
-    topkrecall_score = calc_toprecall(np.array([arg_gt, his_gt]), np.array([arg, his]), top_true=10, top_model=10)
+    ndcg_score = calc_ndcg(np.array([arg_gt, phe_gt]), np.array([arg, phe]), top=1, quantile=False)
+    spearman_score = spearmanr([arg, phe], [arg_gt, phe_gt]).statistic
+    topkrecall_score = calc_toprecall(np.array([arg_gt, phe_gt]), np.array([arg, phe]), top_true=10, top_model=10)
     
     return spearman_score, ndcg_score, topkrecall_score
 
@@ -377,9 +381,9 @@ def test_model(df_gt, df_gen):
     ndcg_score_dict_5 = {}
     topkrecall_dict_5 = {}
     
-    spearman_corr_6 = {}
-    ndcg_score_dict_6 = {}
-    topkrecall_dict_6 = {}
+    spearman_corr_7 = {}
+    ndcg_score_dict_7 = {}
+    topkrecall_dict_7 = {}
     
     for position in list(df_gen['pos']):
         spearman, ndcg, topkrecall = eval_2_atoms(df_gt, df_gen, position)
@@ -402,17 +406,17 @@ def test_model(df_gt, df_gen):
         ndcg_score_dict_5[position] = ndcg
         topkrecall_dict_5[position] = topkrecall
         
-        spearman, ndcg, topkrecall = eval_6_atoms(df_gt, df_gen, position)
-        spearman_corr_6[position] = spearman
-        ndcg_score_dict_6[position] = ndcg
-        topkrecall_dict_6[position] = topkrecall
+        spearman, ndcg, topkrecall = eval_7_atoms(df_gt, df_gen, position)
+        spearman_corr_7[position] = spearman
+        ndcg_score_dict_7[position] = ndcg
+        topkrecall_dict_7[position] = topkrecall
         
     return spearman_corr_2, ndcg_score_dict_2, topkrecall_dict_2, spearman_corr_3, ndcg_score_dict_3, topkrecall_dict_3 \
         , spearman_corr_4, ndcg_score_dict_4, topkrecall_dict_4, spearman_corr_5, ndcg_score_dict_5, topkrecall_dict_5 \
-        , spearman_corr_6, ndcg_score_dict_6, topkrecall_dict_6
+        , spearman_corr_7, ndcg_score_dict_7, topkrecall_dict_7
         
 def eval_2_atoms_baseline(df_gt, baselines, position, model):
-    if df_gt[(df_gt['pos'] == position)]['aa'].iloc[0] in ['C', 'S']:
+    if df_gt[(df_gt['pos'] == position)]['aa'].iloc[0] in ['C', 'S', 'P']:
         return np.nan, np.nan, np.nan
     try:
         cys = baselines[(baselines['pos'] == position) & (baselines['mut'] == 'C')][model].iloc[0]
@@ -430,7 +434,7 @@ def eval_2_atoms_baseline(df_gt, baselines, position, model):
     return spearman_score, ndcg_score, topkrecall_score
 
 def eval_3_atoms_baseline(df_gt, baselines, position, model):
-    if df_gt[(df_gt['pos'] == position)]['aa'].iloc[0] in ['T', 'V']:
+    if df_gt[(df_gt['pos'] == position)]['aa'].iloc[0] in ['T', 'V', 'P']:
         return np.nan, np.nan, np.nan
     try:
         thr = baselines[(baselines['pos'] == position) & (baselines['mut'] == 'T')][model].iloc[0]
@@ -448,7 +452,7 @@ def eval_3_atoms_baseline(df_gt, baselines, position, model):
     return spearman_score, ndcg_score, topkrecall_score
 
 def eval_4_atoms_baseline(df_gt, baselines, position, model):
-    if df_gt[(df_gt['pos'] == position)]['aa'].iloc[0] in ['D', 'N', 'L', 'I', 'M']:
+    if df_gt[(df_gt['pos'] == position)]['aa'].iloc[0] in ['D', 'N', 'L', 'I', 'M', 'P']:
         return np.nan, np.nan, np.nan
     try:
         asp = baselines[(baselines['pos'] == position) & (baselines['mut'] == 'D')][model].iloc[0]
@@ -472,7 +476,7 @@ def eval_4_atoms_baseline(df_gt, baselines, position, model):
     return spearman_score, ndcg_score, topkrecall_score
 
 def eval_5_atoms_baseline(df_gt, baselines, position, model):
-    if df_gt[(df_gt['pos'] == position)]['aa'].iloc[0] in ['Q', 'E', 'K']:
+    if df_gt[(df_gt['pos'] == position)]['aa'].iloc[0] in ['Q', 'E', 'K', 'P']:
         return np.nan, np.nan, np.nan
     try:
         gln = baselines[(baselines['pos'] == position) & (baselines['mut'] == 'Q')][model].iloc[0]
@@ -491,21 +495,21 @@ def eval_5_atoms_baseline(df_gt, baselines, position, model):
     
     return spearman_score, ndcg_score, topkrecall_score
 
-def eval_6_atoms_baseline(df_gt, baselines, position, model):
-    if df_gt[(df_gt['pos'] == position)]['aa'].iloc[0] in ['R', 'H']:
+def eval_7_atoms_baseline(df_gt, baselines, position, model):
+    if df_gt[(df_gt['pos'] == position)]['aa'].iloc[0] in ['R', 'F', 'P']:
         return np.nan, np.nan, np.nan
     try:
         arg = baselines[(baselines['pos'] == position) & (baselines['mut'] == 'R')][model].iloc[0]
-        his = baselines[(baselines['pos'] == position) & (baselines['mut'] == 'H')][model].iloc[0]
+        phe = baselines[(baselines['pos'] == position) & (baselines['mut'] == 'F')][model].iloc[0]
         
         arg_gt = df_gt[(df_gt['pos'] == position) & (df_gt['mut'] == 'R')]['DMS_score'].iloc[0]
-        his_gt = df_gt[(df_gt['pos'] == position) & (df_gt['mut'] == 'H')]['DMS_score'].iloc[0]
+        phe_gt = df_gt[(df_gt['pos'] == position) & (df_gt['mut'] == 'F')]['DMS_score'].iloc[0]
     except:
         return np.nan, np.nan, np.nan
     
-    ndcg_score = calc_ndcg(np.array([arg_gt, his_gt]), np.array([arg, his]), top=1, quantile=False)
-    spearman_score = spearmanr([arg, his], [arg_gt, his_gt]).statistic
-    topkrecall_score = calc_toprecall(np.array([arg_gt, his_gt]), np.array([arg, his]), top_true=10, top_model=10)
+    ndcg_score = calc_ndcg(np.array([arg_gt, phe_gt]), np.array([arg, phe]), top=1, quantile=False)
+    spearman_score = spearmanr([arg, phe], [arg_gt, phe_gt]).statistic
+    topkrecall_score = calc_toprecall(np.array([arg_gt, phe_gt]), np.array([arg, phe]), top_true=10, top_model=10)
     
     return spearman_score, ndcg_score, topkrecall_score
 
@@ -528,9 +532,9 @@ def test_baseline(df_gt, baselines, model):
     ndcg_score_dict_5 = {}
     topkrecall_dict_5 = {}
     
-    spearman_corr_6 = {}
-    ndcg_score_dict_6 = {}
-    topkrecall_dict_6 = {}
+    spearman_corr_7 = {}
+    ndcg_score_dict_7 = {}
+    topkrecall_dict_7 = {}
     
     for position in list(baselines['pos']):
         
@@ -554,15 +558,15 @@ def test_baseline(df_gt, baselines, model):
         ndcg_score_dict_5[position] = ndcg
         topkrecall_dict_5[position] = topkrecall
         
-        spearman, ndcg, topkrecall = eval_6_atoms_baseline(df_gt, baselines, position, model)
-        spearman_corr_6[position] = spearman
-        ndcg_score_dict_6[position] = ndcg
-        topkrecall_dict_6[position] = topkrecall
+        spearman, ndcg, topkrecall = eval_7_atoms_baseline(df_gt, baselines, position, model)
+        spearman_corr_7[position] = spearman
+        ndcg_score_dict_7[position] = ndcg
+        topkrecall_dict_7[position] = topkrecall
         
         
     return spearman_corr_2, ndcg_score_dict_2, topkrecall_dict_2, spearman_corr_3, ndcg_score_dict_3, topkrecall_dict_3 \
         , spearman_corr_4, ndcg_score_dict_4, topkrecall_dict_4, spearman_corr_5, ndcg_score_dict_5, topkrecall_dict_5 \
-        , spearman_corr_6, ndcg_score_dict_6, topkrecall_dict_6
+        , spearman_corr_7, ndcg_score_dict_7, topkrecall_dict_7
         
 if __name__ == "__main__":
     main('/home/qcx679/hantang/UAAG2/ProteinGymSampling/runProteinGym_DN7A_SACS2_eval/DN7A_SACS2')
