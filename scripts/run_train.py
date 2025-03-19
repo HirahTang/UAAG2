@@ -87,8 +87,13 @@ def main(hparams):
     
     dataset_info = Dataset_Info(hparams.data_info_path)
     
-    train_data = UAAG2Dataset(train_data, mask_rate=0.5)
-    val_data = UAAG2Dataset(val_data, mask_rate=0.5)
+    print("pocket noise: ", hparams.pocket_noise)
+    print("mask rate: ", hparams.mask_rate)
+    print("pocket noise scale: ", hparams.pocket_noise_scale)
+    
+    train_data = UAAG2Dataset(train_data, mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale)
+    # from IPython import embed; embed()
+    val_data = UAAG2Dataset(val_data, mask_rate=hparams.mask_rate)
     test_data = UAAG2Dataset(test_data)
     datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data)
     
@@ -310,6 +315,10 @@ if __name__ == "__main__":
     parser.add_argument("--num-bond-classes", default=5, type=int)
     parser.add_argument("--num-charge-classes", default=6, type=int)
 
+    parser.add_argument("--pocket-noise", default=False, action="store_true")
+    parser.add_argument("--mask-rate", default=0.5, type=float)
+    parser.add_argument("--pocket-noise-scale", default=0.01, type=float)
+    
     # BOND PREDICTION AND GUIDANCE:
     parser.add_argument("--bond-guidance-model", default=False, action="store_true")
     parser.add_argument("--bond-prediction", default=False, action="store_true")

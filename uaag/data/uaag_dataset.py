@@ -3,6 +3,7 @@ from os.path import join
 import os
 from typing import Optional
 import sys
+from MolDiff.utils import reconstruct
 import numpy as np
 sys.path.append('.')
 sys.path.append('..')
@@ -36,10 +37,16 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         self, 
         data,
         mask_rate: float = 0,
+        pocket_noise: bool = False,
+        noise_scale: float = 0.1,
     ):
         super(UAAG2Dataset, self).__init__()
         # self.statistics = Statistic()
 
+        self.pocket_noise = pocket_noise
+        if self.pocket_noise:
+            self.noise_scale = noise_scale
+        
         self.data = data
         # self.load_dataset()
         self.charge_emb = {
@@ -99,7 +106,6 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         mapped_np = np.vectorize(self.charge_emb.get)(charges_np)
         charges = torch.from_numpy(mapped_np)
         
-        
         # graph_data.charges = graph_data.charges.long()
         # graph_data.charges = torch.tensor(self.charge_emb[i] for i in graph_data.charges).float()
         # map the value of charges by {-1: 0, 0: 1, 1: 2}
@@ -120,7 +126,14 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         
         graph_data.is_backbone[reconstruct_mask==1] = new_backbone
         
-        
+        if self.pocket_noise:
+            
+            # Introduce gaussian pocket noise here
+            # from IPython import embed; embed()
+            gaussian_pocket_noise = torch.randn_like(graph_data.pos[reconstruct_mask==1]) * self.noise_scale
+            graph_data.pos[reconstruct_mask==1] += gaussian_pocket_noise
+            # from IPython import embed; embed()
+            
         graph_data.degree = graph_data.degree.float()
         graph_data.is_aromatic = graph_data.is_aromatic.float()
         graph_data.is_in_ring = graph_data.is_in_ring.float()
