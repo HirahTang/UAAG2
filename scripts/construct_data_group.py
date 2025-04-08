@@ -91,7 +91,7 @@ def dictionary_to_data(data, compound_id, radius=8):
         degree[new_id] = atom['Degree']
         position[new_id] = torch.tensor(atom['coords'])
         is_ligand[new_id] = 1
-        if backbone_count in [0, 1, 2, 4]:
+        if backbone_count in [0, 1, 2, 3]:
             is_backbone[new_id] = 1
             backbone_count += 1
         else:
@@ -208,7 +208,7 @@ def dictionary_to_data(data, compound_id, radius=8):
     # torch.save(compound_graph, f"/home/qcx679/hantang/UAAG2/data/full_graph/{compound_id}_test.pt")
     # embed()
     
-def split_list(lst, n_splits=50):
+def split_list(lst, n_splits=2):
     # Calculate the approximate size of each sublist
     avg_size = len(lst) // n_splits
     remainder = len(lst) % n_splits
@@ -234,8 +234,8 @@ def json_to_torch_geometric_data(args):
     # compound = data[compound_id_list[0]]
     # dictionary_to_data(compound)
     # split compound_id_list to 20 parts
-    # new_compound_list = split_list(compound_id_list)
-    # new_compound_list = new_compound_list[args.split_num]
+    new_compound_list = split_list(compound_id_list, n_splits=5)
+    new_compound_list = new_compound_list[args.split_num]
     for compound_id in tqdm(compound_id_list):
         compound = data[compound_id]
         compound_graph = dictionary_to_data(compound, compound_id)
@@ -245,7 +245,7 @@ def json_to_torch_geometric_data(args):
         
     # save the data_list
     # embed()
-    torch.save(data_list, f"/home/qcx679/hantang/UAAG2/data/full_graph/data_2/{args.output_name}.pt")
+    torch.save(data_list, f"/home/qcx679/hantang/UAAG2/data/full_graph/benchmarks/{args.output_name}.pt")
 
 def main(args):
 

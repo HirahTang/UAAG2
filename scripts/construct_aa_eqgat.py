@@ -10,11 +10,11 @@ from rdkit.Chem import ChemicalFeatures
 from rdkit import RDConfig
 from tqdm import tqdm
 from IPython import embed
+import argparse
 import os
-pdb_root_path = "/home/qcx679/hantang/UAAG/data/pdb_processed/"
-pdb_list = os.listdir(pdb_root_path)
-pdb_root_path = '/home/qcx679/hantang/UAAG/data/DMS/pdb_tidy/'
-pdb_list = ['DN7A_SACS2_tidy.pdb']
+
+# pdb_root_path = '/home/qcx679/hantang/UAAG/data/DMS/pdb_tidy/'
+# pdb_list = ['DN7A_SACS2_tidy.pdb']
 # read the pdb file using rdkit
 
 def loop_over_atoms(rdkit_mol, pdb_mol):
@@ -72,7 +72,7 @@ def loop_over_atoms(rdkit_mol, pdb_mol):
         }
     return atom_features, bond_features
 
-def create_pickle(pdb_title, pdb_root_path):
+def create_pickle(pdb_title, pdb_root_path, args):
     pdb_path = os.path.join(pdb_root_path, pdb_title)
     pdb_title = pdb_title.split(".")[0]
     example_mol = Chem.MolFromPDBFile(pdb_path, removeHs=True)
@@ -99,12 +99,12 @@ def create_pickle(pdb_title, pdb_root_path):
         output = loop_over_atoms(example_mol, structure)
         atom_features, bond_features = output
         # embed()
-        if not os.path.exists(f"data/uaag_data_v2/pdb/{pdb_title}"):
-            os.makedirs(f"data/uaag_data_v2/pdb/{pdb_title}")
+        if not os.path.exists(f"{args.output_dir}/{pdb_title}"):
+            os.makedirs(f"{args.output_dir}/{pdb_title}")
         
-        with open(f"data/uaag_data_v2/pdb/{pdb_title}/{pdb_title}_atom.pkl", "wb") as f:
+        with open(f"{args.output_dir}/{pdb_title}/{pdb_title}_atom.pkl", "wb") as f:
             pickle.dump(atom_features, f)
-        with open(f"data/uaag_data_v2/pdb/{pdb_title}/{pdb_title}_bond.pkl", "wb") as f:
+        with open(f"{args.output_dir}/{pdb_title}/{pdb_title}_bond.pkl", "wb") as f:
             pickle.dump(bond_features, f)    
             
     except Exception as e:
@@ -112,9 +112,16 @@ def create_pickle(pdb_title, pdb_root_path):
         print(e)
  
 if __name__ == "__main__":
+    
+    parser = argparse.ArgumentParser(description='Create pickle files for each pdb file')
+    parser.add_argument('--pdb_root_path', type=str, default="/home/qcx679/hantang/UAAG2/data/benchmark_row_cleaned", help='Directory containing protein pdb files')
+    parser.add_argument('--output_dir', type=str, default="/home/qcx679/hantang/UAAG2/data/intermediate_pickles", help='Directory to store cleaned protein pdb files')
+    args = parser.parse_args()
+    
+    pdb_list = os.listdir(args.pdb_root_path)
     for pdb_title in tqdm(pdb_list):
         try:
-            create_pickle(pdb_title, pdb_root_path)
+            create_pickle(pdb_title, args.pdb_root_path, args)
         except Exception as e:
             print(f"Failed to process {pdb_title}")
             print(e)

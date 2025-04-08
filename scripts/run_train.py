@@ -73,7 +73,7 @@ def main(hparams):
     # combine three parts of the data
     data = []
     
-    for pdb in pdb_list[:2]:
+    for pdb in pdb_list:
         data.append(pdb)
     
     for naa in naa_list:

@@ -63,15 +63,15 @@ def main(hparams):
     pdb_list = os.listdir(root_pdb_path)
     pdb_list = [os.path.join(root_pdb_path, pdb) for pdb in pdb_list]
     print("Loading data from: ", pdb_list[-2])
-    data_file = torch.load("/home/qcx679/hantang/UAAG2/data/full_graph/data_2/DN7A_SACS2.pt")
+    data_file = torch.load(hparams.benchmark_path)
     # data_file = torch.load(pdb_list[-2])
     dataset_info = Dataset_Info(hparams.data_info_path)
-    for graph in data_file:
+    for graph in data_file[:20]:
         seq_position = int(graph.compound_id.split("_")[-3])
         seq_res = graph.compound_id.split("_")[-4]
         
         print("Sampling for: ", seq_res, seq_position)
-
+        # from IPython import embed; embed()
         for number_of_atom in [1, 2, 3, 4, 5, 6, 7, 8, 10]:
             
             save_path = os.path.join('DN7A_SACS2', f"{seq_res}_{seq_position}", f"sample_{number_of_atom}")
@@ -310,6 +310,8 @@ if __name__ == '__main__':
     parser.add_argument("--calculate-energy", default=False, action="store_true")
     parser.add_argument("--save-xyz", default=False, action="store_true")
     parser.add_argument("--variational-sampling", default=False)
+    
+    parser.add_argument("--benchmark-path", default="/home/qcx679/hantang/UAAG2/data/full_graph/benchmarks/DN7A_SACS2.pt", type=str)
     
     args = parser.parse_args()
     

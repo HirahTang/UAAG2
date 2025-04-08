@@ -3,13 +3,19 @@ import pandas as pd
 from rdkit import Chem
 import os
 import sys
-
+import argparse
 sys.path.append('.')
 sys.path.append('..')
 from uaag.utils import aa_check
 from collections import Counter
 from tqdm import tqdm
-analysis_path = "/home/qcx679/hantang/UAAG2/ProteinGymSampling/runProteinGym_DN7A_SACS2_eval/DN7A_SACS2"
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--analysis_path', type=str, default='/home/qcx679/hantang/UAAG2/ProteinGymSampling/runoverfitting_check_scale/Testing_set')
+args = parser.parse_args()
+
+analysis_path = args.analysis_path
 aa_list = os.listdir(analysis_path)
 
 dataframe = pd.DataFrame(columns=['aa', 'pos', 'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS', 'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'ARG', 'SER', 'THR', 'VAL', 'TRP', 'TYR', 'UNK', 'INV'])
