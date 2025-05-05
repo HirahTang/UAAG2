@@ -39,10 +39,11 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         mask_rate: float = 0,
         pocket_noise: bool = False,
         noise_scale: float = 0.1,
+        params=None,
     ):
         super(UAAG2Dataset, self).__init__()
         # self.statistics = Statistic()
-
+        self.params = params
         self.pocket_noise = pocket_noise
         if self.pocket_noise:
             self.noise_scale = noise_scale
@@ -83,9 +84,11 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         
         graph_data = self.data[idx]
         graph_data = self.pocket_centering(graph_data)
+        CoM = graph_data.pos[graph_data.is_ligand==1].mean(dim=0)
         #. aligning dtype
         
         # if graph_data.edge_ligand
+        
         
         # check if graph_data.edge_ligand exists
         if not hasattr(graph_data, 'compound_id'):
@@ -116,7 +119,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
-        
+        graph_data.charges = charges.float()
         reconstruct_mask = graph_data.is_ligand - graph_data.is_backbone
         new_backbone = graph_data.is_backbone[reconstruct_mask==1]
         # randomly change contents in new_backbone to 1 by the prob of 0.5
@@ -125,6 +128,62 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         new_backbone = torch.bernoulli(torch.ones_like(new_backbone) * self.mask_rate).float()
         
         graph_data.is_backbone[reconstruct_mask==1] = new_backbone
+        # from IPython import embed; embed()
+        if self.params.virtual_node:
+            # adding random n of virtual nodes by the maximum max-virtual-node
+            sample_n = np.random.randint(1, self.params.max_virtual_nodes)
+            virtual_x = torch.ones(sample_n) * 8
+            # virtual pos is a tensor of shape (sample_n, 3) with CoM * 8
+            
+            virtual_pos = torch.stack([CoM] * sample_n)
+            virtual_charges = torch.ones(sample_n)
+            virtual_degree = torch.zeros(sample_n)
+            virtual_is_aromatic = torch.zeros(sample_n)
+            virtual_is_in_ring = torch.zeros(sample_n)
+            virtual_hybridization = torch.zeros(sample_n)
+            
+            # append virtual_x to graph_data.x
+            graph_data.x = torch.cat([graph_data.x, virtual_x])
+            graph_data.pos = torch.cat([graph_data.pos, virtual_pos])
+            graph_data.charges = torch.cat([graph_data.charges, virtual_charges])
+            graph_data.degree = torch.cat([graph_data.degree, virtual_degree])
+            graph_data.is_aromatic = torch.cat([graph_data.is_aromatic, virtual_is_aromatic])
+            graph_data.is_in_ring = torch.cat([graph_data.is_in_ring, virtual_is_in_ring])
+            graph_data.hybridization = torch.cat([graph_data.hybridization, virtual_hybridization])
+            graph_data.is_backbone = torch.cat([graph_data.is_backbone, torch.zeros(sample_n)])
+            graph_data.is_ligand = torch.cat([graph_data.is_ligand, torch.ones(sample_n)])
+            
+            virtual_new_id = torch.tensor(range(len(graph_data.x)))[-sample_n:]
+            virtual_existed = torch.tensor(range(len(graph_data.x)))[:-sample_n]
+            grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_existed)
+            grid1 = grid1.flatten()
+            grid2 = grid2.flatten()
+            # create the new edge index as a bidirectional graph
+            new_edge_index = torch.stack([grid1, grid2])
+            new_edge_index_reverse = torch.stack([grid2, grid1])
+            new_edge_index = torch.cat([new_edge_index, new_edge_index_reverse], dim=1)
+
+            edge_index_new = torch.cat([graph_data.edge_index, new_edge_index], dim=1)
+            edge_attr_new = torch.cat([graph_data.edge_attr, torch.zeros(new_edge_index.size(1))])
+            edge_ligand_new = torch.cat([graph_data.edge_ligand, torch.zeros(new_edge_index.size(1))])
+            
+            grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_new_id)
+            mask = grid1 != grid2
+            grid1 = grid1[mask]
+            grid2 = grid2[mask]
+            grid1 = grid1.flatten()
+            grid2 = grid2.flatten()
+            new_ligand_edge_index = torch.stack([grid1, grid2])
+            edge_index_new = torch.cat([edge_index_new, new_ligand_edge_index], dim=1)
+            edge_attr_new = torch.cat([edge_attr_new, torch.zeros(new_ligand_edge_index.size(1))])
+            edge_ligand_new = torch.cat([edge_ligand_new, torch.ones(new_ligand_edge_index.size(1))]).float()
+            
+            graph_data.edge_index = edge_index_new
+            graph_data.edge_attr = edge_attr_new
+            graph_data.edge_ligand = edge_ligand_new
+            
+            
+            # from IPython import embed; embed()
         
         if self.pocket_noise:
             
@@ -147,7 +206,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             edge_index=graph_data.edge_index,
             edge_attr=graph_data.edge_attr,
             edge_ligand=torch.tensor(graph_data.edge_ligand).float(),
-            charges=charges,
+            charges=graph_data.charges,
             degree=graph_data.degree,
             is_aromatic=graph_data.is_aromatic,
             is_in_ring=graph_data.is_in_ring,
@@ -457,7 +516,8 @@ class UAAG2DataModule(pl.LightningDataModule):
     
         
 class Dataset_Info:
-    def __init__(self, info_path):
+    def __init__(self, hparams, info_path):
+        self.hparams = hparams
         self.info_path = info_path
         self.process()
         self.get_decoder()
@@ -471,6 +531,10 @@ class Dataset_Info:
         self.atom_types = []
         
         sum_x = []
+        if self.hparams.virtual_node:
+            # add another value of 0 to data_info['x']
+            data_info['x'][8] = 0
+            
         for k in data_info['x'].keys():
             sum_x.append(data_info['x'][k])
         sum_x = torch.tensor(sum_x).sum()
@@ -549,6 +613,7 @@ class Dataset_Info:
             "Cl": 5,
             "F": 6,
             "Br": 7,
+            "NOATOM": 8,
         }
         atom_decoder  = {v: k for k, v in atom_encoder.items()}
         self.atom_decoder = atom_decoder

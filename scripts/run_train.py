@@ -73,28 +73,31 @@ def main(hparams):
     # combine three parts of the data
     data = []
     
-    for pdb in pdb_list:
-        data.append(pdb)
-    
+    # for pdb in pdb_list[:2]:
+    #     data.append(pdb)
+    # data = ['/home/qcx679/hantang/UAAG2/data/full_graph/full_graph_debug.pt']
     for naa in naa_list:
         data.append(naa)
 
+    # append pdbbind_path for 20 times
+    # for i in range(3):
     data.append(pdbbind_path)
-    
-    train_data, val_data, test_data = load_data(hparams, data, [pdb_list[-1]])
+    # data = ['/home/qcx679/hantang/UAAG2/data/full_graph/full_graph_debug.pt']
+    # train_data, val_data, test_data = load_data(hparams, data, [pdb_list[-1]])
+    train_data, val_data, test_data = load_data(hparams, data, ['/home/qcx679/hantang/UAAG2/data/full_graph/full_graph_debug.pt'])
 
     print("Loading DataModule")
     
-    dataset_info = Dataset_Info(hparams.data_info_path)
+    dataset_info = Dataset_Info(hparams, hparams.data_info_path)
     
     print("pocket noise: ", hparams.pocket_noise)
     print("mask rate: ", hparams.mask_rate)
     print("pocket noise scale: ", hparams.pocket_noise_scale)
     
-    train_data = UAAG2Dataset(train_data, mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale)
+    train_data = UAAG2Dataset(train_data, mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale, params=hparams)
     # from IPython import embed; embed()
-    val_data = UAAG2Dataset(val_data, mask_rate=hparams.mask_rate)
-    test_data = UAAG2Dataset(test_data)
+    val_data = UAAG2Dataset(val_data, mask_rate=hparams.mask_rate, params=hparams)
+    test_data = UAAG2Dataset(test_data, params=hparams)
     datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data)
     
     model = Trainer(
@@ -133,6 +136,7 @@ def main(hparams):
         num_sanity_val_steps=2,
         max_epochs=hparams.num_epochs,
         detect_anomaly=hparams.detect_anomaly,
+        limit_train_batches=30000,
     )
     
     pl.seed_everything(seed=hparams.seed, workers=hparams.gpus > 1)
@@ -200,7 +204,8 @@ if __name__ == "__main__":
     parser.add_argument("--test-size", default=100, type=int)
 
     parser.add_argument("--dropout-prob", default=0.3, type=float)
-
+    parser.add_argument("--virtual-node", default=1, type=int)
+    parser.add_argument("--max-virtual-nodes", default=11, type=int)
     # LEARNING
     parser.add_argument("-b", "--batch-size", default=32, type=int)
     parser.add_argument("-ib", "--inference-batch-size", default=32, type=int)
@@ -316,7 +321,8 @@ if __name__ == "__main__":
     parser.add_argument("--num-charge-classes", default=6, type=int)
 
     parser.add_argument("--pocket-noise", default=False, action="store_true")
-    parser.add_argument("--mask-rate", default=0.5, type=float)
+    parser.add_argument("--mask-rate", default=0.5, type=float, help="Mask rate, 0 for full mask and the model is reconstructing everything during training \
+        , 1 for no masking and the model is reconstructing nothing during training")
     parser.add_argument("--pocket-noise-scale", default=0.01, type=float)
     
     # BOND PREDICTION AND GUIDANCE:

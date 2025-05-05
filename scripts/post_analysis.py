@@ -18,7 +18,13 @@ args = parser.parse_args()
 analysis_path = args.analysis_path
 aa_list = os.listdir(analysis_path)
 
-dataframe = pd.DataFrame(columns=['aa', 'pos', 'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS', 'LEU', 'MET', 'ASN', 'PRO', 'GLN', 'ARG', 'SER', 'THR', 'VAL', 'TRP', 'TYR', 'UNK', 'INV'])
+dataframe = pd.DataFrame(columns=['aa', 'pos', 'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS', 'LEU', \
+    'MET', 'ASN', 'PRO', 'GLN', 'ARG', \
+        'SER', 'THR', 'VAL', 'TRP', 'TYR', \
+            'Abu', 'Nva', 'Nle', 'Ahp', 'Aoc', \
+                'Tme', 'hSM', 'tBu', 'Cpa', 'Aib', \
+                    'MeG', 'MeA', 'MeB', 'MeF', '2th', \
+                        '3th', 'YMe', '2Np', 'Bzt', 'UNK', 'INV'])
 
 for aa in tqdm(aa_list):
     gen_aa_list = []

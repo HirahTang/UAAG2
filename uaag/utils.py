@@ -25,7 +25,9 @@ import json
 obConversion = ob.OBConversion()
 obConversion.SetInAndOutFormats("xyz", "mol")
 # from torch_sparse import coalesces
-
+import sys
+sys.path.append('.')
+sys.path.append('..')
 
 with open('data/aa_graph.json', 'rb') as json_file:
     AA_GRAPH_DICT = json.load(json_file)
@@ -294,10 +296,20 @@ def visualize_mol_bond_abandoned(
 
 def visualize_mol(atom_sets, val_check=False):
     pos, atoms = atom_sets
-
-    x = pos[:, 0]
-    y = pos[:, 1]
-    z = pos[:, 2]
+    print("Visualizing molecule")
+    new_atoms = []
+    new_pos = []
+    for atom_idx in range(len(atoms)):
+        if atoms[atom_idx] != "NOATOM":
+            new_atoms.append(atoms[atom_idx])
+            new_pos.append(pos[atom_idx])
+    # from IPython import embed; embed()
+    pos = torch.stack(new_pos)
+    atoms = new_atoms
+    
+    x = pos[:, 0].tolist()
+    y = pos[:, 1].tolist()
+    z = pos[:, 2].tolist()
     
     edge_list = []
         
@@ -403,6 +415,11 @@ def convert_edge_to_bond(
         ligand_pos_batch = batch_pos[ligand_atom_idx]
         ligand_atom_batch = batch_atom_type[ligand_atom_idx]
         
+        # skip the ones with value=8 in ligand_atom_batch, and the corresponding ligand_pos_batch
+        ligand_pos_batch = ligand_pos_batch[ligand_atom_batch != 8]
+        ligand_atom_batch = ligand_atom_batch[ligand_atom_batch != 8]
+        
+        # from IPython import embed; embed()
         idx_map = {idx.detach().cpu().item(): i for i, idx in enumerate(ligand_atom_idx)}
         
         ligand_bond_idx = torch.stack([torch.tensor([idx_map[idx.detach().cpu().item()] for idx in ligand_bond_idx[0]]), 

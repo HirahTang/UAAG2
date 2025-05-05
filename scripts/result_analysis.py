@@ -1,4 +1,3 @@
-from unittest import result
 import pandas as pd
 import os
 from scipy.stats import spearmanr
@@ -83,7 +82,7 @@ def calc_ndcg(y_true, y_score, **kwargs):
 def main(output_path):
     
     ground_truth = "/home/qcx679/hantang/UAAG/data/DMS/DN7A_SACS2_Tsuboyama_2023_1JIC.csv"
-    generated = "/home/qcx679/hantang/UAAG2/ProteinGymSampling/runProteinGym_DN7A_SACS2_eval/DN7A_SACS2/aa_distribution.csv"
+    generated = "/home/qcx679/hantang/UAAG2/ProteinGymSampling/runProteinGym_DN7A_SACS2_ligand_model/DN7A_SACS2/aa_distribution.csv"
     baselines = "/home/qcx679/hantang/UAAG/data/DMS/full_benchmark/DN7A_SACS2_Tsuboyama_2023_1JIC.csv"
 
     df_gt = pd.read_csv(ground_truth)
@@ -569,4 +568,4 @@ def test_baseline(df_gt, baselines, model):
         , spearman_corr_7, ndcg_score_dict_7, topkrecall_dict_7
         
 if __name__ == "__main__":
-    main('/home/qcx679/hantang/UAAG2/ProteinGymSampling/runProteinGym_DN7A_SACS2_eval/DN7A_SACS2')
+    main('/home/qcx679/hantang/UAAG2/ProteinGymSampling/runProteinGym_DN7A_SACS2_ligand_model/DN7A_SACS2')

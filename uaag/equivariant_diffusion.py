@@ -225,7 +225,6 @@ class Trainer(pl.LightningModule):
         return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
     def validation_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
-        # from IPython import embed; embed()
         return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="val")
     def on_test_epoch_end(self):
         pass
@@ -350,6 +349,17 @@ class Trainer(pl.LightningModule):
         
         pocket_mask = (1 - batch.is_ligand + batch.is_backbone).long()
         ligand_mask = (batch.is_ligand - batch.is_backbone).long()
+        
+        # skip the current batch if batch.x.shape[0] > 1600
+        if batch.x.shape[0] > 1600:
+            print(f"Skipping batch {batch_idx} with atom size {batch.x.shape[0]}")
+            return torch.tensor(0.0, device=batch.x.device, requires_grad=True)
+
+        if batch.edge_index.shape[1] > 270000:
+            print(f"Skipping batch {batch_idx} with edge size {batch.edge_index.shape[1]}")
+            return torch.tensor(0.0, device=batch.x.device, requires_grad=True)
+
+        
         
         out_dict = self(batch=batch, t=t)
         
@@ -633,7 +643,6 @@ class Trainer(pl.LightningModule):
     
     def on_validation_epoch_end(self):
         torch.cuda.empty_cache()
-        # from IPython import embed; embed()
         if (self.current_epoch + 1) % self.hparams.test_interval == 0:
             if self.local_rank == 0:
                 print(f"Running evaluation in epoch {self.current_epoch + 1}")
@@ -709,8 +718,14 @@ class Trainer(pl.LightningModule):
         for i, batch in enumerate(dataloader):
             
             num_graphs = len(batch.batch.bincount())
-            if not self.hparams.variational_sampling:
+            
+            if not self.hparams.variational_sampling and not self.hparams.virtual_node:
                 num_nodes_lig = batch.ligand_size
+            elif self.hparams.virtual_node:
+                print("Using virtual node sampling")
+                # get the self.hparams.max_virtual_nodes and make it the same shape as batch.ligand_size
+                 
+                num_nodes_lig = torch.tensor([self.hparams.max_virtual_nodes] * batch.ligand_size.shape[0])
             else:
                 # TODO: Implement sampling from empirical distribution
                 # Sampling from empirical distribution, not implemented yet
@@ -719,7 +734,7 @@ class Trainer(pl.LightningModule):
                     high=dataset_info.max_num_nodes + 1,
                     size=(num_graphs,),
                 )
-                
+            # from IPython import embed; embed()
             molecules, connected_ele, sanitized_ele = self.reverse_sampling(
                 batch=batch,
                 device=device,
@@ -805,7 +820,6 @@ class Trainer(pl.LightningModule):
                 iteration=i,
                 show_pocket=False,
             )
-            
             connected_list_batch, sanitized_list_batch = convert_edge_to_bond(
                 batch=batch,
                 out_dict=molecules,
@@ -848,7 +862,6 @@ class Trainer(pl.LightningModule):
         iteration: int = 0,
         show_pocket: bool = False,
         ):
-        # from IPython import embed; embed()
         # implement empirical_distribution_num_nodes of ligand node (randomly initiated)
         # back to the graph, with fully connected edges
         batch = batch.to(self.device)
@@ -869,7 +882,6 @@ class Trainer(pl.LightningModule):
         atom_types_ligand = batch.x[reconstruct_mask==1]
         
         compound_atom_types = batch.x.long().to(self.device)
-        # from IPython import embed; embed()
         compound_atom_types[reconstruct_mask==1] = atom_types
         compound_atom_types = F.one_hot(compound_atom_types, num_classes=self.num_atom_types).float()
         atom_types = F.one_hot(atom_types, num_classes=self.num_atom_types).float()
@@ -955,7 +967,6 @@ class Trainer(pl.LightningModule):
         edge_index_global = batch.edge_index.to(self.device)
         
         batch_is_ligand = batch.is_ligand.unsqueeze(1).to(self.device)
-        # from IPython import embed; embed()
         atoms_feats_in_perturbed = torch.cat(
             [
                 compound_atom_types,
@@ -1052,7 +1063,6 @@ class Trainer(pl.LightningModule):
                     )  # here is cog_proj false as it will be downprojected later
                 else:
                     # positions
-                    # from IPython import embed; embed()
                     pos = self.sde_pos.sample_reverse(
                         t, pos, coords_pred, batch_lig, cog_proj=False, eta_ddim=eta_ddim
                     )  # here is cog_proj false as it will be downprojected later
@@ -1123,7 +1133,6 @@ class Trainer(pl.LightningModule):
                 edge_index_global=edge_index_global_lig,
                 num_classes=self.num_bond_classes,
             )
-            # from IPython import embed; embed()
             
             # combine the denoised features with the pocket features
             
@@ -1150,9 +1159,7 @@ class Trainer(pl.LightningModule):
                 ],
                 dim=-1,
             )
-            # from IPython import embed; embed()
             if save_traj:
-                # from IPython import embed; embed()
                 atom_decoder = self.dataset_info.atom_decoder
                 write_xyz_file_from_batch(
                     pos=compound_pos,
@@ -1178,7 +1185,7 @@ class Trainer(pl.LightningModule):
             "atoms_true": atom_types_ligand,
         }
         
-        
+        # from IPython import embed; embed()
         
         if show_pocket:
             
