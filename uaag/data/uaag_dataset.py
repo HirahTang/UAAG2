@@ -26,7 +26,7 @@ from uaag.data.abstract_dataset import (
 from torch_geometric.utils import sort_edge_index
 
 from uaag.utils import visualize_mol
-
+import lmdb
 import pytorch_lightning as pl
 import pickle
 # from experiments.data.geom.geom_dataset_adaptive import GeomDrugsDataset
@@ -35,7 +35,7 @@ import pickle
 class UAAG2Dataset(torch.utils.data.Dataset):
     def __init__(
         self, 
-        data,
+        data_path,
         mask_rate: float = 0,
         pocket_noise: bool = False,
         noise_scale: float = 0.1,
@@ -48,7 +48,17 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         if self.pocket_noise:
             self.noise_scale = noise_scale
         
-        self.data = data
+        self.env = lmdb.open(
+            data_path,
+            readonly=True,
+            lock=False,
+            subdir=False,
+            readahead=False,
+            meminit=False,
+        )
+        
+        with self.env.begin() as txn:
+            self.length = pickle.loads(txn.get(b"__len__"))
         # self.load_dataset()
         self.charge_emb = {
             -1: 0,
@@ -64,7 +74,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
     #     self.data
         
     def __len__(self):
-        return len(self.data)
+        return self.length
     
     def pocket_centering(self, batch):
         # graph_data = self.data[idx]
@@ -80,9 +90,14 @@ class UAAG2Dataset(torch.utils.data.Dataset):
     
     def __getitem__(self, idx):
         
+        with self.env.begin() as txn:
+            key = f"{idx:08}".encode("ascii")
+            byteflow = txn.get(key)
+        graph_data = pickle.loads(byteflow)
+        assert isinstance(graph_data, Data), f"Expected torch_geometric.data.Data, got {type(graph)}"
         # TODO zero center the positions by the mean of the pocket atoms
         
-        graph_data = self.data[idx]
+        # graph_data = self.data[idx]
         graph_data = self.pocket_centering(graph_data)
         CoM = graph_data.pos[graph_data.is_ligand==1].mean(dim=0)
         #. aligning dtype
@@ -165,7 +180,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
 
             edge_index_new = torch.cat([graph_data.edge_index, new_edge_index], dim=1)
             edge_attr_new = torch.cat([graph_data.edge_attr, torch.zeros(new_edge_index.size(1))])
-            edge_ligand_new = torch.cat([graph_data.edge_ligand, torch.zeros(new_edge_index.size(1))])
+            edge_ligand_new = torch.cat([torch.tensor(graph_data.edge_ligand), torch.zeros(new_edge_index.size(1))])
             
             grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_new_id)
             mask = grid1 != grid2
@@ -448,7 +463,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
       
     
 class UAAG2DataModule(pl.LightningDataModule):
-    def __init__(self, cfg, train_data, val_data, test_data, **kwargs):
+    def __init__(self, cfg, train_data, val_data, test_data, sampler, **kwargs):
         super().__init__()
         self.kwargs = kwargs
         self.cfg = cfg
@@ -458,6 +473,7 @@ class UAAG2DataModule(pl.LightningDataModule):
         self.train_data = train_data
         self.val_data = val_data
         self.test_data = test_data
+        self.sampler = sampler
         # self.setup(stage='fit')
         
     # def prepare_data(self):
@@ -485,11 +501,13 @@ class UAAG2DataModule(pl.LightningDataModule):
             batch_size=self.cfg.batch_size,
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
-            shuffle=shuffle,
+            shuffle=False,
             persistent_workers=False,
             drop_last=True,
+            sampler=self.sampler,
         )
         return dataloader
+
     
     def val_dataloader(self):
         dataloader = DataLoader(

@@ -23,7 +23,10 @@ from uaag.callbacks.ema import ExponentialMovingAverage
 from uaag.equivariant_diffusion import Trainer
 from uaag.utils import load_data, load_model
 from pytorch_lightning.plugins.environments import LightningEnvironment
+import lmdb
+from torch.utils.data import WeightedRandomSampler
 
+import pickle
 warnings.filterwarnings(
     "ignore", category=UserWarning, message="TypedStorage is deprecated"
 )
@@ -55,36 +58,6 @@ def main(hparams):
         logger = tb_logger
     else:
         raise ValueError("Logger type not recognized")
-    
-    root_pdb_path = "/home/qcx679/hantang/UAAG2/data/full_graph/data_2"
-    
-    # root_pdb_path_test = "/home/qcx679/hantang/UAAG2/data/full_graph/data"
-    # root_pdb_path = root_pdb_path_test
-    
-    pdb_list = os.listdir(root_pdb_path)
-    pdb_list = [os.path.join(root_pdb_path, pdb) for pdb in pdb_list]
-    
-    root_naa_path = "/home/qcx679/hantang/UAAG2/data/full_graph/naa"
-    naa_list = os.listdir(root_naa_path)
-    naa_list = [os.path.join(root_naa_path, naa) for naa in naa_list]
-    
-    pdbbind_path = "/home/qcx679/hantang/UAAG2/data/full_graph/pdbbind/pdbbind_data.pt"
-    
-    # combine three parts of the data
-    data = []
-    
-    # for pdb in pdb_list[:2]:
-    #     data.append(pdb)
-    # data = ['/home/qcx679/hantang/UAAG2/data/full_graph/full_graph_debug.pt']
-    for naa in naa_list:
-        data.append(naa)
-
-    # append pdbbind_path for 20 times
-    # for i in range(3):
-    data.append(pdbbind_path)
-    # data = ['/home/qcx679/hantang/UAAG2/data/full_graph/full_graph_debug.pt']
-    # train_data, val_data, test_data = load_data(hparams, data, [pdb_list[-1]])
-    train_data, val_data, test_data = load_data(hparams, data, ['/home/qcx679/hantang/UAAG2/data/full_graph/full_graph_debug.pt'])
 
     print("Loading DataModule")
     
@@ -93,12 +66,36 @@ def main(hparams):
     print("pocket noise: ", hparams.pocket_noise)
     print("mask rate: ", hparams.mask_rate)
     print("pocket noise scale: ", hparams.pocket_noise_scale)
-    
-    train_data = UAAG2Dataset(train_data, mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale, params=hparams)
+    lmdb_data_path = "/datasets/biochem/unaagi/unaagi_whole_v1.lmdb"
+    all_data = UAAG2Dataset(lmdb_data_path,  mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale, params=hparams)
+    test_data_setup = UAAG2Dataset(lmdb_data_path, params=hparams)
+    # split all_data into train, val, test from all_data
     # from IPython import embed; embed()
-    val_data = UAAG2Dataset(val_data, mask_rate=hparams.mask_rate, params=hparams)
-    test_data = UAAG2Dataset(test_data, params=hparams)
-    datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data)
+    train_data, val_data, test_data = torch.utils.data.random_split(all_data, [int(len(all_data) * hparams.train_size), len(all_data) - int(len(all_data) * hparams.train_size) - int(hparams.test_size), int(hparams.test_size)])
+    test_indices = test_data.indices
+    test_data = torch.utils.data.Subset(test_data_setup, test_indices)
+    # test_data
+    # convert the UAAG2Dataset parameters in test_data
+    
+    with open("/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl", "rb") as f:
+        metadata = pickle.load(f)
+    weights = []
+    for i in range(len(train_data)):
+        key = f"{i:08}".encode("ascii")
+        source_name = metadata[key]
+        if source_name in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
+            weights.append(hparams.pdbbind_weight)
+        else:
+            weights.append(1.0)
+    weights = np.array(weights)
+    weights = weights / weights.sum()
+    
+    sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
+    # train_data = UAAG2Dataset(train_data, mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale, params=hparams)
+    # from IPython import embed; embed()
+    # val_data = UAAG2Dataset(val_data, mask_rate=hparams.mask_rate, params=hparams)
+    # test_data = UAAG2Dataset(test_data, params=hparams)
+    datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data, sampler=sampler)
     
     model = Trainer(
         hparams=hparams,
@@ -200,12 +197,13 @@ if __name__ == "__main__":
     parser.add_argument("--remove-hs", default=False, action="store_true")
     parser.add_argument("--select-train-subset", default=False, action="store_true")
     parser.add_argument("--train-size", default=0.99, type=float)
-    parser.add_argument("--val-size", default=0.01, type=float)
+    parser.add_argument("--val-size", default=5000, type=float)
     parser.add_argument("--test-size", default=100, type=int)
 
     parser.add_argument("--dropout-prob", default=0.3, type=float)
     parser.add_argument("--virtual-node", default=1, type=int)
     parser.add_argument("--max-virtual-nodes", default=11, type=int)
+    parser.add_argument("--pdbbind-weight", default=10.0, type=float)
     # LEARNING
     parser.add_argument("-b", "--batch-size", default=32, type=int)
     parser.add_argument("-ib", "--inference-batch-size", default=32, type=int)
