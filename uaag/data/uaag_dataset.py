@@ -143,6 +143,14 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         new_backbone = torch.bernoulli(torch.ones_like(new_backbone) * self.mask_rate).float()
         
         graph_data.is_backbone[reconstruct_mask==1] = new_backbone
+        
+        if self.pocket_noise:
+            
+            # Introduce gaussian pocket noise here
+            # from IPython import embed; embed()
+            gaussian_pocket_noise = torch.randn_like(graph_data.pos[reconstruct_mask==1]) * self.noise_scale
+            graph_data.pos[reconstruct_mask==1] += gaussian_pocket_noise
+        
         # from IPython import embed; embed()
         if self.params.virtual_node:
             # adding random n of virtual nodes by the maximum max-virtual-node
@@ -200,12 +208,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             
             # from IPython import embed; embed()
         
-        if self.pocket_noise:
-            
-            # Introduce gaussian pocket noise here
-            # from IPython import embed; embed()
-            gaussian_pocket_noise = torch.randn_like(graph_data.pos[reconstruct_mask==1]) * self.noise_scale
-            graph_data.pos[reconstruct_mask==1] += gaussian_pocket_noise
+        
             # from IPython import embed; embed()
             
         graph_data.degree = graph_data.degree.float()

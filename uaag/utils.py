@@ -515,10 +515,6 @@ def get_molecules(
         connected_list.append(connected)
         sanitized_list.append(sanitized)
         
-        pocket_pos_i = pocket_pos_i.cpu().detach()
-        pocket_set = (pocket_pos_i, pocket_atom_type_i)
-        pocket_mol_block = visualize_mol(pocket_set, val_check=False)
-        
         true_set = (true_pos_i.cpu().detach(), true_atom_type_i)
         true_mol_block = visualize_mol(true_set, val_check=False)
         
@@ -527,8 +523,7 @@ def get_molecules(
             os.makedirs(path_batch)
         # with open(os.path.join(path_batch, "ligand.mol"), "w") as f:
         #     f.write(mol_block)
-        with open(os.path.join(path_batch, "pocket.mol"), "w") as f:
-            f.write(pocket_mol_block)
+        
         with open(os.path.join(path_batch, "true.mol"), "w") as f:
             f.write(true_mol_block)
             
@@ -536,6 +531,15 @@ def get_molecules(
         start_idx_ligand = end_idx_ligand
         start_idx_backbone = end_idx_backbone
         start_idx_pocket = end_idx_pocket
+        try:
+            pocket_pos_i = pocket_pos_i.cpu().detach()
+            pocket_set = (pocket_pos_i, pocket_atom_type_i)
+            pocket_mol_block = visualize_mol(pocket_set, val_check=False)
+            with open(os.path.join(path_batch, "pocket.mol"), "w") as f:
+                f.write(pocket_mol_block)
+        except:
+            print("Pocket is empty")
+            pass
     return connected_list, sanitized_list
 
 def mol_to_graph(mol): # Convert mol to nx.graph for isomorphism checking

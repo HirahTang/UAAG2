@@ -222,7 +222,13 @@ class Trainer(pl.LightningModule):
         
     def training_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
-        return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
+        try:
+            loss = self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
+        except RuntimeError as e:
+            print(f"RuntimeError: {e}")
+            loss = torch.tensor(0.0, device=batch.x.device, requires_grad=True)
+        return loss
+    
     def validation_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
         return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="val")
@@ -351,13 +357,13 @@ class Trainer(pl.LightningModule):
         ligand_mask = (batch.is_ligand - batch.is_backbone).long()
         
         # skip the current batch if batch.x.shape[0] > 1600
-        if batch.x.shape[0] > 1600:
-            print(f"Skipping batch {batch_idx} with atom size {batch.x.shape[0]}")
-            return torch.tensor(0.0, device=batch.x.device, requires_grad=True)
+        # if batch.x.shape[0] > 1600:
+        #     print(f"Skipping batch {batch_idx} with atom size {batch.x.shape[0]}")
+        #     return torch.tensor(0.0, device=batch.x.device, requires_grad=True)
 
-        if batch.edge_index.shape[1] > 270000:
-            print(f"Skipping batch {batch_idx} with edge size {batch.edge_index.shape[1]}")
-            return torch.tensor(0.0, device=batch.x.device, requires_grad=True)
+        # if batch.edge_index.shape[1] > 270000:
+        #     print(f"Skipping batch {batch_idx} with edge size {batch.edge_index.shape[1]}")
+        #     return torch.tensor(0.0, device=batch.x.device, requires_grad=True)
 
         
         
@@ -1197,18 +1203,20 @@ class Trainer(pl.LightningModule):
                 atom_decoder=self.dataset_info.atom_decoder,
                 edge_decoder=self.dataset_info.bond_decoder,
                 )
-            
-            _, _ = get_molecules(
-                out_dict=out_dict,
-                path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
-                batch=batch.batch,  
-                reconstruct_mask=reconstruct_mask, 
-                backbone_mask=batch.is_backbone,
-                pocket_mask=batch.is_ligand,
-                atom_decoder=self.dataset_info.atom_decoder,
-                
-            )
-        
+            try:
+                _, _ = get_molecules(
+                    out_dict=out_dict,
+                    path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
+                    batch=batch.batch,  
+                    reconstruct_mask=reconstruct_mask, 
+                    backbone_mask=batch.is_backbone,
+                    pocket_mask=batch.is_ligand,
+                    atom_decoder=self.dataset_info.atom_decoder,
+                    
+                )
+            except Exception as e:
+                print("No Pocket for this molecule")
+                return out_dict, connected_list, sanitized_list
             return out_dict, connected_list, sanitized_list
         else:
             return out_dict

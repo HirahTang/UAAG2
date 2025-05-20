@@ -289,7 +289,6 @@ if __name__ == "__main__":
     parser.add_argument("--lc-mulliken", default=1.5, type=float)
     parser.add_argument("--lc-wbo", default=2.0, type=float)
 
-    parser.add_argument("--pocket-noise-std", default=0.1, type=float)
     parser.add_argument(
         "--use-ligand-dataset-sizes", default=False, action="store_true"
     )

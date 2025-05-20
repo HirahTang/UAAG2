@@ -32,20 +32,24 @@ for aa in tqdm(aa_list):
     aa_path = os.path.join(analysis_path, aa)
     sample_path_list = os.listdir(aa_path)
     for sample_path in sample_path_list:
+        
+        # if sample_path is not a directory, skip it
+        if not os.path.isdir(os.path.join(aa_path, sample_path)):
+            continue
+        
         sample_path = os.path.join(aa_path, sample_path)
         
-        for iterate_num in range(13):
-            iterate_path = os.path.join(sample_path, f"iter_{str(iterate_num)}")
-            batch_path_list = os.listdir(iterate_path)
-            for batch_path in batch_path_list:
-                mol_path = os.path.join(iterate_path, batch_path, 'final', 'ligand.mol')
-                mol = Chem.MolFromMolFile(mol_path)
-                try:
-                    gen_aa = aa_check(mol)
-                    gen_aa_list.append(gen_aa)
-                except:
-                    gen_aa_list.append("INV")
-                    print(f"Error in {mol_path}")
+        
+        batch_path_list = os.listdir(sample_path)
+        for batch_path in batch_path_list:
+            mol_path = os.path.join(sample_path, batch_path, 'final', 'ligand.mol')
+            mol = Chem.MolFromMolFile(mol_path)
+            try:
+                gen_aa = aa_check(mol)
+                gen_aa_list.append(gen_aa)
+            except:
+                gen_aa_list.append("INV")
+                print(f"Error in {mol_path}")
                 
     aa_counter = Counter(gen_aa_list)
     # convert all values in aa_counter to lists with one element
