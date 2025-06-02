@@ -62,23 +62,31 @@ def main(hparams):
     root_pdb_path = "/home/qcx679/hantang/UAAG2/data/full_graph/data_2"
     pdb_list = os.listdir(root_pdb_path)
     pdb_list = [os.path.join(root_pdb_path, pdb) for pdb in pdb_list]
-    print("Loading data from: ", pdb_list[-2])
-    data_file = torch.load(hparams.benchmark_path)
+    print("Loading data from: ", hparams.sampling_path)
+    sample_file_path = hparams.sampling_path
+    data_file = torch.load(sample_file_path)
     # data_file = torch.load(pdb_list[-2])
     dataset_info = Dataset_Info(hparams, hparams.data_info_path)
+    # randomly pick 100 integer numbers with the range of 1 to len(data_file)
+    # fix seed for reproducibility
+    np.random.seed(42)
+    random_idx = np.random.choice(len(data_file), 100, replace=False)
+    data_file = [data_file[i] for i in random_idx]
     for graph in data_file:
         seq_position = int(graph.compound_id.split("_")[-3])
         seq_res = graph.compound_id.split("_")[-4]
         
         print("Sampling for: ", seq_res, seq_position)
         # from IPython import embed; embed()
-            
-        save_path = os.path.join('Samples', f"{seq_res}_{seq_position}")
+        # for number_of_atom in [1, 2, 3, 4, 5, 6, 7, 8, 10]:
+        number_of_atom = 11
+        save_path = os.path.join(hparams.division, f"{seq_res}_{seq_position}")
         
-        dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=11, sample_length=500)
+        dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=number_of_atom, sample_length=100)
 
 # from IPython import embed; embed()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(dataset[0], number_of_atom)
         dataloader = DataLoader(
             dataset=dataset, 
             batch_size=hparams.batch_size,
@@ -102,7 +110,8 @@ if __name__ == '__main__':
     DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "ProteinGymSampling")
     parser = ArgumentParser()
     # parser = add_arguments(parser)
-    
+    parser.add_argument("--sampling_path", type=str, default="/home/qcx679/hantang/UAAG2/data/full_graph/data_2")
+    parser.add_argument("--division", default='Training_set', type=str)
     parser.add_argument("--logger-type", default="wandb", type=str)
     
     parser.add_argument('--dataset', type=str, default='drugs')

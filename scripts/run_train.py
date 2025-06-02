@@ -24,7 +24,7 @@ from uaag.equivariant_diffusion import Trainer
 from uaag.utils import load_data, load_model
 from pytorch_lightning.plugins.environments import LightningEnvironment
 import lmdb
-from torch.utils.data import WeightedRandomSampler
+from torch.utils.data import WeightedRandomSampler, RandomSampler
 
 import pickle
 warnings.filterwarnings(
@@ -66,6 +66,7 @@ def main(hparams):
     print("pocket noise: ", hparams.pocket_noise)
     print("mask rate: ", hparams.mask_rate)
     print("pocket noise scale: ", hparams.pocket_noise_scale)
+    # lmdb_data_path = "/datasets/biochem/unaagi/unaagi_overfitting_train_v1.lmdb"
     lmdb_data_path = "/datasets/biochem/unaagi/unaagi_whole_v1.lmdb"
     all_data = UAAG2Dataset(lmdb_data_path,  mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale, params=hparams)
     test_data_setup = UAAG2Dataset(lmdb_data_path, params=hparams)
@@ -91,10 +92,8 @@ def main(hparams):
     weights = weights / weights.sum()
     
     sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
-    # train_data = UAAG2Dataset(train_data, mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale, params=hparams)
-    # from IPython import embed; embed()
-    # val_data = UAAG2Dataset(val_data, mask_rate=hparams.mask_rate, params=hparams)
-    # test_data = UAAG2Dataset(test_data, params=hparams)
+    # sampler = RandomSampler(train_data)
+
     datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data, sampler=sampler)
     
     model = Trainer(
@@ -165,6 +164,13 @@ def main(hparams):
         ckpt_path=ckpt_path if hparams.load_ckpt is not None else None,
     )
 
+    # save hparams
+    hparams_path = os.path.join(hparams.save_dir, f"run{hparams.id}", "hparams.yaml")
+    if not os.path.exists(os.path.dirname(hparams_path)):
+        os.makedirs(os.path.dirname(hparams_path))
+    with open(hparams_path, "w") as f:
+        f.write(hparams.to_yaml())
+    print(f"Saved hparams to {hparams_path}")
 
 if __name__ == "__main__":
     

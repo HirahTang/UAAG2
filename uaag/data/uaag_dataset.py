@@ -102,6 +102,8 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         CoM = graph_data.pos[graph_data.is_ligand==1].mean(dim=0)
         #. aligning dtype
         
+        # from IPython import embed; embed()
+        
         # if graph_data.edge_ligand
         
         
@@ -151,14 +153,23 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             gaussian_pocket_noise = torch.randn_like(graph_data.pos[reconstruct_mask==1]) * self.noise_scale
             graph_data.pos[reconstruct_mask==1] += gaussian_pocket_noise
         
+        reconstruct_size = (graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).item()
+        
         # from IPython import embed; embed()
         if self.params.virtual_node:
             # adding random n of virtual nodes by the maximum max-virtual-node
-            sample_n = np.random.randint(1, self.params.max_virtual_nodes)
+            if reconstruct_size < self.params.max_virtual_nodes:
+                sample_n = int(self.params.max_virtual_nodes - reconstruct_size)
+            else:
+                sample_n = np.random.randint(1, self.params.max_virtual_nodes)
             virtual_x = torch.ones(sample_n) * 8
             # virtual pos is a tensor of shape (sample_n, 3) with CoM * 8
             
             virtual_pos = torch.stack([CoM] * sample_n)
+            # add gaussian noise to the virtual positions
+            gaussian_noise = torch.randn_like(virtual_pos)
+            virtual_pos += gaussian_noise
+            
             virtual_charges = torch.ones(sample_n)
             virtual_degree = torch.zeros(sample_n)
             virtual_is_aromatic = torch.zeros(sample_n)
