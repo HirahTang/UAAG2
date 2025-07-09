@@ -93,6 +93,24 @@ def get_plot(dataframe, x_col, y_col, hue_col, title, spr):
     plt.text(0.1, 0.9, f'Spearman: {spr}', fontsize=12, ha='center', va='center', transform=plt.gca().transAxes)
     plt.legend()
     plt.savefig(f'{title}.png')
+
+
+def special_plot(data_naa, data_uaa, title, spr):
+    data_naa['source'] = 'NAA'
+    data_uaa['source'] = 'NCAA'
+    combined_df = pd.concat([data_naa, data_uaa], ignore_index=True)
+    spr = round(spr, 4)
+    plt.figure(figsize=(10, 10))
+    sns.scatterplot(x=combined_df['pred'], y=combined_df['value'], hue=combined_df['source'], style=combined_df['source'], s=100)
+    for name, group in combined_df.groupby('source'):
+        sns.kdeplot(
+        x=group['pred'], y=group['value'],
+        fill=True, alpha=0.5, label=name
+    )
+        
+    plt.text(0.1, 0.9, f'Spearman: {spr}', fontsize=12, ha='center', va='center', transform=plt.gca().transAxes)
+    plt.legend()
+    plt.savefig(f'{title}.png')
     
 def main(args):
     
@@ -268,8 +286,8 @@ def main(args):
     get_plot(df_uaa, 'pred', 'value', 'target', f'{args.output_dir}/wt-mt_uaa_target', spearmanr(df_uaa['pred'], df_uaa['value']).statistic)
     get_plot(df_uaa, 'UAAG', 'value', 'target', f'{args.output_dir}/mt_uaa_target', spearmanr(df_uaa['UAAG'], df_uaa['value']).statistic)
     get_plot(df_uaa, 'wt_UAAG', 'value', 'target', f'{args.output_dir}/wt_uaa_target', spearmanr(df_uaa['wt_UAAG'], df_uaa['value']).statistic)
-    
-    # from IPython import embed; embed()
+    special_plot(df_naa, df_uaa, f'{args.output_dir}/poseter', spearmanr(df_benchmark['pred'], df_benchmark['value']).statistic)
+    from IPython import embed; embed()
     
     ndcg_pred = calc_ndcg(df_benchmark['value'], df_benchmark['pred'])
     calc_ndcg(df_benchmark['value'], df_benchmark['wt_UAAG'])

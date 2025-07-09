@@ -86,7 +86,7 @@ def main(args):
     file_name2 = '1A1I_tidy_bond.pkl'
     path = "/home/qcx679/hantang/UAAG/data/uaag_data_v2/pdb/1A1I_tidy"
     pdb_path = "/home/qcx679/hantang/UAAG/data/uaag_data_v2/pdb"
-    pdb_path = "/home/qcx679/hantang/UAAG2/data/intermediate_pickles/2roc"
+    pdb_path = "/home/qcx679/hantang/UAAG2/data/intermediate_pickles/5ly1"
     pdb_dir = os.listdir(pdb_path)
     
     save_dict = {}
@@ -117,7 +117,7 @@ def main(args):
                 output_dict['pocket'] = protein_object.get_neighbors(aa)
                 save_dict[f'{pdb_name}_'+aa['identity']] = output_dict
         # embed()
-    with open(f'data/benchmark/uaag_2roc_{args.split_num}.json', 'w') as json_file:
+    with open(f'data/benchmark/uaag_5ly1_{args.split_num}.json', 'w') as json_file:
         json.dump(save_dict, json_file)
         json_file.close()
 if __name__ == "__main__":

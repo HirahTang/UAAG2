@@ -3,7 +3,6 @@ from os.path import join
 import os
 from typing import Optional
 import sys
-from MolDiff.utils import reconstruct
 import numpy as np
 sys.path.append('.')
 sys.path.append('..')
@@ -64,6 +63,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             -1: 0,
             0: 1,
             1: 2,
+            2: 3,
         }
         self.mask_rate = mask_rate
     # def load_dataset(self):
@@ -167,14 +167,14 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             
             virtual_pos = torch.stack([CoM] * sample_n)
             # add gaussian noise to the virtual positions
-            gaussian_noise = torch.randn_like(virtual_pos)
-            virtual_pos += gaussian_noise
+            # gaussian_noise = torch.randn_like(virtual_pos)
+            # virtual_pos += gaussian_noise
             
-            virtual_charges = torch.ones(sample_n)
-            virtual_degree = torch.zeros(sample_n)
-            virtual_is_aromatic = torch.zeros(sample_n)
-            virtual_is_in_ring = torch.zeros(sample_n)
-            virtual_hybridization = torch.zeros(sample_n)
+            virtual_charges = torch.ones(sample_n) * 3
+            virtual_degree = torch.ones(sample_n) * 5
+            virtual_is_aromatic = torch.ones(sample_n) * 2
+            virtual_is_in_ring = torch.ones(sample_n) * 2
+            virtual_hybridization = torch.ones(sample_n) * 4
             
             # append virtual_x to graph_data.x
             graph_data.x = torch.cat([graph_data.x, virtual_x])
@@ -275,6 +275,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             -1: 0,
             0: 1,
             1: 2,
+            2: 3,
         }
         
         self.dataset_info = dataset_info
@@ -566,6 +567,11 @@ class Dataset_Info:
         if self.hparams.virtual_node:
             # add another value of 0 to data_info['x']
             data_info['x'][8] = 0
+            data_info['charge'][2] = 0
+            data_info['aro'][2] = 0
+            data_info['degree'][5] = 0
+            data_info['hybrid'][4] = 0
+            data_info['ring'][2] = 0
             
         for k in data_info['x'].keys():
             sum_x.append(data_info['x'][k])

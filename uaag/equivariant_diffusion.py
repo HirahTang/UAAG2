@@ -77,7 +77,8 @@ class Trainer(pl.LightningModule):
         self.register_buffer("hybridization_prior", hybridization_distribution.clone())
         self.register_buffer("degree_prior", degree_distribution.clone())
         
-        self.num_is_aromatic = self.num_is_in_ring = 2
+        self.num_is_aromatic = len(is_aromatic_distribution)
+        self.num_is_in_ring = len(is_ring_distribution)
         self.is_ligand = 1
         self.num_hybridization = len(hybridization_distribution)
         # self.num_hybridization = dataset_info.num_hybridization
