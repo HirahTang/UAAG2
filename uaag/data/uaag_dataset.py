@@ -158,10 +158,10 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         # from IPython import embed; embed()
         if self.params.virtual_node:
             # adding random n of virtual nodes by the maximum max-virtual-node
-            if reconstruct_size < self.params.max_virtual_nodes:
-                sample_n = int(self.params.max_virtual_nodes - reconstruct_size)
-            else:
-                sample_n = np.random.randint(1, self.params.max_virtual_nodes)
+            # if reconstruct_size < self.params.max_virtual_nodes:
+            #     sample_n = int(self.params.max_virtual_nodes - reconstruct_size)
+            # else:
+            sample_n = np.random.randint(1, self.params.max_virtual_nodes)
             virtual_x = torch.ones(sample_n) * 8
             # virtual pos is a tensor of shape (sample_n, 3) with CoM * 8
             
