@@ -102,10 +102,13 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         CoM = graph_data.pos[graph_data.is_ligand==1].mean(dim=0)
         #. aligning dtype
         
-        # from IPython import embed; embed()
-        
         # if graph_data.edge_ligand
         
+        # if graph_data.source_name not in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
+        #     # padding atom by atom types
+        #     # ToDO
+        # else:
+            # randomly adding by atom types
         
         # check if graph_data.edge_ligand exists
         if not hasattr(graph_data, 'compound_id'):
@@ -137,6 +140,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
         graph_data.charges = charges.float()
+        graph_data.virtual_nodes = torch.zeros(graph_data.x.size(0))
         reconstruct_mask = graph_data.is_ligand - graph_data.is_backbone
         new_backbone = graph_data.is_backbone[reconstruct_mask==1]
         # randomly change contents in new_backbone to 1 by the prob of 0.5
@@ -146,6 +150,13 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         
         graph_data.is_backbone[reconstruct_mask==1] = new_backbone
         
+        if graph_data.source_name not in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
+                # get the count of C, N, O, S in the reconstruction part of the ligand
+                # get count of 0, 1, 2, 3, from graph_data.x[reconstruct_mask == 1]
+                atom_count = torch.zeros(8)
+                for i in graph_data.x[reconstruct_mask==1]:
+                    atom_count[int(i)] += 1
+        # from IPython import embed; embed()
         if self.pocket_noise:
             
             # Introduce gaussian pocket noise here
@@ -157,12 +168,36 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         
         # from IPython import embed; embed()
         if self.params.virtual_node:
+            if graph_data.source_name not in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
+                # get the count of C, N, O, S in the reconstruction part of the ligand
+                # get count of 0, 1, 2, 3, from graph_data.x[reconstruct_mask == 1]
+                atom_count = torch.zeros(8)
+                for i in graph_data.x[reconstruct_mask==1]:
+                    atom_count[int(i)] += 1
+                    
+                desered_atom_count = torch.tensor([9, 2, 3, 1, 0, 0, 0, 0])
+                virtual_atom_count = (desered_atom_count - atom_count).int()
+                sample_n = int(virtual_atom_count.sum().item())
+                # atom_count = torch.tensor([atom_count[0], atom_count[1], atom
+                # from IPython import embed; embed()
+                virtual_x = torch.zeros(sample_n)
+                # add the atom types to the virtual_x
+                virtual_x[:virtual_atom_count[0]] = 0  # C
+                virtual_x[virtual_atom_count[0]:virtual_atom_count[0]+virtual_atom_count[1]] = 1  # N
+                virtual_x[virtual_atom_count[0]+virtual_atom_count[1]:virtual_atom_count[0]+virtual_atom_count[1]+virtual_atom_count[2]] = 2  # O
+                virtual_x[virtual_atom_count[0]+virtual_atom_count[1]+virtual_atom_count[2]:virtual_atom_count[0]+virtual_atom_count[1]+virtual_atom_count[2]+virtual_atom_count[3]] = 3
+                
+                virtual_pos = torch.stack([CoM] * sample_n)
+                
+                
+                
             # adding random n of virtual nodes by the maximum max-virtual-node
             # if reconstruct_size < self.params.max_virtual_nodes:
             #     sample_n = int(self.params.max_virtual_nodes - reconstruct_size)
             # else:
-            sample_n = np.random.randint(1, self.params.max_virtual_nodes)
-            virtual_x = torch.ones(sample_n) * 8
+            else:
+                sample_n = np.random.randint(1, self.params.max_virtual_nodes)
+                virtual_x = torch.zeros(sample_n)
             # virtual pos is a tensor of shape (sample_n, 3) with CoM * 8
             
             virtual_pos = torch.stack([CoM] * sample_n)
@@ -175,7 +210,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             virtual_is_aromatic = torch.ones(sample_n) * 2
             virtual_is_in_ring = torch.ones(sample_n) * 2
             virtual_hybridization = torch.ones(sample_n) * 4
-            
+            virtual_nodes = torch.ones(sample_n)
             # append virtual_x to graph_data.x
             graph_data.x = torch.cat([graph_data.x, virtual_x])
             graph_data.pos = torch.cat([graph_data.pos, virtual_pos])
@@ -186,7 +221,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             graph_data.hybridization = torch.cat([graph_data.hybridization, virtual_hybridization])
             graph_data.is_backbone = torch.cat([graph_data.is_backbone, torch.zeros(sample_n)])
             graph_data.is_ligand = torch.cat([graph_data.is_ligand, torch.ones(sample_n)])
-            
+            graph_data.virtual_nodes = torch.cat([graph_data.virtual_nodes, virtual_nodes])
             virtual_new_id = torch.tensor(range(len(graph_data.x)))[-sample_n:]
             virtual_existed = torch.tensor(range(len(graph_data.x)))[:-sample_n]
             grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_existed)
@@ -228,7 +263,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
-        
+        # from IPython import embed; embed()
         batch_graph_data = Data(
             x=graph_data.x,
             pos=graph_data.pos,
@@ -242,6 +277,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             hybridization=graph_data.hybridization,
             is_backbone=graph_data.is_backbone,
             is_ligand=graph_data.is_ligand,
+            virtual_nodes=graph_data.virtual_nodes,
             ligand_size=torch.tensor(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
             id=graph_data.compound_id,
         )
@@ -566,7 +602,6 @@ class Dataset_Info:
         sum_x = []
         if self.hparams.virtual_node:
             # add another value of 0 to data_info['x']
-            data_info['x'][8] = 0
             data_info['charge'][2] = 0
             data_info['aro'][2] = 0
             data_info['degree'][5] = 0
@@ -650,8 +685,7 @@ class Dataset_Info:
             "P": 4,
             "Cl": 5,
             "F": 6,
-            "Br": 7,
-            "NOATOM": 8,
+            "Br": 7
         }
         atom_decoder  = {v: k for k, v in atom_encoder.items()}
         self.atom_decoder = atom_decoder

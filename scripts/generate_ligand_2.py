@@ -1,40 +1,41 @@
-import os
-import sys
-import wandb
-import torch
 
+import argparse
+import os
+import warnings
+from datetime import datetime
+from pathlib import Path
+from time import time
+
+import numpy as np
+import pandas as pd
+import torch
+from Bio.PDB import PDBParser
+from tqdm import tqdm
+import sys
 sys.path.append('.')
 sys.path.append('..')
-import warnings
-from argparse import ArgumentParser
-import numpy as np
-import pytorch_lightning as pl
-import torch.nn.functional as F
+
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
     ModelCheckpoint,
     ModelSummary,
     TQDMProgressBar,
 )
+
+import pytorch_lightning as pl
+import torch.nn.functional as F
+
 from uaag.data.uaag_dataset import UAAG2DataModule, UAAG2Dataset, UAAG2Dataset_sampling, Dataset_Info
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-
+from argparse import ArgumentParser
 from uaag.callbacks.ema import ExponentialMovingAverage
+
+from torch_geometric.data import Dataset, DataLoader
+
 from uaag.equivariant_diffusion import Trainer
-from uaag.utils import load_data, load_model
-from pytorch_lightning.plugins.environments import LightningEnvironment
-import lmdb
-from torch.utils.data import WeightedRandomSampler, RandomSampler
-
-import pickle
-warnings.filterwarnings(
-    "ignore", category=UserWarning, message="TypedStorage is deprecated"
-)
-
-# from eqgat_diff.experiments.data.distributions import DistributionProperty
-# from eqgat_diff.experiments.hparams import add_arguments
 
 def main(hparams):
+    
     
     ema_callback = ExponentialMovingAverage(decay=hparams.ema_decay)
     checkpoint_callback = ModelCheckpoint(
@@ -58,123 +59,50 @@ def main(hparams):
         logger = tb_logger
     else:
         raise ValueError("Logger type not recognized")
-
-    print("Loading DataModule")
     
-    dataset_info = Dataset_Info(hparams, hparams.data_info_path)
-    
-    print("pocket noise: ", hparams.pocket_noise)
-    print("mask rate: ", hparams.mask_rate)
-    print("pocket noise scale: ", hparams.pocket_noise_scale)
-    # lmdb_data_path = "/datasets/biochem/unaagi/unaagi_overfitting_train_v1.lmdb"
-    lmdb_data_path = "/datasets/biochem/unaagi/unaagi_whole_v1.lmdb"
-    all_data = UAAG2Dataset(lmdb_data_path,  mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale, params=hparams)
-    test_data_setup = UAAG2Dataset(lmdb_data_path, params=hparams)
-    # split all_data into train, val, test from all_data
-    
-    train_data, val_data, test_data = torch.utils.data.random_split(all_data, [int(len(all_data) * hparams.train_size), len(all_data) - int(len(all_data) * hparams.train_size) - int(hparams.test_size), int(hparams.test_size)])
-    test_indices = test_data.indices
-    test_data = torch.utils.data.Subset(test_data_setup, test_indices)
-    # test_data
-    # convert the UAAG2Dataset parameters in test_data
-    
-    with open("/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl", "rb") as f:
-        metadata = pickle.load(f)
-    weights = []
-    for i in range(len(train_data)):
-        key = f"{i:08}".encode("ascii")
-        source_name = metadata[key]
-        if source_name in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
-            weights.append(hparams.pdbbind_weight)
-        else:
-            weights.append(1.0)
-    weights = np.array(weights)
-    weights = weights / weights.sum()
-    
-    sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
-    # sampler = RandomSampler(train_data)
-
-    datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data, sampler=sampler)
-    
-    model = Trainer(
-        hparams=hparams,
-        dataset_info=dataset_info,
-    )
-    
-    # from IPython import embed; embed()
-    strategy = "ddp" if hparams.gpus > 1 else "auto"
-    # strategy = 'ddp_find_unused_parameters_true'
-    callbacks = [
-        ema_callback,
-        lr_logger,
-        checkpoint_callback,
-        TQDMProgressBar(refresh_rate=5),
-        ModelSummary(max_depth=2),
-    ]
-
-    if hparams.ema_decay == 1.0:
-        callbacks = callbacks[1:]
-
-    
-    trainer = pl.Trainer(
-        accelerator="gpu" if hparams.gpus else "cpu",
-        devices=hparams.gpus if hparams.gpus else 1,
-        strategy=strategy,
-        plugins=LightningEnvironment(),
-        num_nodes=1,
-        logger=logger,
-        enable_checkpointing=True,
-        accumulate_grad_batches=hparams.accum_batch,
-        val_check_interval=hparams.eval_freq,
-        gradient_clip_val=hparams.grad_clip_val,
-        callbacks=callbacks,
-        precision=hparams.precision,
-        num_sanity_val_steps=2,
-        max_epochs=hparams.num_epochs,
-        detect_anomaly=hparams.detect_anomaly,
-        limit_train_batches=30000,
-    )
-    
-    pl.seed_everything(seed=hparams.seed, workers=hparams.gpus > 1)
-    
-    ckpt_path = None
-    if hparams.load_ckpt is not None:
-        print("Loading from checkpoint ...")
+    root_pdb_path = "/home/qcx679/hantang/UAAG2/data/full_graph/data_2"
+    pdb_list = os.listdir(root_pdb_path)
+    pdb_list = [os.path.join(root_pdb_path, pdb) for pdb in pdb_list]
+    print("Loading data from: ", pdb_list[-2])
+    data_file = torch.load(hparams.benchmark_path)
+    # data_file = torch.load(pdb_list[-2])
+    dataset_info = Dataset_Info(hparams.data_info_path)
+    for graph in data_file[20:]:
+        seq_position = int(graph.compound_id.split("_")[-3])
+        seq_res = graph.compound_id.split("_")[-4]
         
+        print("Sampling for: ", seq_res, seq_position)
+        # from IPython import embed; embed()
+        for number_of_atom in [1, 2, 3, 4, 5, 6, 7, 8, 10]:
+            
+            save_path = os.path.join('DN7A_SACS2', f"{seq_res}_{seq_position}", f"sample_{number_of_atom}")
+            
+            dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=number_of_atom, sample_length=100)
 
-        ckpt_path = hparams.load_ckpt
-        ckpt = torch.load(ckpt_path)
-        if ckpt["optimizer_states"][0]["param_groups"][0]["lr"] != hparams.lr:
-            print("Changing learning rate ...")
-            ckpt["optimizer_states"][0]["param_groups"][0]["lr"] = hparams.lr
-            ckpt["optimizer_states"][0]["param_groups"][0]["initial_lr"] = hparams.lr
-            ckpt_path = (
-                "lr" + "_" + str(hparams.lr) + "_" + os.path.basename(hparams.load_ckpt)
-            )
-            ckpt_path = os.path.join(
-                os.path.dirname(hparams.load_ckpt),
-                f"retraining_with_lr{hparams.lr}.ckpt",
-            )
-            if not os.path.exists(ckpt_path):
-                torch.save(ckpt, ckpt_path)
-
-    trainer.fit(
-        model=model,
-        datamodule=datamodule,
-        ckpt_path=ckpt_path if hparams.load_ckpt is not None else None,
-    )
-
-    # save hparams
-    hparams_path = os.path.join(hparams.save_dir, f"run{hparams.id}", "hparams.yaml")
-    if not os.path.exists(os.path.dirname(hparams_path)):
-        os.makedirs(os.path.dirname(hparams_path))
-    with open(hparams_path, "w") as f:
-        f.write(hparams.to_yaml())
-    print(f"Saved hparams to {hparams_path}")
-
-if __name__ == "__main__":
+    # from IPython import embed; embed()
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            print(dataset[0], number_of_atom)
+            dataloader = DataLoader(
+                dataset=dataset, 
+                batch_size=hparams.batch_size,
+                num_workers=hparams.num_workers,
+                pin_memory=True,
+                shuffle=False)
     
-    DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "3DcoordsAtomsBonds_0")
+    # Load the model and checkpoint
+            print("Loading model from checkpoint: ", hparams.load_ckpt)
+            model = Trainer.load_from_checkpoint(
+                hparams.load_ckpt,
+                hparams=hparams,
+                dataset_info=dataset_info,
+                ).to(device)
+            model = model.eval()
+            # from IPython import embed; embed()
+            model.generate_ligand(dataloader, save_path=save_path, verbose=True)
+
+if __name__ == '__main__':
+    
+    DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "ProteinGymSampling")
     parser = ArgumentParser()
     # parser = add_arguments(parser)
     
@@ -203,13 +131,11 @@ if __name__ == "__main__":
     parser.add_argument("--remove-hs", default=False, action="store_true")
     parser.add_argument("--select-train-subset", default=False, action="store_true")
     parser.add_argument("--train-size", default=0.99, type=float)
-    parser.add_argument("--val-size", default=5000, type=float)
+    parser.add_argument("--val-size", default=0.01, type=float)
     parser.add_argument("--test-size", default=100, type=int)
 
     parser.add_argument("--dropout-prob", default=0.3, type=float)
-    parser.add_argument("--virtual-node", default=1, type=int)
-    parser.add_argument("--max-virtual-nodes", default=11, type=int)
-    parser.add_argument("--pdbbind-weight", default=10.0, type=float)
+
     # LEARNING
     parser.add_argument("-b", "--batch-size", default=32, type=int)
     parser.add_argument("-ib", "--inference-batch-size", default=32, type=int)
@@ -295,6 +221,7 @@ if __name__ == "__main__":
     parser.add_argument("--lc-mulliken", default=1.5, type=float)
     parser.add_argument("--lc-wbo", default=2.0, type=float)
 
+    parser.add_argument("--pocket-noise-std", default=0.1, type=float)
     parser.add_argument(
         "--use-ligand-dataset-sizes", default=False, action="store_true"
     )
@@ -323,11 +250,6 @@ if __name__ == "__main__":
     parser.add_argument("--num-bond-classes", default=5, type=int)
     parser.add_argument("--num-charge-classes", default=6, type=int)
 
-    parser.add_argument("--pocket-noise", default=False, action="store_true")
-    parser.add_argument("--mask-rate", default=0.5, type=float, help="Mask rate, 0 for full mask and the model is reconstructing everything during training \
-        , 1 for no masking and the model is reconstructing nothing during training")
-    parser.add_argument("--pocket-noise-scale", default=0.01, type=float)
-    
     # BOND PREDICTION AND GUIDANCE:
     parser.add_argument("--bond-guidance-model", default=False, action="store_true")
     parser.add_argument("--bond-prediction", default=False, action="store_true")
@@ -389,6 +311,8 @@ if __name__ == "__main__":
     parser.add_argument("--calculate-energy", default=False, action="store_true")
     parser.add_argument("--save-xyz", default=False, action="store_true")
     parser.add_argument("--variational-sampling", default=False)
+    
+    parser.add_argument("--benchmark-path", default="/home/qcx679/hantang/UAAG2/data/full_graph/benchmarks/DN7A_SACS2.pt", type=str)
     
     args = parser.parse_args()
     

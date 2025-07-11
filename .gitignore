@@ -24,4 +24,8 @@ wandb*
 *.png
 *.csv
 *.npz
+wandb/
+*.log
+*.out
+*.ckpt
 ```

@@ -67,6 +67,7 @@ class Trainer(pl.LightningModule):
         is_ring_distribution = dataset_info.is_ring.float()
         hybridization_distribution = dataset_info.hybridization.float()
         degree_distribution = dataset_info.degree.float()
+        virtual_nodes_distribution = torch.tensor([1.-1e-5, 1e-5], dtype=torch.float32)
         
         
         self.register_buffer("atoms_prior", atom_types_distribution.clone())
@@ -76,6 +77,7 @@ class Trainer(pl.LightningModule):
         self.register_buffer("is_in_ring_prior", is_ring_distribution.clone())
         self.register_buffer("hybridization_prior", hybridization_distribution.clone())
         self.register_buffer("degree_prior", degree_distribution.clone())
+        self.register_buffer("virtual_nodes_prior", virtual_nodes_distribution.clone())
         
         self.num_is_aromatic = len(is_aromatic_distribution)
         self.num_is_in_ring = len(is_ring_distribution)
@@ -89,7 +91,7 @@ class Trainer(pl.LightningModule):
         self.num_atom_types = len(atom_types_distribution)
         
         self.num_degree = len(degree_distribution)
-
+        self.is_virtual_node = 2
         self.num_atom_features = (
             self.num_atom_types
             + self.num_charge_classes
@@ -97,7 +99,9 @@ class Trainer(pl.LightningModule):
             + self.num_is_in_ring
             + self.num_hybridization
             + self.num_degree
+            + self.is_virtual_node
             + self.is_ligand
+            
         )
         
         self.num_bond_classes = len(bond_types_distribution)
@@ -207,6 +211,11 @@ class Trainer(pl.LightningModule):
             alphas=self.sde_atom_charge.alphas.clone(),
             num_degree=self.num_degree,
         )
+        self.cat_virtual_nodes = CategoricalDiffusionKernel(
+            terminal_distribution=virtual_nodes_distribution,
+            alphas=self.sde_atom_charge.alphas.clone(),
+            num_virtual_nodes=self.is_virtual_node,
+        )
         self.diffusion_loss = DiffusionLoss(
             modalities = [
                 "coords",
@@ -217,8 +226,9 @@ class Trainer(pl.LightningModule):
                 "aromatic",
                 "hybridization",
                 "degree",
+                "virtual_nodes",
             ],
-            param=["data"] * 8,
+            param=["data"] * 9,
         )
         
     def training_step(self, batch, batch_idx):
@@ -381,6 +391,7 @@ class Trainer(pl.LightningModule):
             "aromatic": out_dict["aromatic_true"],
             "hybridization": out_dict["hybridization_true"],
             "degree": out_dict["degree_true"],
+            "virtual_nodes": out_dict["virtual_nodes_true"],
         }
         
         coords_pred = out_dict["coords_pred"]
@@ -393,6 +404,7 @@ class Trainer(pl.LightningModule):
             aromatic_pred,
             hybridization_pred,
             degree_pred,
+            virtual_nodes_pred,
             _
         ) = atoms_pred.split(
             [
@@ -402,6 +414,7 @@ class Trainer(pl.LightningModule):
                 self.num_is_aromatic,
                 self.num_hybridization,
                 self.num_degree,
+                self.is_virtual_node,
                 self.is_ligand,
             ],
             dim=-1,
@@ -418,6 +431,7 @@ class Trainer(pl.LightningModule):
             "aromatic": aromatic_pred,
             "hybridization": hybridization_pred,
             "degree": degree_pred,
+            "virtual_nodes": virtual_nodes_pred,
         }
 
         loss = self.diffusion_loss(
@@ -431,13 +445,14 @@ class Trainer(pl.LightningModule):
         
         final_loss = (
             self.hparams.lc_coords * loss["coords"]
-            + self.hparams.lc_atoms * loss["atoms"]
+            # + self.hparams.lc_atoms * loss["atoms"]
             + self.hparams.lc_bonds * loss["bonds"]
             + self.hparams.lc_charges * loss["charges"]
             + 0.5 * loss["ring"]
             + 0.7 * loss["aromatic"]
             + 1.0 * loss["hybridization"]
             + 1.0 * loss["degree"]
+            + 1.5 * loss["virtual_nodes"]
         )
         
         if torch.any(final_loss.isnan()):
@@ -448,17 +463,18 @@ class Trainer(pl.LightningModule):
         self._log(
             final_loss,
             loss["coords"],
-            loss["atoms"],
+            # loss["atoms"],
             loss["charges"],
             loss["bonds"],
             loss["ring"],
             loss["aromatic"],
             loss["hybridization"],
             loss['degree'],
+            loss['virtual_nodes'],
             batch_size,
             stage,
         )
-        
+        # from IPython import embed; embed()
         return final_loss
     
     def forward(self, batch: Batch, t: Tensor):
@@ -476,7 +492,7 @@ class Trainer(pl.LightningModule):
         aromatic_feat = batch.is_aromatic
         hybridization_feat = batch.hybridization
         degree_feat = batch.degree
-        
+        virtual_nodes = batch.virtual_nodes
         # TIME EMBEDDING
         temb = t.float() / self.hparams.timesteps
         temb = temb.clamp(min=self.hparams.eps_min)
@@ -508,7 +524,8 @@ class Trainer(pl.LightningModule):
             type="atoms",
         )
         
-        atom_types_perturbed = atom_types_perturbed * ligand_mask.unsqueeze(1) + atom_types * pocket_mask.unsqueeze(1)
+        # atom_types_perturbed = atom_types * ligand_mask.unsqueeze(1) + atom_types * pocket_mask.unsqueeze(1)
+        atom_types_perturbed = atom_types.clone()
         atom_types = atom_types[ligand_mask==1]
         
         charges, charges_perturbed = self.cat_charges.sample_categorical(
@@ -589,8 +606,24 @@ class Trainer(pl.LightningModule):
         degree_feat_perturbed = degree_feat_perturbed * ligand_mask.unsqueeze(1) + degree_feat * pocket_mask.unsqueeze(1)
         degree_feat = degree_feat[ligand_mask==1]
         
+        (
+            virtual_nodes,
+            virtual_nodes_perturbed,
+        ) = self.cat_virtual_nodes.sample_categorical(
+            t,
+            virtual_nodes,
+            data_batch,
+            self.dataset_info,
+            num_classes=self.is_virtual_node,
+            type="virtual_nodes",
+        )
+        virtual_nodes_perturbed = virtual_nodes_perturbed * ligand_mask.unsqueeze(1) + virtual_nodes * pocket_mask.unsqueeze(1)
+        virtual_nodes = virtual_nodes[ligand_mask==1]
         
         batch_is_ligand = batch.is_ligand.unsqueeze(1)
+        
+        # from IPython import embed; embed()
+        
         atom_feats_in_perturbed = torch.cat(
             [
                 atom_types_perturbed,
@@ -599,6 +632,7 @@ class Trainer(pl.LightningModule):
                 aromatic_feat_perturbed,
                 hybridization_feat_perturbed,
                 degree_feat_perturbed,
+                virtual_nodes_perturbed,
                 batch_is_ligand,
                 
             ],
@@ -632,7 +666,7 @@ class Trainer(pl.LightningModule):
         out["aromatic_perturbed"] = aromatic_feat_perturbed[ligand_mask==1]
         out["hybridization_perturbed"] = hybridization_feat_perturbed[ligand_mask==1]
         out["degree_perturbed"] = degree_feat_perturbed[ligand_mask==1]
-
+        out["virtual_nodes_perturbed"] = virtual_nodes_perturbed[ligand_mask==1]
         out["coords_true"] = pos_true
         out["coords_noise_true"] = noise_coords_true
         out["atoms_true"] = atom_types.argmax(dim=-1)
@@ -642,6 +676,7 @@ class Trainer(pl.LightningModule):
         out["aromatic_true"] = aromatic_feat.argmax(dim=-1)
         out["hybridization_true"] = hybridization_feat.argmax(dim=-1)
         out["degree_true"] = degree_feat.argmax(dim=-1)
+        out["virtual_nodes_true"] = virtual_nodes
         out["bond_aggregation_index"] = bond_edge_index[1][batch.edge_ligand==1]
         out['edge_batch'] = batch.batch[bond_edge_index[0]][batch.edge_ligand==1]
 

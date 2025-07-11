@@ -184,6 +184,15 @@ class DiffusionLoss(nn.Module):
             else:
                 degree_loss = None
             
+            if "virtual_nodes" in self.modalities:
+                virtual_nodes_loss = F.cross_entropy(
+                    pred_data["virtual_nodes"],
+                    true_data["virtual_nodes"],
+                    reduction="mean",
+                )
+            else:
+                virtual_nodes_loss = None
+            
         
         else:
             regr_loss = F.mse_loss(
@@ -240,16 +249,26 @@ class DiffusionLoss(nn.Module):
                 )
             else:
                 degree_loss = None
-        
+            
+            if "virtual_nodes" in self.modalities:
+                virtual_nodes_loss = F.cross_entropy(
+                    pred_data["virtual_nodes"],
+                    true_data["virtual_nodes"],
+                    reduction="mean",
+                )
+            else:
+                virtual_nodes_loss = None
+        # from IPython import embed; embed()
         loss = {
             self.regression_key: regr_loss,
-            "atoms": atoms_loss,
+            # "atoms": atoms_loss,
             "charges": charges_loss,
             "bonds": bonds_loss,
             "ring": ring_loss,
             "aromatic": aromatic_loss,
             "hybridization": hybridization_loss,
             "degree": degree_loss,
+            "virtual_nodes": virtual_nodes_loss,
         }
 
         return loss
