@@ -31,6 +31,7 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         num_is_in_ring: int = 2,
         num_is_aromatic: int = 2,
         num_hybridization: int = 8,
+        num_virtual_nodes: int = 2,
         num_degree: int = 5,
     ):
         super().__init__()
@@ -42,6 +43,7 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         self.num_is_aromatic = num_is_aromatic
         self.num_hybridization = num_hybridization
         self.num_degree = num_degree
+        self.num_virtual_nodes = num_virtual_nodes
         self.num_classes = len(terminal_distribution)
         assert (terminal_distribution.sum() - 1.0).abs() < 1e-4
 
@@ -315,7 +317,7 @@ class CategoricalDiffusionKernel(torch.nn.Module):
     def sample_categorical(
         self, t, x0, data_batch, dataset_info, num_classes=16, type="atoms"
     ):
-        assert type in ["atoms", "charges", "ring", "aromatic", "hybridization", "degree"]
+        assert type in ["atoms", "charges", "ring", "aromatic", "hybridization", "degree", "virtual_nodes"]
 
         # if type == "charges":
         #     x0 = dataset_info.one_hot_charges(x0)

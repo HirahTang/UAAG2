@@ -250,13 +250,13 @@ class Trainer(pl.LightningModule):
         self,
         loss,
         coords_loss,
-        atoms_loss,
         charges_loss,
         bonds_loss,
         ring_loss,
         aromatic_loss,
         hybridization_loss,
         degree_loss,
+        virtual_nodes_loss,
         batch_size,
         stage,
     ):
@@ -278,14 +278,14 @@ class Trainer(pl.LightningModule):
             sync_dist=self.hparams.gpus > 1 and stage == "val",
         )
 
-        self.log(
-            f"{stage}/atoms_loss",
-            atoms_loss,
-            on_step=True,
-            batch_size=batch_size,
-            prog_bar=(stage == "train"),
-            sync_dist=self.hparams.gpus > 1 and stage == "val",
-        )
+        # self.log(
+        #     f"{stage}/atoms_loss",
+        #     atoms_loss,
+        #     on_step=True,
+        #     batch_size=batch_size,
+        #     prog_bar=(stage == "train"),
+        #     sync_dist=self.hparams.gpus > 1 and stage == "val",
+        # )
 
         self.log(
             f"{stage}/charges_loss",
@@ -337,7 +337,15 @@ class Trainer(pl.LightningModule):
             prog_bar=(stage == "train"),
             sync_dist=self.hparams.gpus > 1 and stage == "val",
         )
-    
+        self.log(
+            f"{stage}/virtual_nodes_loss",
+            virtual_nodes_loss,
+            on_step=True,
+            batch_size=batch_size,
+            prog_bar=(stage == "train"),
+            sync_dist=self.hparams.gpus > 1 and stage == "val",
+        )
+        
     def step_fnc(self, batch, batch_idx, stage):
 
         batch_size = int(batch.batch.max()) + 1
@@ -463,7 +471,6 @@ class Trainer(pl.LightningModule):
         self._log(
             final_loss,
             loss["coords"],
-            # loss["atoms"],
             loss["charges"],
             loss["bonds"],
             loss["ring"],
