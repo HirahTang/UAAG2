@@ -150,12 +150,12 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         
         graph_data.is_backbone[reconstruct_mask==1] = new_backbone
         
-        if graph_data.source_name not in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
-                # get the count of C, N, O, S in the reconstruction part of the ligand
-                # get count of 0, 1, 2, 3, from graph_data.x[reconstruct_mask == 1]
-                atom_count = torch.zeros(8)
-                for i in graph_data.x[reconstruct_mask==1]:
-                    atom_count[int(i)] += 1
+        # if graph_data.source_name not in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
+        #         # get the count of C, N, O, S in the reconstruction part of the ligand
+        #         # get count of 0, 1, 2, 3, from graph_data.x[reconstruct_mask == 1]
+        #         atom_count = torch.zeros(8)
+        #         for i in graph_data.x[reconstruct_mask==1]:
+        #             atom_count[int(i)] += 1
         # from IPython import embed; embed()
         if self.pocket_noise:
             
@@ -174,20 +174,25 @@ class UAAG2Dataset(torch.utils.data.Dataset):
                 atom_count = torch.zeros(8)
                 for i in graph_data.x[reconstruct_mask==1]:
                     atom_count[int(i)] += 1
-                    
-                desered_atom_count = torch.tensor([9, 2, 3, 1, 0, 0, 0, 0])
-                virtual_atom_count = (desered_atom_count - atom_count).int()
-                sample_n = int(virtual_atom_count.sum().item())
-                # atom_count = torch.tensor([atom_count[0], atom_count[1], atom
-                # from IPython import embed; embed()
-                virtual_x = torch.zeros(sample_n)
-                # add the atom types to the virtual_x
-                virtual_x[:virtual_atom_count[0]] = 0  # C
-                virtual_x[virtual_atom_count[0]:virtual_atom_count[0]+virtual_atom_count[1]] = 1  # N
-                virtual_x[virtual_atom_count[0]+virtual_atom_count[1]:virtual_atom_count[0]+virtual_atom_count[1]+virtual_atom_count[2]] = 2  # O
-                virtual_x[virtual_atom_count[0]+virtual_atom_count[1]+virtual_atom_count[2]:virtual_atom_count[0]+virtual_atom_count[1]+virtual_atom_count[2]+virtual_atom_count[3]] = 3
                 
-                virtual_pos = torch.stack([CoM] * sample_n)
+                desered_atom_count = torch.tensor([9, 2, 3, 1, 0, 0, 0, 0])
+                
+                if atom_count.sum() > desered_atom_count.sum():
+                    sample_n = np.random.randint(1, self.params.max_virtual_nodes)
+                    virtual_x = torch.zeros(sample_n)
+                else:
+                    virtual_atom_count = (desered_atom_count - atom_count).int()
+                    sample_n = int(virtual_atom_count.sum().item())
+                    # atom_count = torch.tensor([atom_count[0], atom_count[1], atom
+                    # from IPython import embed; embed()
+                    virtual_x = torch.zeros(sample_n)
+                    # add the atom types to the virtual_x
+                    virtual_x[:virtual_atom_count[0]] = 0  # C
+                    virtual_x[virtual_atom_count[0]:virtual_atom_count[0]+virtual_atom_count[1]] = 1  # N
+                    virtual_x[virtual_atom_count[0]+virtual_atom_count[1]:virtual_atom_count[0]+virtual_atom_count[1]+virtual_atom_count[2]] = 2  # O
+                    virtual_x[virtual_atom_count[0]+virtual_atom_count[1]+virtual_atom_count[2]:virtual_atom_count[0]+virtual_atom_count[1]+virtual_atom_count[2]+virtual_atom_count[3]] = 3
+                    
+                    virtual_pos = torch.stack([CoM] * sample_n)
                 
                 
                 
@@ -292,7 +297,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         hparams,
         save_path,
         dataset_info,
-        sample_size=10,
+        sample_size=15,
         sample_length=1000,
     ):
         super(UAAG2Dataset_sampling, self).__init__()
@@ -317,6 +322,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         self.dataset_info = dataset_info
         self.atom_decoder = self.dataset_info.atom_decoder
         self.data = self.preprocess(data)
+        self.data.virtual_nodes = torch.zeros(graph_data.x.size(0))
         
         ligand_pos_true = self.data.pos[self.data.is_ligand==1].cpu().detach()
         ligand_atom_true = [self.atom_decoder[int(a)] for a in self.data.x[self.data.is_ligand==1]]
@@ -399,7 +405,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
 
 
     def __getitem__(self, idx):
-
+        
         reconstruct_mask = self.data.is_ligand - self.data.is_backbone
         x = self.data.x[reconstruct_mask==0]
         pos = self.data.pos[reconstruct_mask==0]
@@ -412,6 +418,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         is_backbone = self.data.is_backbone[reconstruct_mask==0]
         ids = self.data.ids[reconstruct_mask==0]
         
+        virtual_nodes = self.data.virtual_nodes[reconstruct_mask==0]
         # remove the information of current edges connect to ligands
         
         edge_mask = torch.isin(self.data.edge_index[0], ids) & torch.isin(self.data.edge_index[1], ids)
@@ -437,8 +444,8 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         # Add new nodes based on the assigned sample size
         # print("Inside the get item function")
         # from IPython import embed; embed()
-        
-        x_new = torch.cat([x, torch.zeros(self.sample_size)])
+        x_new = [0] * 9 + [1] * 2 + [2] * 3 + [3] * 1 
+        x_new = torch.cat([x, torch.tensor(x_new)])
         pos_new = torch.cat([pos, torch.randn(self.sample_size, 3)])
         charges_new = torch.cat([charges, torch.multinomial(self.dataset_info.charge_types, self.sample_size, replacement=True)])
         degree_new = torch.cat([degree, torch.multinomial(self.dataset_info.degree, self.sample_size, replacement=True)])
@@ -447,7 +454,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         hybridization_new = torch.cat([hybridization, torch.multinomial(self.dataset_info.hybridization, self.sample_size, replacement=True)])
         is_ligand_new = torch.cat([is_ligand, torch.ones(self.sample_size)])
         is_backbone_new = torch.cat([is_backbone, torch.zeros(self.sample_size)])
-        
+        virtual_nodes_new = torch.cat(virtual_nodes, [torch.ones(self.sample_size)])
         # Add new edges, firstly interaction edge between ligand and pocket (edge_ligand=0)
         # Then adding the edges inside ligands (edge_ligand=1)
         
@@ -504,6 +511,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             is_in_ring=is_in_ring_new,
             hybridization=hybridization_new,
             is_backbone=is_backbone_new,
+            virtual_nodes=virtual_nodes_new,
             is_ligand=is_ligand_new,
             ids=ids_new,
             id=self.data.id,

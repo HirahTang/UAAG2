@@ -365,7 +365,7 @@ def convert_edge_to_bond(
     atom_decoder,
     edge_decoder,
 ):
-
+    # from IPython import embed; embed()
     ''' Convert edge_attr_global to bond type '''
     # batch: the input batch 
     # edge_attr_global_ligand: Tensor (num_of_ligand_edges, num_bond_classes=5)
@@ -374,7 +374,7 @@ def convert_edge_to_bond(
     sanitized_list = []
     
     ligand_pos = out_dict["coords_pred"]
-    ligand_atom_type = out_dict["atoms_pred"].argmax(dim=-1)
+    ligand_atom_type = out_dict["atoms_pred"][reconstruct_mask==1].argmax(dim=-1)
     
     batch_pos = batch.pos
     batch_pos[reconstruct_mask==1] = ligand_pos
@@ -397,7 +397,7 @@ def convert_edge_to_bond(
     start_idx_ligand = 0
     start_idx_backbone = 0
     start_idx_edge = 0
-    
+    # from IPython import embed; embed()
     for i in range(len(backbone_size)):
         
         path_batch = os.path.join(path, f"batch_{i}", "final")
@@ -405,25 +405,28 @@ def convert_edge_to_bond(
             os.makedirs(path_batch)
             
         end_idx_ligand_atom = start_idx_ligand + ligand_size[i]
-        end_idx_ligand_edge = start_idx_edge + edge_size[i]
+        # end_idx_ligand_edge = start_idx_edge + edge_size[i]
 
 
         ligand_atom_idx = batch_atom_idx_ligand[start_idx_ligand:end_idx_ligand_atom]
-        ligand_bond_idx = ligand_edge_index[:, start_idx_edge:end_idx_ligand_edge]
-        ligand_bond_attr = ligand_edge_attr[start_idx_edge:end_idx_ligand_edge]
-        
+        # ligand_bond_idx = ligand_edge_index[:, start_idx_edge:end_idx_ligand_edge]
+        # ligand_bond_attr = ligand_edge_attr[start_idx_edge:end_idx_ligand_edge]
+        # from IPython import embed; embed()
         ligand_pos_batch = batch_pos[ligand_atom_idx]
         ligand_atom_batch = batch_atom_type[ligand_atom_idx]
-        
+        virtual_nodes_mask = out_dict["virtual_nodes_pred"][ligand_atom_idx]
+        ligand_atom_batch = ligand_atom_batch[virtual_nodes_mask==0]
+        ligand_pos_batch = ligand_pos_batch[virtual_nodes_mask==0]
+        # from IPython import embed; embed()
         # skip the ones with value=8 in ligand_atom_batch, and the corresponding ligand_pos_batch
-        ligand_pos_batch = ligand_pos_batch[ligand_atom_batch != 8]
-        ligand_atom_batch = ligand_atom_batch[ligand_atom_batch != 8]
+        # ligand_pos_batch = ligand_pos_batch[ligand_atom_batch != 8]
+        # ligand_atom_batch = ligand_atom_batch[ligand_atom_batch != 8]
         
         # from IPython import embed; embed()
-        idx_map = {idx.detach().cpu().item(): i for i, idx in enumerate(ligand_atom_idx)}
+        # idx_map = {idx.detach().cpu().item(): i for i, idx in enumerate(ligand_atom_idx)}
         
-        ligand_bond_idx = torch.stack([torch.tensor([idx_map[idx.detach().cpu().item()] for idx in ligand_bond_idx[0]]), 
-                                    torch.tensor([idx_map[idx.detach().cpu().item()] for idx in ligand_bond_idx[1]])], dim=0)
+        # ligand_bond_idx = torch.stack([torch.tensor([idx_map[idx.detach().cpu().item()] for idx in ligand_bond_idx[0]]), 
+        #                             torch.tensor([idx_map[idx.detach().cpu().item()] for idx in ligand_bond_idx[1]])], dim=0)
         
         ligand_path = os.path.join(path_batch, "ligand.xyz")
         
@@ -449,7 +452,7 @@ def convert_edge_to_bond(
         
         
         start_idx_ligand = end_idx_ligand_atom
-        start_idx_edge = end_idx_ligand_edge
+        # start_idx_edge = end_idx_ligand_edge
         
     return connected_list, sanitized_list
         
@@ -484,11 +487,15 @@ def get_molecules(
     start_idx_backbone = 0
     start_idx_pocket = 0
     start_idx_true = 0
+    
     for i in range(len(ligand_size)):
         end_idx_ligand = start_idx_ligand + ligand_size[i]
         ligand_pos_i = ligand_pos[start_idx_ligand:end_idx_ligand]
         ligand_atom_type_i = ligand_atom_type[start_idx_ligand:end_idx_ligand]
+        virtual_nodes_i = out_dict["virtual_nodes_true"][start_idx_ligand:end_idx_ligand]
         ligand_atom_type_i = [atom_decoder[int(a)] for a in ligand_atom_type_i.argmax(dim=1)]
+        ligand_pos_i = ligand_pos_i[virtual_nodes_i==0]
+        ligand_atom_type_i = [a for a, v in zip(ligand_atom_type_i, virtual_nodes_i) if v==0]
         
         end_idx_backbone = start_idx_backbone + backbone_size[i]
         backbone_pos_i = backbone_pos[start_idx_backbone:end_idx_backbone]
@@ -503,14 +510,16 @@ def get_molecules(
         
         end_idx_true = start_idx_true + ligand_size[i]
         true_pos_i = true_pos[start_idx_true:end_idx_true]
+        true_pos_i = true_pos_i[virtual_nodes_i==0]
         true_atom_type_i = true_atom_type[start_idx_true:end_idx_true]
         true_atom_type_i = [atom_decoder[int(a)] for a in true_atom_type_i]
+        true_atom_type_i = [a for a, v in zip(true_atom_type_i, virtual_nodes_i) if v==0]
         
         # from IPython import embed; embed()
         ligand_pos_all = torch.cat([ligand_pos_i, backbone_pos_i], dim=0)
         ligand_atom_type_all = ligand_atom_type_i + backbone_atom_type_i
         atom_set = (ligand_pos_all.cpu().detach(), ligand_atom_type_all)
-        mol_block, (connected, sanitized) = visualize_mol(atom_set, val_check=True)
+        _, (connected, sanitized) = visualize_mol(atom_set, val_check=True)
         
         connected_list.append(connected)
         sanitized_list.append(sanitized)

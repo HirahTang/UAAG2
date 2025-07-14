@@ -928,8 +928,10 @@ class Trainer(pl.LightningModule):
         atom_types = torch.multinomial(
             self.atoms_prior, num_samples=n, replacement=True
         ).to(self.device)
+        # from IPython import embed; embed()
         atom_types_ligand = batch.x[reconstruct_mask==1]
-        
+        # atom_types = F.one_hot(atom_types_ligand, num_classes=self.num_atom_types).float()
+        atom_types = atom_types_ligand.clone().long()
         compound_atom_types = batch.x.long().to(self.device)
         compound_atom_types[reconstruct_mask==1] = atom_types
         compound_atom_types = F.one_hot(compound_atom_types, num_classes=self.num_atom_types).float()
@@ -990,6 +992,16 @@ class Trainer(pl.LightningModule):
         compound_degree_feat = F.one_hot(compound_degree_feat, num_classes=self.num_degree).float()
         degree_feat = F.one_hot(degree_feat, num_classes=self.num_degree).float()
         
+        virtual_nodes_feat = torch.multinomial(
+            self.virtual_nodes_prior, num_samples=n, replacement=True
+        ).to(self.device)
+        virtual_nodes_feat_ligand = batch.virtual_nodes[reconstruct_mask==1]
+        
+        compound_virtual_nodes_feat = batch.virtual_nodes.long().to(self.device)
+        compound_virtual_nodes_feat[reconstruct_mask==1] = virtual_nodes_feat
+        compound_virtual_nodes_feat = F.one_hot(compound_virtual_nodes_feat, num_classes=self.is_virtual_node).float()
+        virtual_nodes_feat = F.one_hot(virtual_nodes_feat, num_classes=self.is_virtual_node).float()
+        
         edge_index_ligand = batch.edge_index.t()[batch.edge_ligand==1].t()
         edge_attr_ligand = batch.edge_attr[batch.edge_ligand==1]
         
@@ -1016,6 +1028,7 @@ class Trainer(pl.LightningModule):
         edge_index_global = batch.edge_index.to(self.device)
         
         batch_is_ligand = batch.is_ligand.unsqueeze(1).to(self.device)
+        
         atoms_feats_in_perturbed = torch.cat(
             [
                 compound_atom_types,
@@ -1024,6 +1037,7 @@ class Trainer(pl.LightningModule):
                 compound_aromatic_feat,
                 compound_hybridization_feat,
                 compound_degree_feat,
+                compound_virtual_nodes_feat,
                 batch_is_ligand,
             ],
             dim=-1,
@@ -1080,6 +1094,7 @@ class Trainer(pl.LightningModule):
                 aromatic_pred,
                 hybridization_pred,
                 degree_pred,
+                virtual_nodes_pred,
                 _
             ) = out["atoms_pred"].split(
                 [
@@ -1089,6 +1104,7 @@ class Trainer(pl.LightningModule):
                     self.num_is_aromatic,
                     self.num_hybridization,
                     self.num_degree,
+                    self.is_virtual_node,
                     self.is_ligand,
                 ],
                 dim=-1,
@@ -1103,6 +1119,7 @@ class Trainer(pl.LightningModule):
             aromatic_pred = aromatic_pred.softmax(dim=-1)
             hybridization_pred = hybridization_pred.softmax(dim=-1)
             degree_pred = degree_pred.softmax(dim=-1)
+            virtual_nodes_pred = virtual_nodes_pred.softmax(dim=-1)
             
             if ddpm:
                 if self.hparams.noise_scheduler == "adaptive":
@@ -1122,12 +1139,13 @@ class Trainer(pl.LightningModule):
 
             # atoms
             
-            atom_types = self.cat_atoms.sample_reverse_categorical(
-                xt=atom_types,
-                x0=atoms_pred,
-                t=t[batch_lig],
-                num_classes=self.num_atom_types,
-            )
+            # atom_types = self.cat_atoms.sample_reverse_categorical(
+            #     xt=atom_types,
+            #     x0=atoms_pred,
+            #     t=t[batch_lig],
+            #     num_classes=self.num_atom_types,
+            # )
+            atom_types = compound_atom_types
             
            
             
@@ -1167,6 +1185,13 @@ class Trainer(pl.LightningModule):
                 num_classes=self.num_degree,
             )
             
+            virtual_nodes_feat = self.cat_virtual_nodes.sample_reverse_categorical(
+                xt=virtual_nodes_feat,
+                x0=virtual_nodes_pred,
+                t=t[batch_lig],
+                num_classes=self.is_virtual_node,
+            )
+            
             (
                 edge_attr_global_lig,
                 edge_index_global_lig,
@@ -1184,14 +1209,14 @@ class Trainer(pl.LightningModule):
             )
             
             # combine the denoised features with the pocket features
-            
-            compound_atom_types[reconstruct_mask==1] = atom_types
+            # from IPython import embed; embed()
+            # compound_atom_types[reconstruct_mask==1] = atom_types
             compound_charges[reconstruct_mask==1] = charge_types
             compound_ring_feat[reconstruct_mask==1] = ring_feat
             compound_aromatic_feat[reconstruct_mask==1] = aromatic_feat
             compound_hybridization_feat[reconstruct_mask==1] = hybridization_feat
             compound_degree_feat[reconstruct_mask==1] = degree_feat
-            
+            compound_virtual_nodes_feat[reconstruct_mask==1] = virtual_nodes_feat
             compound_pos[reconstruct_mask==1] = pos
             
             edge_attr_full[batch.edge_ligand==1] = edge_attr_global_lig
@@ -1204,10 +1229,12 @@ class Trainer(pl.LightningModule):
                     compound_aromatic_feat,
                     compound_hybridization_feat,
                     compound_degree_feat,
+                    compound_virtual_nodes_feat,
                     batch_is_ligand,
                 ],
                 dim=-1,
             )
+            # from IPython import embed; embed()
             if save_traj:
                 atom_decoder = self.dataset_info.atom_decoder
                 write_xyz_file_from_batch(
@@ -1219,6 +1246,13 @@ class Trainer(pl.LightningModule):
                     i=i,
                 )
         
+        virtual_nodes_pred = virtual_nodes_pred.argmax(dim=-1)
+        virtual_nodes_true = batch.virtual_nodes[reconstruct_mask==1]
+        virtual_nodes_pred_intermediate = batch.virtual_nodes.clone().long()
+        # from IPython import embed; embed()
+        virtual_nodes_pred_intermediate[reconstruct_mask==1] = virtual_nodes_pred
+        virtual_nodes_pred = virtual_nodes_pred_intermediate
+        
         out_dict = {
             "coords_pred": pos,
             "atoms_pred": atom_types,
@@ -1226,8 +1260,10 @@ class Trainer(pl.LightningModule):
             "bonds_pred": edge_attr_global_lig,
             "coords_pocket": compound_pos[batch.is_ligand==0],
             "atoms_pocket": compound_atom_types[batch.is_ligand==0],
-            "arpmatic_pred": aromatic_feat,
+            "aromatic_pred": aromatic_feat,
             "hybridization_pred": hybridization_feat,
+            "virtual_nodes_pred": virtual_nodes_pred,
+            "virtual_nodes_true": batch.virtual_nodes[reconstruct_mask==1],
             "coords_backbone": compound_pos[batch.is_backbone==1],
             "atoms_backbone": compound_atom_types[batch.is_backbone==1],
             "coords_true": pos_ligand,
@@ -1238,6 +1274,7 @@ class Trainer(pl.LightningModule):
         
         if show_pocket:
             
+            # reconstruct_mask = reconstruct_mask[virtual_nodes_pred==0]
             connected_list, sanitized_list = convert_edge_to_bond(
                 batch=batch, 
                 out_dict=out_dict, 
@@ -1246,20 +1283,21 @@ class Trainer(pl.LightningModule):
                 atom_decoder=self.dataset_info.atom_decoder,
                 edge_decoder=self.dataset_info.bond_decoder,
                 )
-            try:
-                _, _ = get_molecules(
-                    out_dict=out_dict,
-                    path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
-                    batch=batch.batch,  
-                    reconstruct_mask=reconstruct_mask, 
-                    backbone_mask=batch.is_backbone,
-                    pocket_mask=batch.is_ligand,
-                    atom_decoder=self.dataset_info.atom_decoder,
-                    
-                )
-            except Exception as e:
-                print("No Pocket for this molecule")
-                return out_dict, connected_list, sanitized_list
+            # try:
+                
+            _, _ = get_molecules(
+                out_dict=out_dict,
+                path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
+                batch=batch.batch,  
+                reconstruct_mask=reconstruct_mask, 
+                backbone_mask=batch.is_backbone,
+                pocket_mask=batch.is_ligand,
+                atom_decoder=self.dataset_info.atom_decoder,
+            
+        )
+            # except Exception as e:
+            #     print("No Pocket for this molecule")
+            #     return out_dict, connected_list, sanitized_list
             return out_dict, connected_list, sanitized_list
         else:
             return out_dict

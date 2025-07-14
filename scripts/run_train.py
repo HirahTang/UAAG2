@@ -68,6 +68,7 @@ def main(hparams):
     print("pocket noise scale: ", hparams.pocket_noise_scale)
     # lmdb_data_path = "/datasets/biochem/unaagi/unaagi_overfitting_train_v1.lmdb"
     lmdb_data_path = "/datasets/biochem/unaagi/unaagi_whole_v1.lmdb"
+    # lmdb_data_path = "/datasets/biochem/unaagi/debug_test.lmdb"
     all_data = UAAG2Dataset(lmdb_data_path,  mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale, params=hparams)
     test_data_setup = UAAG2Dataset(lmdb_data_path, params=hparams)
     # split all_data into train, val, test from all_data
