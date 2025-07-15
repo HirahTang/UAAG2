@@ -1184,7 +1184,7 @@ class Trainer(pl.LightningModule):
             "bonds_pred": edge_attr_global_lig,
             "coords_pocket": compound_pos[batch.is_ligand==0],
             "atoms_pocket": compound_atom_types[batch.is_ligand==0],
-            "arpmatic_pred": aromatic_feat,
+            "aromatic_pred": aromatic_feat,
             "hybridization_pred": hybridization_feat,
             "coords_backbone": compound_pos[batch.is_backbone==1],
             "atoms_backbone": compound_atom_types[batch.is_backbone==1],

@@ -75,7 +75,7 @@ def main(hparams):
             
         save_path = os.path.join('Samples', f"{seq_res}_{seq_position}")
         
-        dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=11, sample_length=500)
+        dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=20, sample_length=500)
 
 # from IPython import embed; embed()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -312,7 +312,7 @@ if __name__ == '__main__':
     parser.add_argument("--benchmark-path", default="/home/qcx679/hantang/UAAG2/data/full_graph/benchmarks/DN7A_SACS2.pt", type=str)
     
     parser.add_argument("--num-samples", default=10, type=int)
-    parser.add_argument("--virtual-node", default=1, type=int)
+    parser.add_argument("--virtual_node", default=1, type=int)
     args = parser.parse_args()
     
     main(args)
