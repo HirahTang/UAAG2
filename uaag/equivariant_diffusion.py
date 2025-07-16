@@ -1283,21 +1283,20 @@ class Trainer(pl.LightningModule):
                 atom_decoder=self.dataset_info.atom_decoder,
                 edge_decoder=self.dataset_info.bond_decoder,
                 )
-            # try:
+            try:
                 
-            _, _ = get_molecules(
-                out_dict=out_dict,
-                path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
-                batch=batch.batch,  
-                reconstruct_mask=reconstruct_mask, 
-                backbone_mask=batch.is_backbone,
-                pocket_mask=batch.is_ligand,
-                atom_decoder=self.dataset_info.atom_decoder,
-            
-        )
-            # except Exception as e:
-            #     print("No Pocket for this molecule")
-            #     return out_dict, connected_list, sanitized_list
+                _, _ = get_molecules(
+                    out_dict=out_dict,
+                    path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
+                    batch=batch.batch,  
+                    reconstruct_mask=reconstruct_mask, 
+                    backbone_mask=batch.is_backbone,
+                    pocket_mask=batch.is_ligand,
+                    atom_decoder=self.dataset_info.atom_decoder,
+                )
+            except Exception as e:
+                print("No Pocket for this molecule")
+                return out_dict, connected_list, sanitized_list
             return out_dict, connected_list, sanitized_list
         else:
             return out_dict
