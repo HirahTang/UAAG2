@@ -322,7 +322,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         self.dataset_info = dataset_info
         self.atom_decoder = self.dataset_info.atom_decoder
         self.data = self.preprocess(data)
-        self.data.virtual_nodes = torch.zeros(graph_data.x.size(0))
+        self.data.virtual_nodes = torch.zeros(self.data.x.size(0))
         
         ligand_pos_true = self.data.pos[self.data.is_ligand==1].cpu().detach()
         ligand_atom_true = [self.atom_decoder[int(a)] for a in self.data.x[self.data.is_ligand==1]]
@@ -454,7 +454,8 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         hybridization_new = torch.cat([hybridization, torch.multinomial(self.dataset_info.hybridization, self.sample_size, replacement=True)])
         is_ligand_new = torch.cat([is_ligand, torch.ones(self.sample_size)])
         is_backbone_new = torch.cat([is_backbone, torch.zeros(self.sample_size)])
-        virtual_nodes_new = torch.cat(virtual_nodes, [torch.ones(self.sample_size)])
+        # from IPython import embed; embed()
+        virtual_nodes_new = torch.cat([virtual_nodes, torch.ones(self.sample_size)])
         # Add new edges, firstly interaction edge between ligand and pocket (edge_ligand=0)
         # Then adding the edges inside ligands (edge_ligand=1)
         
