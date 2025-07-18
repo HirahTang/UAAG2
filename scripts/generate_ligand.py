@@ -75,7 +75,7 @@ def main(hparams):
             
         save_path = os.path.join('Samples', f"{seq_res}_{seq_position}")
         
-        dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=20, sample_length=500)
+        dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=30, sample_length=500)
 
 # from IPython import embed; embed()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
