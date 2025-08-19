@@ -128,6 +128,9 @@ class DiffusionLoss(nn.Module):
             bonds_loss, m = self.loss_non_nans(bonds_loss, "bonds")
             bonds_loss *= weights[~m]
             bonds_loss = bonds_loss.sum(dim=0)
+            
+            # from IPython import embed; embed()
+            
             if "ring" in self.modalities:
                 ring_loss = F.cross_entropy(
                     pred_data["ring"], true_data["ring"], reduction="none"
