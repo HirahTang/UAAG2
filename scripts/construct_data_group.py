@@ -91,7 +91,7 @@ def dictionary_to_data(data, compound_id, radius=8):
         degree[new_id] = atom['Degree']
         position[new_id] = torch.tensor(atom['coords'])
         is_ligand[new_id] = 1
-        if backbone_count in [0, 1, 2, 3]:
+        if backbone_count in [0, 1, 2, 4]:
             is_backbone[new_id] = 1
             backbone_count += 1
         else:

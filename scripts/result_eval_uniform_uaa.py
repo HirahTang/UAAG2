@@ -287,7 +287,7 @@ def main(args):
     get_plot(df_uaa, 'UAAG', 'value', 'target', f'{args.output_dir}/mt_uaa_target', spearmanr(df_uaa['UAAG'], df_uaa['value']).statistic)
     get_plot(df_uaa, 'wt_UAAG', 'value', 'target', f'{args.output_dir}/wt_uaa_target', spearmanr(df_uaa['wt_UAAG'], df_uaa['value']).statistic)
     special_plot(df_naa, df_uaa, f'{args.output_dir}/poseter', spearmanr(df_benchmark['pred'], df_benchmark['value']).statistic)
-    from IPython import embed; embed()
+    # from IPython import embed; embed()
     
     ndcg_pred = calc_ndcg(df_benchmark['value'], df_benchmark['pred'])
     calc_ndcg(df_benchmark['value'], df_benchmark['wt_UAAG'])

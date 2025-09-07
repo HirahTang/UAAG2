@@ -120,12 +120,10 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         graph_data.pos = graph_data.pos.float()
         graph_data.edge_attr = graph_data.edge_attr.float()
         graph_data.edge_index = graph_data.edge_index.long()
-        # from IPython import embed; embed()
         
         charges_np = graph_data.charges.numpy()
         mapped_np = np.vectorize(self.charge_emb.get)(charges_np)
         charges = torch.from_numpy(mapped_np)
-        
         # graph_data.charges = graph_data.charges.long()
         # graph_data.charges = torch.tensor(self.charge_emb[i] for i in graph_data.charges).float()
         # map the value of charges by {-1: 0, 0: 1, 1: 2}

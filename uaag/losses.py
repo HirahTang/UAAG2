@@ -103,12 +103,12 @@ class DiffusionLoss(nn.Module):
             if take_mean:
                 bonds_loss = bonds_loss.mean(dim=1)
             
-            # bonds_loss = 0.5 * scatter_mean(
-            #     bonds_loss,
-            #     index=bond_aggregation_index,
-            #     dim=0,
-            #     dim_size=true_data["atoms"].size(0),
-            # )
+            bonds_loss = 0.5 * scatter_mean(
+                bonds_loss,
+                index=bond_aggregation_index,
+                dim=0,
+                dim_size=true_data["atoms"].size(0),
+            )
             
             # bonds_loss = 0.5 * scatter_mean(
             #     bonds_loss,
@@ -116,14 +116,13 @@ class DiffusionLoss(nn.Module):
             #     dim=0,
             #     dim_size=bond_aggregation_index.max().item()+1,
             # )
-            bonds_loss = scatter_mean(
-                bonds_loss, index=bond_aggregation_index, dim=0, dim_size=batch_size
-            )
-
-            
             # bonds_loss = scatter_mean(
-            #     bonds_loss, index=batch, dim=0, dim_size=batch_size
+            #     bonds_loss, index=bond_aggregation_index, dim=0, dim_size=batch_size
             # )
+
+            bonds_loss = scatter_mean(
+                bonds_loss, index=batch, dim=0, dim_size=batch_size
+            )
             
             bonds_loss, m = self.loss_non_nans(bonds_loss, "bonds")
             bonds_loss *= weights[~m]

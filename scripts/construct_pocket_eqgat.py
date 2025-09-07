@@ -86,7 +86,8 @@ def main(args):
     file_name2 = '1A1I_tidy_bond.pkl'
     path = "/home/qcx679/hantang/UAAG/data/uaag_data_v2/pdb/1A1I_tidy"
     pdb_path = "/home/qcx679/hantang/UAAG/data/uaag_data_v2/pdb"
-    pdb_path = "/home/qcx679/hantang/UAAG2/data/intermediate_pickles/5ly1"
+    pdb_path = args.pdb_dir
+    # pdb_path = "/home/qcx679/hantang/UAAG2/data/intermediate_pickles/5ly1"
     pdb_dir = os.listdir(pdb_path)
     
     save_dict = {}
@@ -94,11 +95,14 @@ def main(args):
     random.seed(42)
     pdb_dir_copy = pdb_dir.copy()
     random.shuffle(pdb_dir_copy)
-    pdb_dir_copy = np.array_split(pdb_dir_copy, 2)
-    pdb_dir_current = list(pdb_dir_copy[args.split_num])
+    if args.split:
+        pdb_dir_copy = np.array_split(pdb_dir_copy, 2)
+        pdb_dir_current = list(pdb_dir_copy[args.split_num])
+    else:
+        pdb_dir_current = pdb_dir_copy
     # embed()
     for pdb_name in pdb_dir_current:
-    
+        save_dict = {}
         # pdb_path = "/home/qcx679/hantang/UAAG2/data/uaag_data_v2/pdb/DN7A_SACS2_tidy/"
         # pdb_name = "DN7A_SACS2_tidy"
         atom_file = os.path.join(pdb_path, f"{pdb_name}", f"{pdb_name}_atom.pkl")
@@ -117,12 +121,13 @@ def main(args):
                 output_dict['pocket'] = protein_object.get_neighbors(aa)
                 save_dict[f'{pdb_name}_'+aa['identity']] = output_dict
         # embed()
-    with open(f'data/benchmark/uaag_5ly1_{args.split_num}.json', 'w') as json_file:
-        json.dump(save_dict, json_file)
-        json_file.close()
+        with open(f'data/benchmark/uaag_{pdb_name}.json', 'w') as json_file:
+            json.dump(save_dict, json_file)
+            json_file.close()
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Create pocket data')
-    parser.add_argument('--split', action='store_true', help='Split the PDBs for parallel processing')
+    parser.add_argument('--pdb_dir', type=str, default='/home/qcx679/hantang/UAAG2/data/intermediate_pickles', help='Directory containing protein pdb files')
+    parser.add_argument('--split', action='store_true', default=False, help='Split the PDBs for parallel processing')
     parser.add_argument('--split_num', type=int, default=0, help='Split number')
     args = parser.parse_args()
     main(args)

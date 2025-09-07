@@ -33,6 +33,8 @@ from torch_geometric.data import Dataset, DataLoader
 
 from uaag.equivariant_diffusion import Trainer
 
+import yaml
+
 def main(hparams):
     
     
@@ -59,25 +61,37 @@ def main(hparams):
     else:
         raise ValueError("Logger type not recognized")
     
-    root_pdb_path = "/home/qcx679/hantang/UAAG2/data/full_graph/data_2"
-    pdb_list = os.listdir(root_pdb_path)
-    pdb_list = [os.path.join(root_pdb_path, pdb) for pdb in pdb_list]
-    print("Loading data from: ", pdb_list[-2])
+    print("Loading data from: ", hparams.benchmark_path)
     data_file = torch.load(hparams.benchmark_path)
     # data_file = torch.load(pdb_list[-2])
-    dataset_info = Dataset_Info(hparams, hparams.data_info_path)
-    for graph in data_file:
-        seq_position = int(graph.compound_id.split("_")[-3])
-        seq_res = graph.compound_id.split("_")[-4]
+    # split data_file in two halves, and run by the half assigned as hparams.split_index
+    
+    index = list(range(len(data_file)))
+
+    index_a = index[:len(index)//2]
+    index_b = index[len(index)//2:]
+    if hparams.split_index == 0:
+        index = index_a
+    else:
+        index = index_b
         
+    dataset_info = Dataset_Info(hparams, hparams.data_info_path)
+    
+    print("Number of Residues: ", len(index))
+    
+    for graph_num in index:
+        seq_position = int(data_file[graph_num].compound_id.split("_")[-3])
+        seq_res = data_file[graph_num].compound_id.split("_")[-4]
+        graph = data_file[graph_num]
         print("Sampling for: ", seq_res, seq_position)
         # from IPython import embed; embed()
             
         save_path = os.path.join('Samples', f"{seq_res}_{seq_position}")
         
-        dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=30, sample_length=500)
+        dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=hparams.virtual_node_size, sample_length=hparams.num_samples)
 
-# from IPython import embed; embed()
+        # from IPython import embed; embed()
+        # continue
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         dataloader = DataLoader(
             dataset=dataset, 
@@ -96,10 +110,15 @@ def main(hparams):
         model = model.eval()
         # from IPython import embed; embed()
         model.generate_ligand(dataloader, save_path=save_path, verbose=True)
-
+    # Save the configuration
+    config_path = os.path.join(hparams.save_dir, f"run{hparams.id}", "config.yaml")
+    args_dict = vars(hparams)
+    with open(config_path, "w") as f:
+        yaml.dump(args_dict, f)
+        
 if __name__ == '__main__':
     
-    DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "ProteinGymSampling")
+    DEFAULT_SAVE_DIR = os.path.join("/datasets/biochem/unaagi", "ProteinGymSampling")
     parser = ArgumentParser()
     # parser = add_arguments(parser)
     
@@ -311,8 +330,11 @@ if __name__ == '__main__':
     
     parser.add_argument("--benchmark-path", default="/home/qcx679/hantang/UAAG2/data/full_graph/benchmarks/DN7A_SACS2.pt", type=str)
     
-    parser.add_argument("--num-samples", default=10, type=int)
+    parser.add_argument("--num-samples", default=500, type=int)
     parser.add_argument("--virtual_node", default=1, type=int)
+    parser.add_argument("--virtual_node_size", default=15, type=int)
+
+    parser.add_argument("--split_index", default=0, type=int)
     args = parser.parse_args()
     
     main(args)

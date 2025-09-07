@@ -223,11 +223,11 @@ class Trainer(pl.LightningModule):
         
     def training_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
-        try:
-            loss = self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
-        except RuntimeError as e:
-            print(f"RuntimeError: {e}")
-            loss = torch.tensor(0.0, device=batch.x.device, requires_grad=True)
+        # try:
+        loss = self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
+        # except RuntimeError as e:
+        #     print(f"RuntimeError: {e}")
+        #     loss = torch.tensor(0.0, device=batch.x.device, requires_grad=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -369,6 +369,9 @@ class Trainer(pl.LightningModule):
         
         
         out_dict = self(batch=batch, t=t)
+       
+        if out_dict is None:
+            return torch.tensor(0.0, device=batch.x.device, requires_grad=True)
         
         true_data = {
             "coords": out_dict["coords_true"]
@@ -510,7 +513,6 @@ class Trainer(pl.LightningModule):
         
         atom_types_perturbed = atom_types_perturbed * ligand_mask.unsqueeze(1) + atom_types * pocket_mask.unsqueeze(1)
         atom_types = atom_types[ligand_mask==1]
-        
         charges, charges_perturbed = self.cat_charges.sample_categorical(
             t,
             charges,
@@ -522,7 +524,6 @@ class Trainer(pl.LightningModule):
         
         charges_perturbed = charges_perturbed * ligand_mask.unsqueeze(1) + charges * pocket_mask.unsqueeze(1)
         charges = charges[ligand_mask==1]
-
         edge_attr_global_perturbed, edge_attr_global_original = self.cat_bonds.sample_edges_categorical(
                 t, bond_edge_index, bond_edge_attr, data_batch
             )
@@ -606,24 +607,32 @@ class Trainer(pl.LightningModule):
         )
         
 
+        try:
+            out = self.model(
+                x=atom_feats_in_perturbed,
+                t=temb,
+                pos=pos_perturbed,
+                edge_index_local=None,
+                edge_index_global=bond_edge_index,
+                edge_attr_global=edge_attr_global_perturbed,
+                batch=data_batch,
+                batch_edge_global=batch.edge_ligand.long(),
+                context=None,
+                pocket_mask=pocket_mask.unsqueeze(1),
+                edge_mask=batch.edge_ligand.long(),
+                batch_lig=batch.batch[pocket_mask==0],
+            )
+        except torch.cuda.OutOfMemoryError:
+            # Compact log instead of full traceback:
+            print(f"[OOM {now()}] step={step} "
+                  f"nodes_total={atom_feats_in_perturbed.shape[0]} "
+                  f"edges_total={edge_attr_global.shape[0]}",
+                  file=sys.stdout, flush=True)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            # Skip this batch and keep training:
+            return None
 
-        out = self.model(
-            x=atom_feats_in_perturbed,
-            t=temb,
-            pos=pos_perturbed,
-            edge_index_local=None,
-            edge_index_global=bond_edge_index,
-            edge_attr_global=edge_attr_global_perturbed,
-            batch=data_batch,
-            batch_edge_global=batch.edge_ligand.long(),
-            context=None,
-            pocket_mask=pocket_mask.unsqueeze(1),
-            edge_mask=batch.edge_ligand.long(),
-            batch_lig=batch.batch[pocket_mask==0],
-        )
-
-        
-        
         out["coords_perturbed"] = pos_perturbed[ligand_mask==1]
         out["atoms_perturbed"] = atom_types_perturbed[ligand_mask==1]
         out["charges_perturbed"] = charges_perturbed[ligand_mask==1]
@@ -741,7 +750,6 @@ class Trainer(pl.LightningModule):
                     high=dataset_info.max_num_nodes + 1,
                     size=(num_graphs,),
                 )
-            # from IPython import embed; embed()
             molecules, connected_ele, sanitized_ele = self.reverse_sampling(
                 batch=batch,
                 device=device,
@@ -1192,8 +1200,7 @@ class Trainer(pl.LightningModule):
             "atoms_true": atom_types_ligand,
         }
         
-        # from IPython import embed; embed()
-        
+
         if show_pocket:
             
             connected_list, sanitized_list = convert_edge_to_bond(

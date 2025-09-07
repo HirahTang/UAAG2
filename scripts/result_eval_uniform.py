@@ -107,7 +107,7 @@ def get_plot(dataframe, x_col, y_col, hue_col, title, spr):
     plt.savefig(f'{title}.png')
 
 def main(args):
-    df_ground_truth = pd.read_csv(args.ground_truth)
+    # df_ground_truth = pd.read_csv(args.ground_truth)
     df_generated = pd.read_csv(args.generated)
     df_baselines = pd.read_csv(args.baselines)
     df_baselines['wt'], df_baselines['pos'], df_baselines['mut'] = zip(*df_baselines['mutant'].map(divide_mutant))
@@ -130,7 +130,7 @@ def main(args):
        'ProtSSN_k10_h512', 'ProtSSN_k10_h768', 'ProtSSN_k10_h1280',
        'ProtSSN_k20_h512', 'ProtSSN_k20_h768', 'ProtSSN_k20_h1280',
        'ProtSSN_k30_h512', 'ProtSSN_k30_h768', 'ProtSSN_k30_h1280',
-       'ProtSSN_ensemble', 'ProteinMPNN_global_score']
+       'ProtSSN_ensemble']
     
     generated_processed = {'aa': [], 'pred': [], 'wt': []}
     
