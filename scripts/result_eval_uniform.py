@@ -254,14 +254,19 @@ def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
     # from IPython import embed; embed()
     
-    ndcg_pred = calc_ndcg(df_baselines['DMS_score'], df_baselines['UAAG'])
-    
+    try:
+        ndcg_pred = calc_ndcg(df_baselines['DMS_score'], df_baselines['UAAG'])
+    except:
+        ndcg_pred = 0
     results = {'model': [],
                'spearmanr_pred': [], 'ndcg_pred': []}
     
     for model in baseline_list:
         spearmanr_model = spearmanr(df_baselines[model], df_baselines['DMS_score'])
-        ndcg_model = calc_ndcg(df_baselines['DMS_score'], df_baselines[model])
+        try:
+            ndcg_model = calc_ndcg(df_baselines['DMS_score'], df_baselines[model])
+        except:
+            ndcg_model = 0
         results['model'].append(model)
         results['spearmanr_pred'].append(spearmanr_model.correlation)
         results['ndcg_pred'].append(ndcg_model)
