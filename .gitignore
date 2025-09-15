@@ -24,4 +24,6 @@ wandb*
 *.png
 *.csv
 *.npz
+*ProteinGymSampling*
+*results*
 ```
