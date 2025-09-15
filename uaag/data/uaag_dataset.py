@@ -168,11 +168,11 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             # gaussian_noise = torch.randn_like(virtual_pos)
             # virtual_pos += gaussian_noise
             
-            virtual_charges = torch.ones(sample_n) * 3
-            virtual_degree = torch.ones(sample_n) * 5
-            virtual_is_aromatic = torch.ones(sample_n) * 2
-            virtual_is_in_ring = torch.ones(sample_n) * 2
-            virtual_hybridization = torch.ones(sample_n) * 4
+            virtual_charges = torch.ones(sample_n)
+            virtual_degree = torch.ones(sample_n) * 0
+            virtual_is_aromatic = torch.ones(sample_n) * 0
+            virtual_is_in_ring = torch.ones(sample_n) * 0
+            virtual_hybridization = torch.ones(sample_n) * 0
             
             # append virtual_x to graph_data.x
             graph_data.x = torch.cat([graph_data.x, virtual_x])
@@ -565,11 +565,11 @@ class Dataset_Info:
         if self.hparams.virtual_node:
             # add another value of 0 to data_info['x']
             data_info['x'][8] = 0
-            data_info['charge'][2] = 0
-            data_info['aro'][2] = 0
-            data_info['degree'][5] = 0
-            data_info['hybrid'][4] = 0
-            data_info['ring'][2] = 0
+            # data_info['charge'][2] = 0
+            # data_info['aro'][2] = 0
+            # data_info['degree'][5] = 0
+            # data_info['hybrid'][4] = 0
+            # data_info['ring'][2] = 0
             
         for k in data_info['x'].keys():
             sum_x.append(data_info['x'][k])

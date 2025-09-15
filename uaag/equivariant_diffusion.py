@@ -75,20 +75,20 @@ class Trainer(pl.LightningModule):
         bond_types_distribution = torch.zeros_like(bond_types_distribution)
         bond_types_distribution[0] = 1.0
         
-        charge_types_distribution = torch.zeros_like(charge_types_distribution)
-        charge_types_distribution[-1] = 1.0
+        # charge_types_distribution = torch.zeros_like(charge_types_distribution)
+        # charge_types_distribution[-1] = 1.0
         
-        is_aromatic_distribution = torch.zeros_like(is_aromatic_distribution)
-        is_aromatic_distribution[-1] = 1.0
+        # is_aromatic_distribution = torch.zeros_like(is_aromatic_distribution)
+        # is_aromatic_distribution[-1] = 1.0
         
-        is_ring_distribution = torch.zeros_like(is_ring_distribution)
-        is_ring_distribution[-1] = 1.0
+        # is_ring_distribution = torch.zeros_like(is_ring_distribution)
+        # is_ring_distribution[-1] = 1.0
         
-        hybridization_distribution = torch.zeros_like(hybridization_distribution)
-        hybridization_distribution[-1] = 1.0
+        # hybridization_distribution = torch.zeros_like(hybridization_distribution)
+        # hybridization_distribution[-1] = 1.0
         
-        degree_distribution = torch.zeros_like(degree_distribution)
-        degree_distribution[-1] = 1.0
+        # degree_distribution = torch.zeros_like(degree_distribution)
+        # degree_distribution[-1] = 1.0
         
         self.register_buffer("atoms_prior", atom_types_distribution.clone())
         self.register_buffer("bonds_prior", bond_types_distribution.clone())
