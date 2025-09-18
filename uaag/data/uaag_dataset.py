@@ -416,8 +416,8 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         # Then adding the edges inside ligands (edge_ligand=1)
         
         ids_new = torch.tensor(range(len(x_new)))
-        ids_new_node = ids_new[-self.sample_size:]
-        ids_existed = ids_new[:-self.sample_size]
+        ids_new_node = ids_new[-sample_size:]
+        ids_existed = ids_new[:-sample_size]
         
         # adding a new full connected graph of new nodes to existed graph
         
