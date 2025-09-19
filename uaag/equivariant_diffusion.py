@@ -649,7 +649,7 @@ class Trainer(pl.LightningModule):
             
             print(f"[OOM {datetime.now()}]"
                   f"nodes_total={atom_feats_in_perturbed.shape[0]} "
-                  f"edges_total={edge_attr_global.shape[0]}",
+                  f"edges_total={edge_attr_global_perturbed.shape[0]}",
                   file=sys.stdout, flush=True)
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
