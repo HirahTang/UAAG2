@@ -260,12 +260,17 @@ def main(args):
     df_uaa = df_benchmark[df_benchmark['target'].isin(uaa_identity)]
     df_naa = df_benchmark[df_benchmark['target'].isin(aa_indentity)]
     
+    args.output_dir = os.path.join('results', args.output_dir)
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    df_benchmark.to_csv(os.path.join(args.output_dir, 'all_benchmark_results_raw.csv'), index=False)
+    df_naa.to_csv(os.path.join(args.output_dir, 'naa_benchmark_results_raw.csv'), index=False)
+    df_uaa.to_csv(os.path.join(args.output_dir, 'uaa_benchmark_results_raw.csv'), index=False)
     # scatter dot coloured by aa
     
     # using seaborn to plot the scatter plot with dots coloured by aa
     
-    args.output_dir = os.path.join('results', args.output_dir)
-    os.makedirs(args.output_dir, exist_ok=True)
+    
     
     get_plot(df_benchmark, 'pred', 'value', 'aa', f'{args.output_dir}/wt-my_all_aa', spearmanr(df_benchmark['pred'], df_benchmark['value']).statistic)
     get_plot(df_benchmark, 'UAAG', 'value', 'aa', f'{args.output_dir}/mt_all_aa', spearmanr(df_benchmark['UAAG'], df_benchmark['value']).statistic)
@@ -303,7 +308,9 @@ def main(args):
     spearmanr(df_naa['wt_UAAG'], df_naa['value'])
     
         
-    
+    df_benchmark.to_csv(os.path.join(args.output_dir, 'all_benchmark_results.csv'), index=False)
+    df_naa.to_csv(os.path.join(args.output_dir, 'naa_benchmark_results.csv'), index=False)
+    df_uaa.to_csv(os.path.join(args.output_dir, 'uaa_benchmark_results.csv'), index=False)
 
 
 if __name__ == "__main__":
