@@ -2,7 +2,7 @@ import os
 import sys
 import wandb
 import torch
-
+import yaml
 sys.path.append('.')
 sys.path.append('..')
 import warnings
@@ -158,19 +158,22 @@ def main(hparams):
             if not os.path.exists(ckpt_path):
                 torch.save(ckpt, ckpt_path)
 
+     # save hparams
+    
+    hparams_path = os.path.join(hparams.save_dir, f"run{hparams.id}", "hparams.yaml")
+    if not os.path.exists(os.path.dirname(hparams_path)):
+        os.makedirs(os.path.dirname(hparams_path))
+
+    
+    with open(hparams_path, "w") as f:
+        yaml.safe_dump(vars(hparams), f)
+    # from IPython import embed; embed()
     trainer.fit(
         model=model,
         datamodule=datamodule,
         ckpt_path=ckpt_path if hparams.load_ckpt is not None else None,
     )
 
-    # save hparams
-    hparams_path = os.path.join(hparams.save_dir, f"run{hparams.id}", "hparams.yaml")
-    if not os.path.exists(os.path.dirname(hparams_path)):
-        os.makedirs(os.path.dirname(hparams_path))
-    with open(hparams_path, "w") as f:
-        f.write(hparams.to_yaml())
-    print(f"Saved hparams to {hparams_path}")
 
 if __name__ == "__main__":
     

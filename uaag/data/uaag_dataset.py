@@ -168,11 +168,11 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             # gaussian_noise = torch.randn_like(virtual_pos)
             # virtual_pos += gaussian_noise
             
-            virtual_charges = torch.ones(sample_n) * 3
-            virtual_degree = torch.ones(sample_n) * 5
-            virtual_is_aromatic = torch.ones(sample_n) * 2
-            virtual_is_in_ring = torch.ones(sample_n) * 2
-            virtual_hybridization = torch.ones(sample_n) * 4
+            virtual_charges = torch.ones(sample_n)
+            virtual_degree = torch.ones(sample_n) * 0
+            virtual_is_aromatic = torch.ones(sample_n) * 0
+            virtual_is_in_ring = torch.ones(sample_n) * 0
+            virtual_hybridization = torch.ones(sample_n) * 0
             
             # append virtual_x to graph_data.x
             graph_data.x = torch.cat([graph_data.x, virtual_x])
@@ -361,7 +361,9 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
 
 
     def __getitem__(self, idx):
-
+        # self.sample_size
+        # sample sample size from a uniform distributino between 1 and self.sample_size
+        sample_size = torch.randint(1, self.sample_size + 1, (1,)).item()
         reconstruct_mask = self.data.is_ligand - self.data.is_backbone
         x = self.data.x[reconstruct_mask==0]
         pos = self.data.pos[reconstruct_mask==0]
@@ -399,23 +401,23 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         # Add new nodes based on the assigned sample size
         # print("Inside the get item function")
         # from IPython import embed; embed()
-        
-        x_new = torch.cat([x, torch.zeros(self.sample_size)])
-        pos_new = torch.cat([pos, torch.randn(self.sample_size, 3)])
-        charges_new = torch.cat([charges, torch.multinomial(self.dataset_info.charge_types, self.sample_size, replacement=True)])
-        degree_new = torch.cat([degree, torch.multinomial(self.dataset_info.degree, self.sample_size, replacement=True)])
-        is_aromatic_new = torch.cat([is_aromatic, torch.multinomial(self.dataset_info.is_aromatic, self.sample_size, replacement=True)])
-        is_in_ring_new = torch.cat([is_in_ring, torch.multinomial(self.dataset_info.is_ring, self.sample_size, replacement=True)])
-        hybridization_new = torch.cat([hybridization, torch.multinomial(self.dataset_info.hybridization, self.sample_size, replacement=True)])
-        is_ligand_new = torch.cat([is_ligand, torch.ones(self.sample_size)])
-        is_backbone_new = torch.cat([is_backbone, torch.zeros(self.sample_size)])
-        
+
+        x_new = torch.cat([x, torch.zeros(sample_size)])
+        pos_new = torch.cat([pos, torch.randn(sample_size, 3)])
+        charges_new = torch.cat([charges, torch.multinomial(self.dataset_info.charge_types, sample_size, replacement=True)])
+        degree_new = torch.cat([degree, torch.multinomial(self.dataset_info.degree, sample_size, replacement=True)])
+        is_aromatic_new = torch.cat([is_aromatic, torch.multinomial(self.dataset_info.is_aromatic, sample_size, replacement=True)])
+        is_in_ring_new = torch.cat([is_in_ring, torch.multinomial(self.dataset_info.is_ring, sample_size, replacement=True)])
+        hybridization_new = torch.cat([hybridization, torch.multinomial(self.dataset_info.hybridization, sample_size, replacement=True)])
+        is_ligand_new = torch.cat([is_ligand, torch.ones(sample_size)])
+        is_backbone_new = torch.cat([is_backbone, torch.zeros(sample_size)])
+
         # Add new edges, firstly interaction edge between ligand and pocket (edge_ligand=0)
         # Then adding the edges inside ligands (edge_ligand=1)
         
         ids_new = torch.tensor(range(len(x_new)))
-        ids_new_node = ids_new[-self.sample_size:]
-        ids_existed = ids_new[:-self.sample_size]
+        ids_new_node = ids_new[-sample_size:]
+        ids_existed = ids_new[:-sample_size]
         
         # adding a new full connected graph of new nodes to existed graph
         
@@ -565,11 +567,11 @@ class Dataset_Info:
         if self.hparams.virtual_node:
             # add another value of 0 to data_info['x']
             data_info['x'][8] = 0
-            data_info['charge'][2] = 0
-            data_info['aro'][2] = 0
-            data_info['degree'][5] = 0
-            data_info['hybrid'][4] = 0
-            data_info['ring'][2] = 0
+            # data_info['charge'][2] = 0
+            # data_info['aro'][2] = 0
+            # data_info['degree'][5] = 0
+            # data_info['hybrid'][4] = 0
+            # data_info['ring'][2] = 0
             
         for k in data_info['x'].keys():
             sum_x.append(data_info['x'][k])

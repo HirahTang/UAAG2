@@ -135,10 +135,9 @@ def main(args):
     generated_processed = {'aa': [], 'pred': [], 'wt': []}
     
     for index, row in df_generated.iterrows():
+        # from IPython import embed; embed()
         mt_aa = aa_map[row['aa']]
         pos = row['pos']
-        if pos == 1 or pos == 55:
-            continue
         wt_value = mt_aa + str(pos) + mt_aa
         if not np.isnan(row[row['aa']]):
             wt_value = row[row['aa']]
@@ -220,12 +219,12 @@ def main(args):
         
     
     output_df = pd.DataFrame(generated_processed)
-    
+    # from IPython import embed; embed()
     # output_df['UAAG'] = -np.log(output_df['wt']) - np.log(output_df['pred'])
     # output_df['UAAG'] = np.log(output_df['wt']) - np.log(output_df['pred'])
     output_df["pred"] = np.log(output_df["pred"]/args.total_num)
     output_df["wt"] = np.log(output_df["wt"]/args.total_num)
-    output_df['UAAG'] = output_df['wt'] - output_df['pred']
+    output_df['UNAAGI'] =  -output_df['wt'] + output_df['pred']
     # output_df['UAAG'] = 
     
     # from IPython import embed; embed()
@@ -243,7 +242,7 @@ def main(args):
     
     # df_baselines = df_baselines[~((df_baselines['wt'].isin(['F', 'R'])) & (df_baselines['mut'].str[0].isin(['F', 'R'])))]
     
-    spearmanr_pred = spearmanr(df_baselines['UAAG'], df_baselines['DMS_score'])
+    spearmanr_pred = spearmanr(df_baselines['UNAAGI'], df_baselines['DMS_score'])
     # approach_a = spearmanr(df_baselines['wt_y'] - df_baselines['pred'], df_baselines['DMS_score'])
     # spearmanr(df_baselines['pred'], df_baselines['DMS_score'])
     # approch_b = spearmanr(-np.log(df_baselines['pred']/500) + np.log(df_baselines['wt_y']/500), df_baselines['DMS_score'])
@@ -253,30 +252,35 @@ def main(args):
     args.output_dir = os.path.join('results', args.output_dir)
     os.makedirs(args.output_dir, exist_ok=True)
     # from IPython import embed; embed()
-    
-    ndcg_pred = calc_ndcg(df_baselines['DMS_score'], df_baselines['UAAG'])
-    
+    df_baselines.to_csv(f'{args.output_dir}/full_table.csv', index=False)
+    try:
+        ndcg_pred = calc_ndcg(df_baselines['DMS_score'], df_baselines['UNAAGI'])
+    except:
+        ndcg_pred = 0
     results = {'model': [],
                'spearmanr_pred': [], 'ndcg_pred': []}
     
     for model in baseline_list:
         spearmanr_model = spearmanr(df_baselines[model], df_baselines['DMS_score'])
-        ndcg_model = calc_ndcg(df_baselines['DMS_score'], df_baselines[model])
+        try:
+            ndcg_model = calc_ndcg(df_baselines['DMS_score'], df_baselines[model])
+        except:
+            ndcg_model = 0
         results['model'].append(model)
         results['spearmanr_pred'].append(spearmanr_model.correlation)
         results['ndcg_pred'].append(ndcg_model)
         
-    results['model'].append('UAAG')
+    results['model'].append('UNAAGI')
     results['spearmanr_pred'].append(spearmanr_pred.correlation)
     results['ndcg_pred'].append(ndcg_pred)
     
     
     
-    get_plot(df_baselines, 'UAAG', 'DMS_score', 'wt_x', f'{args.output_dir}/wt-mut_all_aa', spearmanr_pred.statistic)
+    get_plot(df_baselines, 'UNAAGI', 'DMS_score', 'wt_x', f'{args.output_dir}/wt-mut_all_aa', spearmanr_pred.statistic)
     get_plot(df_baselines, 'pred', 'DMS_score', 'wt_x', f'{args.output_dir}/mt_all_aa', spearmanr(df_baselines['pred'], df_baselines['DMS_score']).statistic)
     get_plot(df_baselines, 'wt_y', 'DMS_score', 'wt_x', f'{args.output_dir}/wt_all_aa', spearmanr(df_baselines['wt_y'], df_baselines['DMS_score']).statistic)
     
-    get_plot(df_baselines, 'UAAG', 'DMS_score', 'mut', f'{args.output_dir}/wt-mut_all_target', spearmanr_pred.statistic)
+    get_plot(df_baselines, 'UNAAGI', 'DMS_score', 'mut', f'{args.output_dir}/wt-mut_all_target', spearmanr_pred.statistic)
     get_plot(df_baselines, 'pred', 'DMS_score', 'mut', f'{args.output_dir}/mt_all_target', spearmanr(df_baselines['pred'], df_baselines['DMS_score']).statistic)
     get_plot(df_baselines, 'wt_y', 'DMS_score', 'mut', f'{args.output_dir}/wt_all_target', spearmanr(df_baselines['wt_y'], df_baselines['DMS_score']).statistic)
     
