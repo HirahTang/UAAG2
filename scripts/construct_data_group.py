@@ -12,6 +12,8 @@ import torch.nn.functional as F
 from torch_geometric.data import Data
 from IPython import embed
 import pickle
+import lmdb
+import os
 
 atom_encoder = {
     "C": 0,
@@ -91,7 +93,7 @@ def dictionary_to_data(data, compound_id, radius=8):
         degree[new_id] = atom['Degree']
         position[new_id] = torch.tensor(atom['coords'])
         is_ligand[new_id] = 1
-        if backbone_count in [0, 1, 2, 4]:
+        if backbone_count in [0, 1, 2, 3]:
             is_backbone[new_id] = 1
             backbone_count += 1
         else:
@@ -224,28 +226,129 @@ def split_list(lst, n_splits=2):
     return sublists
 
 def json_to_torch_geometric_data(args):
-    print(f"Processing {args.json_path}")
-    with open(args.json_path, 'r') as f:
-        data = json.load(f)
-    print("Finished loading json file")
-    data_list = []
-    compound_id_list = list(data.keys())
-    compound_id_list.sort()
-    # compound = data[compound_id_list[0]]
-    # dictionary_to_data(compound)
-    # split compound_id_list to 20 parts
-    new_compound_list = split_list(compound_id_list, n_splits=5)
-    new_compound_list = new_compound_list[args.split_num]
-    for compound_id in tqdm(compound_id_list):
-        compound = data[compound_id]
-        compound_graph = dictionary_to_data(compound, compound_id)
-        if compound_graph is not None:
-            data_list.append(compound_graph)
-        
-        
+    
+    # if args.json_path is a folder or a json
+    lmdb_path = f"/datasets/biochem/unaagi/{args.output_name}.lmdb"
+    env = lmdb.open(
+        lmdb_path,
+        map_size=1 << 40,
+        subdir=False,
+        readonly=False,
+        meminit=False,
+        map_async=True,
+    )
+    total_count = 0
+    metadata = {}
+    txn = env.begin(write=True)
+    source_name = os.path.basename(args.json_path)
+    if os.path.isdir(args.json_path):
+        json_files = os.listdir(args.json_path)
+        # data_list = []
+        for json_file in json_files:
+            with open(os.path.join(args.json_path, json_file), 'r') as f:
+                data = json.load(f)
+            compound_id_list = list(data.keys())
+            for compound_id in tqdm(compound_id_list):
+                compound = data[compound_id]
+                compound_graph = dictionary_to_data(compound, compound_id)
+                if compound_graph is not None:
+                    # data_list.append(compound_graph)
+                    key = f"{total_count:08}".encode("ascii")
+                    compound_graph.source_name = source_name
+                    metadata[key] = source_name
+                    value = pickle.dumps(compound_graph, protocol=pickle.HIGHEST_PROTOCOL)
+                    txn.put(key, value)
+                    if (total_count+1) % 10000 == 0:
+                        txn.commit()
+                        txn = env.begin(write=True)
+                    total_count += 1
+    else:           
+        print(f"Processing {args.json_path}")
+        with open(args.json_path, 'r') as f:
+            data = json.load(f)
+        print("Finished loading json file")
+        # data_list = []
+        compound_id_list = list(data.keys())
+        compound_id_list.sort()
+        # compound = data[compound_id_list[0]]
+        # dictionary_to_data(compound)
+        # split compound_id_list to 20 parts
+        new_compound_list = split_list(compound_id_list, n_splits=5)
+        new_compound_list = new_compound_list[args.split_num]
+        for compound_id in tqdm(compound_id_list):
+            compound = data[compound_id]
+            compound_graph = dictionary_to_data(compound, compound_id)
+            if compound_graph is not None:
+                key = f"{total_count:08}".encode("ascii")
+                compound_graph.source_name = source_name
+                metadata[key] = source_name
+                value = pickle.dumps(compound_graph, protocol=pickle.HIGHEST_PROTOCOL)
+                txn.put(key, value)
+                if (total_count+1) % 10000 == 0:
+                    txn.commit()
+                    txn = env.begin(write=True)
+                total_count += 1
+    
+    # for i, sample in tqdm(enumerate(data_list)):
+    #     key = f"{total_count:08}".encode("ascii")
+    #     sample.source_name = source_name
+    #     metadata[key] = source_name
+    #     value = pickle.dumps(sample, protocol=pickle.HIGHEST_PROTOCOL)
+    #     txn.put(key, value)
+    #     if (i+1) % 10000 == 0:
+    #         txn.commit()
+    #         txn = env.begin(write=True)
+    #     total_count += 1
+    
     # save the data_list
     # embed()
-    torch.save(data_list, f"/home/qcx679/hantang/UAAG2/data/full_graph/benchmarks/{args.output_name}.pt")
+    # Save length
+    pdbbind_pt = "/home/qcx679/hantang/UAAG2/data/full_graph/pdbbind/pdbbind_data.pt"
+    pdbbind_pt = torch.load(pdbbind_pt, map_location='cpu')
+    source_name = "pdbbind_data.pt"
+    print(f"Loaded {len(pdbbind_pt)} samples from {source_name}", flush=True)
+    for i, sample in tqdm(enumerate(pdbbind_pt)):
+        key = f"{total_count:08}".encode("ascii")
+        sample.source_name = source_name
+        metadata[key] = source_name
+        value = pickle.dumps(sample, protocol=pickle.HIGHEST_PROTOCOL)
+        txn.put(key, value)
+        if (i+1) % 10000 == 0:
+            txn.commit()
+            txn = env.begin(write=True)
+        total_count += 1
+    txn.commit()
+    txn = env.begin(write=True)
+    
+    naa_folder = "/home/qcx679/hantang/UAAG2/data/full_graph/naa"
+    for naa_file in os.listdir(naa_folder):
+        naa_path = os.path.join(naa_folder, naa_file)
+        naa_data = torch.load(naa_path, map_location='cpu')
+        source_name = naa_file
+        print(f"Loaded {len(naa_data)} samples from {source_name}", flush=True)
+        for i, sample in tqdm(enumerate(naa_data)):
+            key = f"{total_count:08}".encode("ascii")
+            sample.source_name = source_name
+            metadata[key] = source_name
+            value = pickle.dumps(sample, protocol=pickle.HIGHEST_PROTOCOL)
+            txn.put(key, value)
+            if (i+1) % 10000 == 0:
+                txn.commit()
+                txn = env.begin(write=True)
+            total_count += 1
+    
+    
+     # Save length
+    
+    
+    txn.put(b"__len__", pickle.dumps(total_count))
+    txn.commit()
+    env.sync()
+    env.close()
+    with open(f"/datasets/biochem/unaagi/{args.output_name}.metadata.pkl", "wb") as f:
+        pickle.dump(metadata, f)
+    print(f"All done. {total_count} graphs saved to {lmdb_path}")
+    # torch.save(data_list, f"/datasets/biochem/unaagi/intermediate_data/{args.output_name}.pt")
 
 def main(args):
 
