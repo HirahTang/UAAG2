@@ -83,7 +83,7 @@ def main(hparams):
     for i in range(len(train_data)):
         key = f"{i:08}".encode("ascii")
         source_name = metadata[key]
-        if source_name in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
+        if source_name in ["AACLBR.pt", "L_sidechain_data.pt"]:
             weights.append(hparams.pdbbind_weight)
         else:
             weights.append(1.0)

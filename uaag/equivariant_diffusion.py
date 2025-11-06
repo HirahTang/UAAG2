@@ -245,11 +245,11 @@ class Trainer(pl.LightningModule):
         # from IPython import embed; embed()
     def training_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
-        # try:
-        loss = self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
-        # except RuntimeError as e:
-        #     print(f"RuntimeError: {e}")
-        #     loss = torch.tensor(0.0, device=batch.x.device, requires_grad=True)
+        try:
+            loss = self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
+        except RuntimeError as e:
+            print(f"RuntimeError: {e}")
+            loss = torch.tensor(0.0, device=batch.x.device, requires_grad=True)
         return loss
     
     def validation_step(self, batch, batch_idx):

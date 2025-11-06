@@ -250,7 +250,11 @@ def json_to_torch_geometric_data(args):
             compound_id_list = list(data.keys())
             for compound_id in tqdm(compound_id_list):
                 compound = data[compound_id]
-                compound_graph = dictionary_to_data(compound, compound_id)
+                try:
+                    compound_graph = dictionary_to_data(compound, compound_id)
+                except Exception as e:
+                    print(f"Error processing {compound_id}: {e}")
+                    compound_graph = None
                 if compound_graph is not None:
                     # data_list.append(compound_graph)
                     key = f"{total_count:08}".encode("ascii")
@@ -262,6 +266,9 @@ def json_to_torch_geometric_data(args):
                         txn.commit()
                         txn = env.begin(write=True)
                     total_count += 1
+            print(f"Processed: {json_file}, Total count:", total_count)
+            if total_count > 150000:
+                break
     else:           
         print(f"Processing {args.json_path}")
         with open(args.json_path, 'r') as f:
@@ -288,7 +295,10 @@ def json_to_torch_geometric_data(args):
                     txn.commit()
                     txn = env.begin(write=True)
                 total_count += 1
-    
+            if total_count > 150000:
+                break
+        print(f"Processed: {source_name}, Total count:", total_count)
+
     # for i, sample in tqdm(enumerate(data_list)):
     #     key = f"{total_count:08}".encode("ascii")
     #     sample.source_name = source_name
