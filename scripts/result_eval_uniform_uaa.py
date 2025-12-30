@@ -146,11 +146,13 @@ def main(args):
         pos = row['POS']
         if pos == 156:
             continue
+        if wt_aa == 'PRO':
+            continue
         # from IPython import embed; embed()
         if not np.isnan(row[wt_aa]):
             wt_value = row[wt_aa]
         else:
-            continue
+            wt_value = 1 / args.total_num
         
         # if wt_aa in ['ALA', 'TRP', 'TYR']:
         #     wt_value *= (1/23)
@@ -167,7 +169,7 @@ def main(args):
             if not np.isnan(row[aa_name]):
                 mt_value = row[aa_name]
             else:
-                continue
+                mt_value = 1 / args.total_num
                 # mt_value = 1e-5
             # add mt_value to df_benchmark by the same [wt_aa, pos, aa_name]
             df_benchmark.loc[
@@ -181,11 +183,13 @@ def main(args):
                 (df_benchmark['target'] == aa_name), 'wt_UAAG'] = wt_value
         
         for aa_name in aa_indentity:
+            if aa_name == 'PRO':
+                continue
             if not np.isnan(row[aa_name]):
                 mt_value = row[aa_name]
             else:
-                continue
-                # mt_value = 1e-5
+                # continue
+                mt_value = 1 / args.total_num
             # add mt_value to df_benchmark by the same [wt_aa, pos, aa_name]
             df_benchmark.loc[
                 (df_benchmark['aa'] == wt_aa) & 

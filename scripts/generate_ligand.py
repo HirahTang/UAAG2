@@ -63,17 +63,25 @@ def main(hparams):
     
     print("Loading data from: ", hparams.benchmark_path)
     data_file = torch.load(hparams.benchmark_path)
-    # data_file = torch.load(pdb_list[-2])
-    # split data_file in two halves, and run by the half assigned as hparams.split_index
     
+    # Split data into partitions based on split_index
+    NUM_PARTITIONS = 10
     index = list(range(len(data_file)))
-
-    index_a = index[:len(index)//2]
-    index_b = index[len(index)//2:]
-    if hparams.split_index == 0:
-        index = index_a
-    else:
-        index = index_b
+    part_size = len(index) // NUM_PARTITIONS
+    
+    # Create partitions
+    partitions = []
+    for i in range(NUM_PARTITIONS - 1):
+        partitions.append(index[i * part_size : (i + 1) * part_size])
+    # Last partition gets any remaining elements
+    partitions.append(index[(NUM_PARTITIONS - 1) * part_size :])
+    
+    # Select partition based on split_index
+    if hparams.split_index < 0 or hparams.split_index >= NUM_PARTITIONS:
+        raise ValueError(f"split_index must be between 0 and {NUM_PARTITIONS - 1}, got {hparams.split_index}")
+    
+    index = partitions[hparams.split_index]
+    print(f"Processing partition {hparams.split_index}/{NUM_PARTITIONS - 1} with {len(index)} residues")
         
     dataset_info = Dataset_Info(hparams, hparams.data_info_path)
     

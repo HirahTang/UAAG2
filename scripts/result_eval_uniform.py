@@ -139,10 +139,12 @@ def main(args):
         mt_aa = aa_map[row['aa']]
         pos = row['pos']
         wt_value = mt_aa + str(pos) + mt_aa
+        if row['aa'] == "PRO":
+            continue
         if not np.isnan(row[row['aa']]):
             wt_value = row[row['aa']]
         else:
-            continue
+            wt_value = 1
         # if row['aa'] in ['CYS', 'SER', 'THR', 'VAL', 'PHE', 'ARG']:
         #     wt_value = wt_value * (2 / 18)
         # elif row['aa'] in ['ASP', 'ASN', 'ILE', 'LEU', 'MET']:
@@ -154,12 +156,16 @@ def main(args):
         for aa_name in aa_map.keys():
             
             row_aa = mt_aa + str(pos) + aa_map[aa_name]
+            if aa_name == "PRO":
+                continue
             if not np.isnan(row[aa_name]):
                 generated_processed['aa'].append(row_aa)
                 generated_processed['pred'].append(row[aa_name])
                 generated_processed['wt'].append(wt_value)
             else:
-                continue
+                generated_processed['aa'].append(row_aa)
+                generated_processed['pred'].append(1)
+                generated_processed['wt'].append(wt_value)
                 # generated_processed['aa'].append(row_aa)
                 # generated_processed['pred'].append(1e-5)
                 # generated_processed['wt'].append(wt_value)

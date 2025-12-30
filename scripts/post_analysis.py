@@ -26,7 +26,10 @@ dataframe = pd.DataFrame(columns=['aa', 'pos', 'ALA', 'CYS', 'ASP', 'GLU', 'PHE'
                     'MeG', 'MeA', 'MeB', 'MeF', '2th', \
                         '3th', 'YMe', '2Np', 'Bzt', 'UNK', 'INV'])
 
+
+
 for aa in tqdm(aa_list):
+    per_aa_table = pd.DataFrame(columns=['iter', 'batch', 'identity', 'SMILES'])
     gen_aa_list = []
     aa_name, aa_pos = aa.split("_")[0], int(aa.split("_")[1])
     aa_path = os.path.join(analysis_path, aa)
@@ -37,20 +40,31 @@ for aa in tqdm(aa_list):
         if not os.path.isdir(os.path.join(aa_path, sample_path)):
             continue
         
+        iter_num = int(sample_path.split("_")[-1])
+        
         sample_path = os.path.join(aa_path, sample_path)
         
         
         batch_path_list = os.listdir(sample_path)
         for batch_path in batch_path_list:
+            batch_num = int(batch_path.split("_")[-1])
             mol_path = os.path.join(sample_path, batch_path, 'final', 'ligand.mol')
             mol = Chem.MolFromMolFile(mol_path)
             try:
                 gen_aa = aa_check(mol)
                 gen_aa_list.append(gen_aa)
+                if gen_aa == "UNK":
+                    per_aa_table = pd.concat([per_aa_table, pd.DataFrame([[iter_num, batch_num, "UNK", Chem.MolToSmiles(mol)]], columns=per_aa_table.columns)], ignore_index=True)
+                else:
+                    per_aa_table = pd.concat([per_aa_table, pd.DataFrame([[iter_num, batch_num, gen_aa, None]], columns=per_aa_table.columns)], ignore_index=True)
             except:
+                per_aa_table = pd.concat([per_aa_table, pd.DataFrame([[iter_num, batch_num, "INV", None]], columns=per_aa_table.columns)], ignore_index=True)
                 gen_aa_list.append("INV")
                 print(f"Error in {mol_path}")
-                
+    
+    # save per_aa_table
+    save_per_aa_path = os.path.join(aa_path, f"{aa_name}_{aa_pos}_aa_table.csv")
+    per_aa_table.to_csv(save_per_aa_path, index=False)        
     aa_counter = Counter(gen_aa_list)
     # convert all values in aa_counter to lists with one element
     aa_counter = {k: [v] for k, v in aa_counter.items()}

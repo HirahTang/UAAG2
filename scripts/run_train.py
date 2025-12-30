@@ -137,6 +137,9 @@ def main(hparams):
     pl.seed_everything(seed=hparams.seed, workers=hparams.gpus > 1)
     
     ckpt_path = None
+    # from IPython import embed; embed()
+    # print the model parameter size
+    
     if hparams.load_ckpt is not None:
         print("Loading from checkpoint ...")
         
