@@ -417,11 +417,15 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         
         ids_new = torch.tensor(range(len(x_new)))
         ids_new_node = ids_new[-sample_size:]
-        ids_existed = ids_new[:-sample_size]
         
-        # adding a new full connected graph of new nodes to existed graph
+        ids_backbone = ids_new[is_backbone_new==1]
+        ids_existed = torch.tensor([i for i in ids_new if i not in ids_new_node and i not in ids_backbone])
+        # the ids_existed and ids_new_node are not quite clear to me
+        # from IPython import embed; embed()
         
-        grid1, grid2 = torch.meshgrid(ids_new_node, ids_existed)
+        # Adding a new full connected graph of new nodes to backbone nodes
+        
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_backbone)
         grid1 = grid1.flatten()
         grid2 = grid2.flatten()
         # create the new edge index as a bidirectional graph
@@ -435,8 +439,25 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         # Adding interaction edge information
         edge_index_new = torch.cat([edge_index, new_edge_index], dim=1)
         edge_attr_new = torch.cat([edge_attr, torch.zeros(new_edge_index.size(1))])
-        edge_ligand_new = torch.cat([edge_ligand, torch.zeros(new_edge_index.size(1))])
+        edge_ligand_new = torch.cat([edge_ligand, torch.ones(new_edge_index.size(1))])
+        # The edge_ligand_new now also include the edges between new nodes and existed nodes
         
+        # Adding edge information between the new nodes and the existed background context nodes
+        # print("Adding edges inside ligand")
+        
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_existed)
+        grid1 = grid1.flatten()
+        grid2 = grid2.flatten()
+        # create the new edge index as a bidirectional graph
+        new_edge_index = torch.stack([grid1, grid2])
+        new_edge_index_reverse = torch.stack([grid2, grid1])
+        new_edge_index = torch.cat([new_edge_index, new_edge_index_reverse], dim=1)
+        
+        edge_index_new = torch.cat([edge_index_new, new_edge_index], dim=1)
+        edge_attr_new = torch.cat([edge_attr_new, torch.zeros(new_edge_index.size(1))])
+        edge_ligand_new = torch.cat([edge_ligand_new, torch.zeros(new_edge_index.size(1))])
+        
+        # from IPython import embed; embed()
         # Adding edge information inside the new nodes
         
         grid1, grid2 = torch.meshgrid(ids_new_node, ids_new_node)
@@ -447,14 +468,218 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         grid2 = grid2.flatten()
         new_ligand_edge_index = torch.stack([grid1, grid2])
         
-        # print("New edges inside ligand")
+        edge_index_new = torch.cat([edge_index_new, new_ligand_edge_index], dim=1)
+        edge_attr_new = torch.cat([edge_attr_new, torch.zeros(new_ligand_edge_index.size(1))])
+        edge_ligand_new = torch.cat([edge_ligand_new, torch.ones(new_ligand_edge_index.size(1))]).float()
+
         # from IPython import embed; embed()
+        
+        output_graph = Data(
+            x=x_new,
+            pos=pos_new,
+            edge_index=edge_index_new,
+            edge_attr=edge_attr_new,
+            edge_ligand=edge_ligand_new,
+            charges=charges_new,
+            degree=degree_new,
+            is_aromatic=is_aromatic_new,
+            is_in_ring=is_in_ring_new,
+            hybridization=hybridization_new,
+            is_backbone=is_backbone_new,
+            is_ligand=is_ligand_new,
+            ids=ids_new,
+            id=self.data.id,
+        )
+        
+        return output_graph
+
+
+class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        data,
+        hparams,
+        save_path,
+        dataset_info,
+        sample_size=10,
+        sample_length=1000,
+    ):
+        super(UAAG2Dataset_sampling_prior, self).__init__()
+        # self.statistics = Statistic()
+        self.save_dir = os.path.join(hparams.save_dir, f'run{hparams.id}', f"{save_path}")
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
+            
+        self.sample_size = sample_size
+        self.sample_length = sample_length
+        self.data = data
+        # self.load_dataset()
+        self.charge_emb = {
+            -1: 0,
+            0: 1,
+            1: 2,
+            2: 3,
+        }
+        
+        self.dataset_info = dataset_info
+        self.atom_decoder = self.dataset_info.atom_decoder
+        self.data = self.preprocess(data)
+        
+        ligand_pos_true = self.data.pos[self.data.is_ligand==1].cpu().detach()
+        ligand_atom_true = [self.atom_decoder[int(a)] for a in self.data.x[self.data.is_ligand==1]]
+        
+        true_molblock = visualize_mol((ligand_pos_true, ligand_atom_true), val_check=False)
+        # save the true ligand molblock
+        
+        with open(os.path.join(self.save_dir, 'ligand_true.mol'), 'w') as f:
+            f.write(true_molblock)
+        
+        # Skip pocket visualization for prior sampling (no pocket)
+        # pocket_pos_true = self.data.pos[self.data.is_ligand==0].cpu().detach()
+        # pocket_atom_true = [self.atom_decoder[int(a)] for a in self.data.x[self.data.is_ligand==0]]
+        # pocket_molblock = visualize_mol((pocket_pos_true, pocket_atom_true), val_check=False)
+        # with open(os.path.join(self.save_dir, 'pocket_true.mol'), 'w') as f:
+        #     f.write(pocket_molblock)
+        
+        
+    def __len__(self):
+        return self.sample_length
+    
+    def pocket_centering(self, batch):
+        # graph_data = self.data[idx]
+        pos = batch.pos
+        if batch.is_ligand.sum() == len(batch.is_ligand):
+            pocket_mean = pos.mean(dim=0)
+        else:
+            ligand_pos = batch.pos[batch.is_ligand==1]
+            ligand_mean = ligand_pos.mean(dim=0)
+        pos = pos - ligand_mean
+        batch.pos = pos
+        return batch
+    
+    def preprocess(self, data):
+        graph_data = self.pocket_centering(data)
+        if not hasattr(graph_data, 'compound_id'):
+            graph_data.compound_id = graph_data.componud_id
+        if not hasattr(graph_data, 'edge_ligand'):
+            graph_data.edge_ligand = torch.ones(graph_data.edge_attr.size(0))
+        if not hasattr(graph_data, 'id'):
+            graph_data.id = graph_data.compound_id
+        graph_data.x = graph_data.x.float()
+        graph_data.pos = graph_data.pos.float()
+        graph_data.edge_attr = graph_data.edge_attr.float()
+        graph_data.edge_index = graph_data.edge_index.long()
+        # from IPython import embed; embed()
+        
+        charges_np = graph_data.charges.numpy()
+        mapped_np = np.vectorize(self.charge_emb.get)(charges_np)
+        charges = torch.from_numpy(mapped_np)
+        
+        graph_data.degree = graph_data.degree.float()
+        graph_data.is_aromatic = graph_data.is_aromatic.float()
+        graph_data.is_in_ring = graph_data.is_in_ring.float()
+        graph_data.hybridization = graph_data.hybridization.float()
+        graph_data.is_backbone = graph_data.is_backbone.float()
+        graph_data.is_ligand = graph_data.is_ligand.float()
+        
+        batch_graph_data = Data(
+            x=graph_data.x,
+            pos=graph_data.pos,
+            edge_index=graph_data.edge_index,
+            edge_attr=graph_data.edge_attr,
+            edge_ligand=torch.tensor(graph_data.edge_ligand).float(),
+            charges=charges,
+            degree=graph_data.degree,
+            is_aromatic=graph_data.is_aromatic,
+            is_in_ring=graph_data.is_in_ring,
+            hybridization=graph_data.hybridization,
+            is_backbone=graph_data.is_backbone,
+            is_ligand=graph_data.is_ligand,
+            ligand_size=torch.tensor(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
+            id=graph_data.compound_id,
+            ids=torch.tensor(range(len(graph_data.x))),
+        )
+        
+        return batch_graph_data
+    
+
+
+    def __getitem__(self, idx):
+        # For prior sampling: sample molecules without pocket conditioning
+        # Sample size from uniform distribution between 1 and self.sample_size
+        sample_size = torch.randint(1, self.sample_size + 1, (1,)).item()
+        reconstruct_mask = 1 - self.data.is_backbone
+
+        # Since this is PRIOR sampling (no pocket), we create molec ules from scratch
+        # Create new ligand nodes with random features from prior distribution
+        
+        x = self.data.x[reconstruct_mask==0]
+        pos = self.data.pos[reconstruct_mask==0]
+        charges = self.data.charges[reconstruct_mask==0]
+        degree = self.data.degree[reconstruct_mask==0]
+        is_aromatic = self.data.is_aromatic[reconstruct_mask==0]
+        is_in_ring = self.data.is_in_ring[reconstruct_mask==0]
+        hybridization = self.data.hybridization[reconstruct_mask==0]
+        is_ligand = self.data.is_ligand[reconstruct_mask==0]
+        is_backbone = self.data.is_backbone[reconstruct_mask==0]
+        ids = self.data.ids[reconstruct_mask==0]
+        
+        edge_mask = torch.isin(self.data.edge_index[0], ids) & torch.isin(self.data.edge_index[1], ids)
+        edge_index = self.data.edge_index[:, edge_mask]
+        edge_attr = self.data.edge_attr[edge_mask]
+        edge_ligand = torch.tensor(self.data.edge_ligand)[edge_mask]
+        
+        map_ids = {int(ids[i]): i for i in range(len(ids))}
+        
+        new_edge_index = torch.empty_like(edge_index)
+        for i in range(edge_index.size(1)):
+            new_edge_index[0, i] = map_ids[int(edge_index[0, i])]
+            new_edge_index[1, i] = map_ids[int(edge_index[1, i])]
+        edge_index = new_edge_index
+        
+        # from IPython import embed; embed()
+        
+        x_new = torch.cat([x, torch.zeros(sample_size)])
+        pos_new = torch.cat([pos, torch.randn(sample_size, 3)])
+        charges_new = torch.cat([charges, torch.multinomial(self.dataset_info.charge_types, sample_size, replacement=True)])
+        degree_new = torch.cat([degree, torch.multinomial(self.dataset_info.degree, sample_size, replacement=True)])
+        is_aromatic_new = torch.cat([is_aromatic, torch.multinomial(self.dataset_info.is_aromatic, sample_size, replacement=True)])
+        is_in_ring_new = torch.cat([is_in_ring, torch.multinomial(self.dataset_info.is_ring, sample_size, replacement=True)])
+        hybridization_new = torch.cat([hybridization, torch.multinomial(self.dataset_info.hybridization, sample_size, replacement=True)])
+        is_ligand_new = torch.cat([is_ligand, torch.ones(sample_size)])
+        is_backbone_new = torch.cat([is_backbone, torch.zeros(sample_size)])
+
+        # Create fully connected graph among all ligand nodes
+        # For n nodes, this creates n*(n-1) directed edges
+        
+        ids_new = torch.tensor(range(len(x_new)))
+        ids_new_node = ids_new[-sample_size:]
+        
+        ids_backbone = ids_new[is_backbone_new==1]
+        # ids_existed = torch.tensor([i for i in ids_new if i not in ids_new_node and i not in ids_backbone])
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_backbone)
+        grid1 = grid1.flatten()
+        grid2 = grid2.flatten()
+        # create the new edge index as a bidirectional graph
+        new_edge_index = torch.stack([grid1, grid2])
+        new_edge_index_reverse = torch.stack([grid2, grid1])
+        new_edge_index = torch.cat([new_edge_index, new_edge_index_reverse], dim=1)
+        
+        edge_index_new = torch.cat([edge_index, new_edge_index], dim=1)
+        edge_attr_new = torch.cat([edge_attr, torch.zeros(new_edge_index.size(1))])
+        edge_ligand_new = torch.cat([edge_ligand, torch.ones(new_edge_index.size(1))])
+        
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_new_node)
+        mask = grid1 != grid2
+        grid1 = grid1[mask]
+        grid2 = grid2[mask]
+        grid1 = grid1.flatten()
+        grid2 = grid2.flatten()
+        new_ligand_edge_index = torch.stack([grid1, grid2])
         
         edge_index_new = torch.cat([edge_index_new, new_ligand_edge_index], dim=1)
         edge_attr_new = torch.cat([edge_attr_new, torch.zeros(new_ligand_edge_index.size(1))])
         edge_ligand_new = torch.cat([edge_ligand_new, torch.ones(new_ligand_edge_index.size(1))]).float()
-   
-        
         
         output_graph = Data(
             x=x_new,
