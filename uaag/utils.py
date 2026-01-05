@@ -13,10 +13,9 @@ from pytorch_lightning.utilities import rank_zero_warn
 from rdkit import Chem
 from torch_geometric.data import Data
 from torch_geometric.nn import radius_graph
-from torch_geometric.utils import dense_to_sparse, sort_edge_index
+from torch_geometric.utils import dense_to_sparse, sort_edge_index, subgraph
 from torch_geometric.utils.num_nodes import maybe_num_nodes
-from torch_geometric.utils.sort_edge_index import sort_edge_index
-from torch_geometric.utils.subgraph import subgraph
+# Removed duplicate imports that cause issues with newer torch_geometric versions
 from torch_scatter import scatter_add, scatter_mean
 from tqdm import tqdm
 from uaag import bond_analyze

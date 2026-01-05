@@ -10,7 +10,6 @@
 *.log
 *.pickle
 *.json
-*.sh
 *.mol
 *.pth
 *.pt
