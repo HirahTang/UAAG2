@@ -19,7 +19,13 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi==0.115.6",
-    "torch==2.6.0",
+    "pytorch-lightning==2.0",
+    "torch==2.9.1",
+    "torch-cluster>=1.6.3",
+    "torch-geometric==2.7",
+    "torch-scatter>=2.1.2",
+    "torch-sparse>=0.6.18",
+    "torch-spline-conv>=1.2.2",
     "typer==0.15.1",
     "uvicorn==0.34.0",
 ]
@@ -49,6 +55,12 @@ torchvision = [
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
+
+[tool.uv.extra-build-dependencies]
+torch-scatter = ["torch"]
+torch-sparse = ["torch"]
+torch-cluster = ["torch"]
+torch-spline-conv = ["torch"]
 
 [tool.ruff]
 line-length = 120
