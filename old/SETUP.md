@@ -2,12 +2,13 @@
 
 **Uncanonical Amino Acid Generative Model v2** - A diffusion-based model for generating uncanonical amino acids given proteomic information.
 
-This guide provides instructions for setting up the UAAG2 environment on both **NVIDIA GPUs** and **AMD GPUs** (including HPC systems like LUMI).
+This guide provides instructions for setting up the UAAG2 environment using **uv** (ultra-fast Python package installer) on both **NVIDIA GPUs** and **AMD GPUs** (including HPC systems like LUMI).
 
 ---
 
 ## Table of Contents
 - [System Requirements](#system-requirements)
+- [Installing uv](#installing-uv)
 - [Option 1: NVIDIA GPU Setup](#option-1-nvidia-gpu-setup)
 - [Option 2: AMD GPU Setup (ROCm)](#option-2-amd-gpu-setup-rocm)
 - [Installation Verification](#installation-verification)
@@ -24,30 +25,55 @@ This guide provides instructions for setting up the UAAG2 environment on both **
 - **Storage**: 50GB+ free space
 
 ### Software Prerequisites
-- Python 3.8-3.10
-- Conda or Mamba package manager
+- Python 3.8-3.10 (uv will manage this)
 - CUDA 11.8+ (for NVIDIA) or ROCm 5.4+ (for AMD)
+- uv package manager (instructions below)
+
+---
+
+## Installing uv
+
+Install uv using the official installer:
+
+```bash
+# Install uv (macOS/Linux)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Or using pip if you prefer
+pip install uv
+
+# Verify installation
+uv --version
+```
+
+For Windows:
+```powershell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
 
 ---
 
 ## Option 1: NVIDIA GPU Setup
 
-### Step 1: Create Conda Environment
+### Step 1: Create Python Environment with uv
 
 ```bash
 # Navigate to UAAG2 directory
 cd /path/to/UAAG2
 
-# Create conda environment
-conda create -n uaag2 python=3.10 -y
-conda activate uaag2
+# Create virtual environment with uv
+uv venv --python 3.10 .venv
+
+# Activate the environment
+source .venv/bin/activate  # Linux/macOS
+# or on Windows: .venv\Scripts\activate
 ```
 
 ### Step 2: Install PyTorch with CUDA
 
 ```bash
-# Install PyTorch 2.0+ with CUDA 11.8
-conda install pytorch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 pytorch-cuda=11.8 -c pytorch -c nvidia -y
+# Install PyTorch 2.1.0 with CUDA 11.8 using uv
+uv pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
 
 # Verify PyTorch installation
 python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')"
@@ -56,50 +82,55 @@ python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA av
 ### Step 3: Install PyTorch Geometric
 
 ```bash
-# Install PyG and extensions
-pip install torch-geometric
-pip install torch-scatter torch-sparse torch-cluster torch-spline-conv -f https://data.pyg.org/whl/torch-2.1.0+cu118.html
+# Install PyG and extensions using uv
+uv pip install torch-geometric
+uv pip install torch-scatter torch-sparse torch-cluster torch-spline-conv -f https://data.pyg.org/whl/torch-2.1.0+cu118.html
 ```
 
 ### Step 4: Install Core Dependencies
 
 ```bash
 # Install PyTorch Lightning and other ML libraries
-pip install pytorch-lightning==2.0.0
-pip install wandb tensorboard
-pip install torch-ema  # Exponential Moving Average for model weights
+uv pip install pytorch-lightning==2.0.0
+uv pip install wandb tensorboard
+uv pip install torch-ema  # Exponential Moving Average for model weights
 
 # Install chemistry libraries
-conda install -c conda-forge rdkit -y
-pip install biopython
-pip install openbabel-wheel  # or: conda install -c conda-forge openbabel
+# Note: RDKit requires conda or system packages, install via conda or use conda-forge builds
+uv pip install rdkit  # or: conda install -c conda-forge rdkit -y
+uv pip install biopython
+uv pip install openbabel-wheel
 
 # Install scientific computing libraries
-pip install numpy scipy scikit-learn
-pip install pandas
-pip install networkx
+uv pip install numpy scipy scikit-learn
+uv pip install pandas
+uv pip install networkx
 
 # Install utilities
-pip install tqdm pyyaml omegaconf
-pip install lmdb
-pip install ipython  # For interactive debugging in some scripts
+uv pip install tqdm pyyaml omegaconf
+uv pip install lmdb
+uv pip install ipython  # For interactive debugging in some scripts
 ```
+
+**Note on RDKit:** If `uv pip install rdkit` fails, you can either:
+1. Install RDKit via conda: `conda install -c conda-forge rdkit -y`
+2. Use system packages: `sudo apt-get install python3-rdkit` (Ubuntu/Debian)
 
 ### Step 5: Install Optional Tools
 
 ```bash
 # For molecule evaluation
-pip install posebusters
+uv pip install posebusters
 
 # For visualization
-pip install matplotlib seaborn py3Dmol
+uv pip install matplotlib seaborn py3Dmol
 ```
 
 ### Step 6: Set Library Path (if needed)
 
 ```bash
 # Add to ~/.bashrc or run before each session
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$VIRTUAL_ENV/lib
 ```
 
 ---
@@ -123,9 +154,10 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib
 module load LUMI/22.08
 module load rocm/5.4.3
 
-# Create conda environment
-conda create -n uaag2_rocm python=3.10 -y
-conda activate uaag2_rocm
+# Create virtual environment with uv
+cd /path/to/UAAG2
+uv venv --python 3.10 .venv
+source .venv/bin/activate
 ```
 
 #### On Standalone System with ROCm:
@@ -134,16 +166,17 @@ conda activate uaag2_rocm
 # Verify ROCm installation
 rocm-smi
 
-# Create conda environment
-conda create -n uaag2_rocm python=3.10 -y
-conda activate uaag2_rocm
+# Create virtual environment with uv
+cd /path/to/UAAG2
+uv venv --python 3.10 .venv
+source .venv/bin/activate
 ```
 
 ### Step 2: Install PyTorch with ROCm
 
 ```bash
-# Install PyTorch built for ROCm
-pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/rocm5.6
+# Install PyTorch built for ROCm using uv
+uv pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/rocm5.6
 
 # Verify PyTorch + ROCm
 python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'ROCm available: {torch.cuda.is_available()}'); print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}')"
@@ -155,52 +188,53 @@ python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'ROCm av
 
 ```bash
 # Install PyG
-pip install torch-geometric
+uv pip install torch-geometric
 
 # Build PyG extensions from source for ROCm
-pip install torch-scatter torch-sparse torch-cluster torch-spline-conv --no-binary :all:
+uv pip install torch-scatter torch-sparse torch-cluster torch-spline-conv --no-binary :all:
 ```
 
 **Alternative (pre-built ROCm wheels):**
 ```bash
 # Try ROCm-specific wheels if available
-pip install torch-scatter torch-sparse torch-cluster -f https://data.pyg.org/whl/torch-2.1.0+rocm5.6.html
+uv pip install torch-scatter torch-sparse torch-cluster -f https://data.pyg.org/whl/torch-2.1.0+rocm5.6.html
 ```
 
 ### Step 4: Install Core Dependencies
 
 ```bash
 # Install PyTorch Lightning
-pip install pytorch-lightning==2.0.0
+uv pip install pytorch-lightning==2.0.0
 
 # Logging and experiment tracking
-pip install wandb tensorboard
-pip install torch-ema  # Exponential Moving Average for model weights
+uv pip install wandb tensorboard
+uv pip install torch-ema  # Exponential Moving Average for model weights
 
 # Chemistry libraries
-conda install -c conda-forge rdkit -y
-pip install biopython
-pip install openbabel-wheel  # or: conda install -c conda-forge openbabel
+# Note: For RDKit, you may need conda or system packages
+uv pip install rdkit  # or: conda install -c conda-forge rdkit -y
+uv pip install biopython
+uv pip install openbabel-wheel
 
 # Scientific computing libraries
-pip install numpy scipy scikit-learn
-pip install pandas
-pip install networkx
+uv pip install numpy scipy scikit-learn
+uv pip install pandas
+uv pip install networkx
 
 # Utilities
-pip install tqdm pyyaml omegaconf
-pip install lmdb
-pip install ipython  # For interactive debugging in some scripts
+uv pip install tqdm pyyaml omegaconf
+uv pip install lmdb
+uv pip install ipython  # For interactive debugging in some scripts
 ```
 
 ### Step 5: Install Optional Tools
 
 ```bash
 # Molecule evaluation
-pip install posebusters
+uv pip install posebusters
 
 # Visualization
-pip install matplotlib seaborn py3Dmol
+uv pip install matplotlib seaborn py3Dmol
 ```
 
 ### Step 6: Set Environment Variables for ROCm
@@ -211,8 +245,8 @@ export HSA_OVERRIDE_GFX_VERSION=9.0.8  # Adjust for your GPU (e.g., 9.0.8 for MI
 export ROCM_HOME=/opt/rocm  # Adjust to your ROCm installation path
 export LD_LIBRARY_PATH=$ROCM_HOME/lib:$LD_LIBRARY_PATH
 
-# For conda environment
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+# For virtual environment
+export LD_LIBRARY_PATH=$VIRTUAL_ENV/lib:$LD_LIBRARY_PATH
 ```
 
 **For LUMI specifically:**
@@ -306,10 +340,11 @@ EOF
 
 ```bash
 # Activate environment
-conda activate uaag2  # or uaag2_rocm for AMD
+source .venv/bin/activate  # Linux/macOS
+# or on Windows: .venv\Scripts\activate
 
 # Set library path
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$VIRTUAL_ENV/lib
 
 # Run training
 bash run_train.sh
@@ -363,7 +398,7 @@ nvidia-smi
 nvcc --version
 
 # Reinstall PyTorch with correct CUDA version
-conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia --force-reinstall
+uv pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
 **AMD:**
@@ -382,13 +417,13 @@ export HSA_OVERRIDE_GFX_VERSION=9.0.8  # Adjust for your GPU
 
 ```bash
 # Install dependencies first
-pip install ninja
+uv pip install ninja
 
 # Build from source
-pip install torch-scatter torch-sparse --no-binary :all:
+uv pip install torch-scatter torch-sparse --no-binary :all:
 
 # Or use specific wheel URL
-pip install torch-scatter -f https://data.pyg.org/whl/torch-$(python -c "import torch; print(torch.__version__)")+cu118.html
+uv pip install torch-scatter -f https://data.pyg.org/whl/torch-$(python -c "import torch; print(torch.__version__)")+cu118.html
 ```
 
 #### 3. Out of Memory Errors
@@ -408,13 +443,13 @@ export PYTORCH_HIP_ALLOC_CONF=max_split_size_mb:512
 
 ```bash
 # Add to shell profile (~/.bashrc or ~/.zshrc)
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$VIRTUAL_ENV/lib:$LD_LIBRARY_PATH
 
-# For specific conda environment
-conda activate uaag2
-conda env config vars set LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
-conda deactivate
-conda activate uaag2
+# Or add to activation script
+echo 'export LD_LIBRARY_PATH=$VIRTUAL_ENV/lib:$LD_LIBRARY_PATH' >> .venv/bin/activate
+
+# Then reactivate
+deactivate && source .venv/bin/activate
 ```
 
 #### 5. ROCm-Specific Issues

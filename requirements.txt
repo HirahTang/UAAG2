@@ -1,0 +1,51 @@
+# PyTorch and related packages
+# For NVIDIA CUDA 11.8, install with:
+# uv pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu118
+# For AMD ROCm 5.6, install with:
+# uv pip install -r requirements.txt --index-url https://download.pytorch.org/whl/rocm5.6
+
+torch==2.1.0
+torchvision==0.16.0
+torchaudio==2.1.0
+
+# PyTorch Geometric
+torch-geometric
+torch-scatter
+torch-sparse
+torch-cluster
+torch-spline-conv
+
+# Deep Learning Frameworks
+pytorch-lightning==2.0.0
+torch-ema
+
+# Experiment Tracking
+wandb
+tensorboard
+
+# Chemistry Libraries
+rdkit
+biopython
+openbabel-wheel
+
+# Scientific Computing
+numpy
+scipy
+scikit-learn
+pandas
+networkx
+
+# Utilities
+tqdm
+pyyaml
+omegaconf
+lmdb
+ipython
+
+# Optional: Molecule Evaluation
+posebusters
+
+# Optional: Visualization
+matplotlib
+seaborn
+py3Dmol
