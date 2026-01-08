@@ -51,3 +51,34 @@ def build_docs(ctx: Context) -> None:
 def serve_docs(ctx: Context) -> None:
     """Serve documentation."""
     ctx.run("uv run mkdocs serve --config-file docs/mkdocs.yaml", echo=True, pty=not WINDOWS)
+
+
+# ------------------------------------------------------------
+# MNIST commands
+@task
+def mnist_preprocess_data(ctx: Context) -> None:
+    """Preprocess data."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/mnist_data.py data/mnist/raw data/mnist/processed", echo=True, pty=not WINDOWS)
+
+@task
+def mnist_train(ctx: Context) -> None:
+    """Train model."""
+    ctx.run(f"uv run src/{PROJECT_NAME}/mnist_train.py", echo=True, pty=not WINDOWS)
+
+@task
+def mnist_test(ctx: Context) -> None:
+    """Run tests."""
+    ctx.run("uv run coverage run -m pytest tests/", echo=True, pty=not WINDOWS)
+    ctx.run("uv run coverage report -m -i", echo=True, pty=not WINDOWS)
+
+@task
+def mnist_docker_build(ctx: Context, progress: str = "plain") -> None:
+    """Build docker images."""
+    ctx.run(
+        f"docker build -t mnist_train:latest . -f dockerfiles/mnist_train.dockerfile --progress={progress}",
+        echo=True,
+        pty=not WINDOWS,
+    )
+    ctx.run(
+        f"docker build -t mnist_api:latest . -f dockerfiles/mnist_api.dockerfile --progress={progress}", echo=True, pty=not WINDOWS
+    )
