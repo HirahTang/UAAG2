@@ -18,16 +18,31 @@ classifiers = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "biopython>=1.86",
     "fastapi==0.115.6",
+    "lmdb>=1.7.5",
+    "networkx>=3.6.1",
+    "numpy>=2.4.0",
+    "omegaconf>=2.3.0",
+    "openbabel-wheel>=3.1.1.22",
+    "pandas>=2.3.3",
+    "posebusters>=0.6.3",
     "pytorch-lightning==2.0",
+    "rdkit>=2025.9.3",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.16.3",
+    "tensorboard>=2.20.0",
     "torch==2.9.1",
     "torch-cluster>=1.6.3",
+    "torch-ema>=0.3",
     "torch-geometric==2.7",
     "torch-scatter>=2.1.2",
     "torch-sparse>=0.6.18",
     "torch-spline-conv>=1.2.2",
+    "tqdm>=4.67.1",
     "typer==0.15.1",
     "uvicorn==0.34.0",
+    "wandb>=0.23.1",
 ]
 
 [dependency-groups]
@@ -40,6 +55,7 @@ dev = [
     "pytest==8.3.4",
     "ruff==0.1.3",
     "mkdocstrings-python==1.12.2",
+    "ipython>=9.9.0",
 ]
 
 
