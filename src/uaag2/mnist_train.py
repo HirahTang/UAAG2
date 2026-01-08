@@ -4,6 +4,12 @@ import typer
 from uaag2.mnist_data import corrupt_mnist
 from uaag2.mnist_model import MyAwesomeModel
 
+# some difficult imports
+import openbabel
+import rdkit
+import torch_scatter
+import torch_geometric
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
 

@@ -49,7 +49,21 @@ The directory structure of the project looks like this:
 └── tasks.py                  # Project tasks
 ```
 
+## Docker images
 
-Created using [mlops_template](https://github.com/SkafteNicki/mlops_template),
+Build the MNIST image with
+
+```bash
+docker build -t mnist_train:latest . -f dockerfiles/mnist_train.dockerfile --progress=plain
+```
+
+Then, run the image with
+
+```bash
+docker run --name mnist-train2 -v $(pwd)/models:/models/ mnist_train:latest
+```
+
+
+Project template created using [mlops_template](https://github.com/SkafteNicki/mlops_template),
 a [cookiecutter template](https://github.com/cookiecutter/cookiecutter) for getting
 started with Machine Learning Operations (MLOps).
