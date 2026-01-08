@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+.vscode/
 
 # Virtual environments
 .venv
@@ -14,7 +15,6 @@ wheels/
 *.ckpt
 *.yaml
 *.pkl
-*.pyc
 *.out
 *.log
 *.pickle
@@ -25,12 +25,32 @@ wheels/
 *.sdf
 *.mol2
 *.xyz
-wandb*
-*L_sidechain*
-*3DcoordsAtomsBonds*
-*pdbbind*
 *.png
 *.csv
-*.npz
-*ProteinGymSampling*
-*results*
+
+*.swp
+*.swo
+
+*$py.class
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Sphinx documentation
+docs/_build/
+
+# IPython
+profile_default/
+ipython_config.py
