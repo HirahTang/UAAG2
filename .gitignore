@@ -1,6 +1,7 @@
 # Ignore anything that ends with .pkl
 
 ```bash
+.DS_Store/
 *.pdb
 *.ckpt
 *.yaml
