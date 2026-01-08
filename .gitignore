@@ -1,7 +1,15 @@
-# Ignore anything that ends with .pkl
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
 
-```bash
-.DS_Store/
+# Virtual environments
+.venv
+
+.DS_Store
 *.pdb
 *.ckpt
 *.yaml
@@ -26,4 +34,3 @@ wandb*
 *.npz
 *ProteinGymSampling*
 *results*
-```
