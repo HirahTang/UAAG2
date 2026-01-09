@@ -10,7 +10,7 @@ set -e  # Exit on error
 # ==============================================================================
 
 # GPU Configuration
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 NUM_GPUS=1
 
 # Training Hyperparameters
@@ -70,7 +70,6 @@ echo "Working directory: $(pwd)"
 if git rev-parse --git-dir > /dev/null 2>&1; then
     echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
     echo "Commit: $(git rev-parse --short HEAD)"
-    echo "Status: $(git status --porcelain | wc -l) uncommitted changes"
 fi
 echo "=========================================="
 
