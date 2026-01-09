@@ -88,6 +88,10 @@ fi
 # conda activate uaag2
 # export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 
+# Add src directory to PYTHONPATH so uaag2 package can be found
+export PYTHONPATH="${PWD}/src:${PYTHONPATH}"
+echo "PYTHONPATH: $PYTHONPATH"
+
 echo "Python: $(which python)"
 echo "Python version: $(python --version)"
 echo ""
