@@ -26,7 +26,7 @@ MASK_RATE=0.0
 NUM_LAYERS=7
 
 # Data Paths (adjust these to your system)
-DATA_PATH="/datasets/biochem/unaagi/unaagi_whole_v1.lmdb"
+DATA_PATH="/datasets/biochem/unaagi/debug_test.lmdb"
 METADATA_PATH="/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl"
 DATA_INFO_PATH="/home/qcx679/hantang/UAAG2/data/full_graph/statistic.pkl"
 
@@ -36,7 +36,7 @@ LOGGER_TYPE="wandb"  # Options: wandb, tensorboard
 SAVE_DIR="./checkpoints"
 
 # Sampler Configuration
-USE_METADATA_SAMPLER=true  # Set to false to use RandomSampler instead
+USE_METADATA_SAMPLER=false  # Set to false to use RandomSampler instead
 PDBBIND_WEIGHT=10.0
 
 # ==============================================================================
