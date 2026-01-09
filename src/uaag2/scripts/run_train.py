@@ -3,9 +3,8 @@ import sys
 import wandb
 import torch
 import yaml
-
-sys.path.append(".")
-sys.path.append("..")
+sys.path.append('.')
+sys.path.append('..')
 import warnings
 from argparse import ArgumentParser
 import numpy as np
@@ -28,14 +27,15 @@ import lmdb
 from torch.utils.data import WeightedRandomSampler, RandomSampler
 
 import pickle
-
-warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
+warnings.filterwarnings(
+    "ignore", category=UserWarning, message="TypedStorage is deprecated"
+)
 
 # from eqgat_diff.experiments.data.distributions import DistributionProperty
 # from eqgat_diff.experiments.hparams import add_arguments
 
-
 def main(hparams):
+    
     ema_callback = ExponentialMovingAverage(decay=hparams.ema_decay)
     checkpoint_callback = ModelCheckpoint(
         dirpath=hparams.save_dir + f"/run{hparams.id}/",
@@ -48,8 +48,10 @@ def main(hparams):
         log_model="all",
         project="uaag2",
         name=f"run{hparams.id}",
-    )
-    tb_logger = TensorBoardLogger(hparams.save_dir + f"/run{hparams.id}/", default_hp_metric=False)
+        )
+    tb_logger = TensorBoardLogger(
+            hparams.save_dir + f"/run{hparams.id}/", default_hp_metric=False
+        )
     if hparams.logger_type == "wandb":
         logger = wandb_logger
     elif hparams.logger_type == "tensorboard":
@@ -58,31 +60,18 @@ def main(hparams):
         raise ValueError("Logger type not recognized")
 
     print("Loading DataModule")
-
+    
     dataset_info = Dataset_Info(hparams, hparams.data_info_path)
-
+    
     print("pocket noise: ", hparams.pocket_noise)
     print("mask rate: ", hparams.mask_rate)
     print("pocket noise scale: ", hparams.pocket_noise_scale)
     lmdb_data_path = hparams.training_data
-    all_data = UAAG2Dataset(
-        lmdb_data_path,
-        mask_rate=hparams.mask_rate,
-        pocket_noise=hparams.pocket_noise,
-        noise_scale=hparams.pocket_noise_scale,
-        params=hparams,
-    )
+    all_data = UAAG2Dataset(lmdb_data_path,  mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale, params=hparams)
     test_data_setup = UAAG2Dataset(lmdb_data_path, params=hparams)
     # split all_data into train, val, test from all_data
     # from IPython import embed; embed()
-    train_data, val_data, test_data = torch.utils.data.random_split(
-        all_data,
-        [
-            int(len(all_data) * hparams.train_size),
-            len(all_data) - int(len(all_data) * hparams.train_size) - int(hparams.test_size),
-            int(hparams.test_size),
-        ],
-    )
+    train_data, val_data, test_data = torch.utils.data.random_split(all_data, [int(len(all_data) * hparams.train_size), len(all_data) - int(len(all_data) * hparams.train_size) - int(hparams.test_size), int(hparams.test_size)])
     test_indices = test_data.indices
     test_data = torch.utils.data.Subset(test_data_setup, test_indices)
     # test_data
@@ -100,17 +89,18 @@ def main(hparams):
             weights.append(1.0)
     weights = np.array(weights)
     weights = weights / weights.sum()
-
+    
     sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
     # sampler = RandomSampler(train_data)
 
     datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data, sampler=sampler)
-
+    
     model = Trainer(
         hparams=hparams,
         dataset_info=dataset_info,
     )
-
+    
+    
     strategy = "ddp" if hparams.gpus > 1 else "auto"
     # strategy = 'ddp_find_unused_parameters_true'
     callbacks = [
@@ -124,6 +114,7 @@ def main(hparams):
     if hparams.ema_decay == 1.0:
         callbacks = callbacks[1:]
 
+    
     trainer = pl.Trainer(
         accelerator="gpu" if hparams.gpus else "cpu",
         devices=hparams.gpus if hparams.gpus else 1,
@@ -142,15 +133,16 @@ def main(hparams):
         detect_anomaly=hparams.detect_anomaly,
         limit_train_batches=30000,
     )
-
+    
     pl.seed_everything(seed=hparams.seed, workers=hparams.gpus > 1)
-
+    
     ckpt_path = None
     # from IPython import embed; embed()
     # print the model parameter size
-
+    
     if hparams.load_ckpt is not None:
         print("Loading from checkpoint ...")
+        
 
         ckpt_path = hparams.load_ckpt
         ckpt = torch.load(ckpt_path)
@@ -158,7 +150,9 @@ def main(hparams):
             print("Changing learning rate ...")
             ckpt["optimizer_states"][0]["param_groups"][0]["lr"] = hparams.lr
             ckpt["optimizer_states"][0]["param_groups"][0]["initial_lr"] = hparams.lr
-            ckpt_path = "lr" + "_" + str(hparams.lr) + "_" + os.path.basename(hparams.load_ckpt)
+            ckpt_path = (
+                "lr" + "_" + str(hparams.lr) + "_" + os.path.basename(hparams.load_ckpt)
+            )
             ckpt_path = os.path.join(
                 os.path.dirname(hparams.load_ckpt),
                 f"retraining_with_lr{hparams.lr}.ckpt",
@@ -166,12 +160,13 @@ def main(hparams):
             if not os.path.exists(ckpt_path):
                 torch.save(ckpt, ckpt_path)
 
-    # save hparams
-
+     # save hparams
+    
     hparams_path = os.path.join(hparams.save_dir, f"run{hparams.id}", "hparams.yaml")
     if not os.path.exists(os.path.dirname(hparams_path)):
         os.makedirs(os.path.dirname(hparams_path))
 
+    
     with open(hparams_path, "w") as f:
         yaml.safe_dump(vars(hparams), f)
     # from IPython import embed; embed()
@@ -183,19 +178,18 @@ def main(hparams):
 
 
 if __name__ == "__main__":
+    
     DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "3DcoordsAtomsBonds_0")
     parser = ArgumentParser()
     # parser = add_arguments(parser)
-
+    
     parser.add_argument("--logger-type", default="wandb", type=str)
-
-    parser.add_argument("--dataset", type=str, default="drugs")
-
-    parser.add_argument(
-        "--data_info_path", type=str, default="/home/qcx679/hantang/UAAG2/data/full_graph/statistic.pkl"
-    )
-    parser.add_argument("--training_data", type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.lmdb")
-    parser.add_argument("--metadata_path", type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl")
+    
+    parser.add_argument('--dataset', type=str, default='drugs')
+    
+    parser.add_argument('--data_info_path', type=str, default="/home/qcx679/hantang/UAAG2/data/full_graph/statistic.pkl")
+    parser.add_argument('--training_data', type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.lmdb")
+    parser.add_argument('--metadata_path', type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl")
     # parser.add_argument(
     #     "--conf", "-c", type=open, action=LoadFromFile, help="Configuration yaml file"
     # )  # keep first
@@ -208,7 +202,9 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--save-dir", default=DEFAULT_SAVE_DIR, type=str)
     parser.add_argument("--test-save-dir", default=DEFAULT_SAVE_DIR, type=str)
 
-    parser.add_argument("--dataset-root", default="----")
+    parser.add_argument(
+        "--dataset-root", default="----"
+    )
     parser.add_argument("--use-adaptive-loader", default=True, action="store_true")
     parser.add_argument("--remove-hs", default=False, action="store_true")
     parser.add_argument("--select-train-subset", default=False, action="store_true")
@@ -305,7 +301,9 @@ if __name__ == "__main__":
     parser.add_argument("--lc-mulliken", default=1.5, type=float)
     parser.add_argument("--lc-wbo", default=2.0, type=float)
 
-    parser.add_argument("--use-ligand-dataset-sizes", default=False, action="store_true")
+    parser.add_argument(
+        "--use-ligand-dataset-sizes", default=False, action="store_true"
+    )
 
     parser.add_argument(
         "--loss-weighting",
@@ -315,9 +313,13 @@ if __name__ == "__main__":
     parser.add_argument("--snr-clamp-min", default=0.05, type=float)
     parser.add_argument("--snr-clamp-max", default=1.50, type=float)
 
-    parser.add_argument("--ligand-pocket-interaction", default=False, action="store_true")
+    parser.add_argument(
+        "--ligand-pocket-interaction", default=False, action="store_true"
+    )
     parser.add_argument("--diffusion-pretraining", default=False, action="store_true")
-    parser.add_argument("--continuous-param", default="data", type=str, choices=["data", "noise"])
+    parser.add_argument(
+        "--continuous-param", default="data", type=str, choices=["data", "noise"]
+    )
     parser.add_argument("--atoms-categorical", default=True, action="store_true")
     parser.add_argument("--bonds-categorical", default=True, action="store_true")
 
@@ -328,21 +330,18 @@ if __name__ == "__main__":
     parser.add_argument("--num-charge-classes", default=6, type=int)
 
     parser.add_argument("--pocket-noise", default=False, action="store_true")
-    parser.add_argument(
-        "--mask-rate",
-        default=0.5,
-        type=float,
-        help="Mask rate, 0 for full mask and the model is reconstructing everything during training \
-        , 1 for no masking and the model is reconstructing nothing during training",
-    )
+    parser.add_argument("--mask-rate", default=0.5, type=float, help="Mask rate, 0 for full mask and the model is reconstructing everything during training \
+        , 1 for no masking and the model is reconstructing nothing during training")
     parser.add_argument("--pocket-noise-scale", default=0.01, type=float)
-
+    
     # BOND PREDICTION AND GUIDANCE:
     parser.add_argument("--bond-guidance-model", default=False, action="store_true")
     parser.add_argument("--bond-prediction", default=False, action="store_true")
     parser.add_argument("--bond-model-guidance", default=False, action="store_true")
     parser.add_argument("--energy-model-guidance", default=False, action="store_true")
-    parser.add_argument("--polarizabilty-model-guidance", default=False, action="store_true")
+    parser.add_argument(
+        "--polarizabilty-model-guidance", default=False, action="store_true"
+    )
     parser.add_argument("--ckpt-bond-model", default=None, type=str)
     parser.add_argument("--ckpt-energy-model", default=None, type=str)
     parser.add_argument("--ckpt-polarizabilty-model", default=None, type=str)
@@ -396,7 +395,9 @@ if __name__ == "__main__":
     parser.add_argument("--calculate-energy", default=False, action="store_true")
     parser.add_argument("--save-xyz", default=False, action="store_true")
     parser.add_argument("--variational-sampling", default=False)
-
+    
     args = parser.parse_args()
-
+    
     main(args)
+    
+
