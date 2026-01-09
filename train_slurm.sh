@@ -74,12 +74,31 @@ mkdir -p logs
 # Check GPU availability
 echo ""
 echo "=========================================="
-echo "GPU Information"
+echo "GPU Assignment Information"
 echo "=========================================="
+echo "SLURM GPU allocation: $SLURM_GPUS_ON_NODE"
+echo "SLURM GPU IDs: $SLURM_JOB_GPUS"
+echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-Not set}"
+echo ""
+
 if command -v nvidia-smi &> /dev/null; then
-    nvidia-smi
+    echo "All GPUs on this node:"
+    nvidia-smi --query-gpu=index,name,memory.total,memory.free --format=csv,noheader
     echo ""
-    echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-Not set}"
+    
+    echo "GPUs assigned to this job:"
+    if [ -n "$CUDA_VISIBLE_DEVICES" ]; then
+        for gpu_id in ${CUDA_VISIBLE_DEVICES//,/ }; do
+            nvidia-smi -i $gpu_id --query-gpu=index,name,memory.total,memory.free --format=csv,noheader
+        done
+    else
+        echo "CUDA_VISIBLE_DEVICES not set - all GPUs visible"
+        nvidia-smi --query-gpu=index,name,memory.total,memory.free --format=csv,noheader
+    fi
+    echo ""
+    
+    echo "Full nvidia-smi output:"
+    nvidia-smi
 else
     echo "WARNING: nvidia-smi not found!"
 fi
