@@ -5,62 +5,47 @@ build-backend = "uv_build"
 [project]
 name = "uaag2"
 version = "0.0.1"
-description = "Uncanonical Amino Acid Generative Model v2 - A diffusion-based model for generating uncanonical amino acids"
+description = "protein diffusion"
 authors = [
   { name = "Han Tang", email = "your@email.com" },
 ]
 license = { file = "LICENSE" }
-keywords = ["machine learning", "MLOps", "diffusion", "protein", "chemistry"]
+keywords = ["machine learning", "MLOps"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python :: 3",
 ]
 readme = "README.md"
-requires-python = ">=3.8,<3.11"
+requires-python = ">=3.12"
 dependencies = [
-    # Core ML/API
+    "biopython>=1.86",
     "fastapi==0.115.6",
+    "lmdb>=1.7.5",
+    "matplotlib>=3.10.8",
+    "networkx>=3.6.1",
+    "numpy>=2.4.0",
+    "omegaconf>=2.3.0",
+    "openbabel-wheel>=3.1.1.22",
+    "pandas>=2.3.3",
+    "posebusters>=0.6.3",
+    "py3dmol>=2.5.3",
+    "pytorch-lightning==2.0",
+    "rdkit>=2025.9.3",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.16.3",
+    "seaborn>=0.13.2",
+    "tensorboard>=2.20.0",
+    "torch==2.9.1",
+    "torch-cluster>=1.6.3",
+    "torch-ema>=0.3",
+    "torch-geometric==2.7",
+    "torch-scatter>=2.1.2",
+    "torch-sparse>=0.6.18",
+    "torch-spline-conv>=1.2.2",
+    "tqdm>=4.67.1",
     "typer==0.15.1",
     "uvicorn==0.34.0",
-    
-    # PyTorch (version managed via uv.sources)
-    "torch==2.1.0",
-    "torchvision==0.16.0",
-    "torchaudio==2.1.0",
-    
-    # PyTorch Geometric
-    "torch-geometric",
-    "torch-scatter",
-    "torch-sparse",
-    "torch-cluster",
-    "torch-spline-conv",
-    
-    # Deep Learning Frameworks
-    "pytorch-lightning==2.0.0",
-    "torch-ema",
-    
-    # Experiment Tracking
-    "wandb",
-    "tensorboard",
-    
-    # Chemistry Libraries
-    "rdkit",
-    "biopython",
-    "openbabel-wheel",
-    
-    # Scientific Computing
-    "numpy",
-    "scipy",
-    "scikit-learn",
-    "pandas",
-    "networkx",
-    
-    # Utilities
-    "tqdm",
-    "pyyaml",
-    "omegaconf",
-    "lmdb",
-    "ipython",
+    "wandb>=0.23.1",
 ]
 
 [dependency-groups]
@@ -73,66 +58,28 @@ dev = [
     "pytest==8.3.4",
     "ruff==0.1.3",
     "mkdocstrings-python==1.12.2",
+    "ipython>=9.9.0",
 ]
 
-eval = [
-    "posebusters",
-]
-
-viz = [
-    "matplotlib",
-    "seaborn",
-    "py3Dmol",
-]
-
-# PyTorch index configuration
-# Change the index name below to match your hardware:
-# - pytorch-cuda118 for NVIDIA GPUs with CUDA 11.8
-# - pytorch-rocm56 for AMD GPUs with ROCm 5.6
-# - pytorch-cpu for CPU-only (default)
 
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cuda118" },  # Change to pytorch-rocm56 or pytorch-cpu as needed
+    { index = "pytorch-cpu" },
 ]
 torchvision = [
-    { index = "pytorch-cuda118" },
+    { index = "pytorch-cpu" },
 ]
-torchaudio = [
-    { index = "pytorch-cuda118" },
-]
-torch-scatter = [
-    { index = "pytorch-geometric" },
-]
-torch-sparse = [
-    { index = "pytorch-geometric" },
-]
-torch-cluster = [
-    { index = "pytorch-geometric" },
-]
-torch-spline-conv = [
-    { index = "pytorch-geometric" },
-]
-
-[[tool.uv.index]]
-name = "pytorch-cuda118"
-url = "https://download.pytorch.org/whl/cu118"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-rocm56"
-url = "https://download.pytorch.org/whl/rocm5.6"
-explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-[[tool.uv.index]]
-name = "pytorch-geometric"
-url = "https://data.pyg.org/whl/torch-2.1.0+cu118.html"
-explicit = true
+[tool.uv.extra-build-dependencies]
+torch-scatter = ["torch"]
+torch-sparse = ["torch"]
+torch-cluster = ["torch"]
+torch-spline-conv = ["torch"]
 
 [tool.ruff]
 line-length = 120

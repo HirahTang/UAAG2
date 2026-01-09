@@ -1,12 +1,20 @@
-# Ignore anything that ends with .pkl
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.vscode/
 
-```bash
-.DS_Store/
+# Virtual environments
+.venv
+
+.DS_Store
 *.pdb
 *.ckpt
 *.yaml
 *.pkl
-*.pyc
 *.out
 *.log
 *.pickle
@@ -17,13 +25,32 @@
 *.sdf
 *.mol2
 *.xyz
-wandb*
-*L_sidechain*
-*3DcoordsAtomsBonds*
-*pdbbind*
 *.png
 *.csv
-*.npz
-*ProteinGymSampling*
-*results*
-```
+
+*.swp
+*.swo
+
+*$py.class
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Sphinx documentation
+docs/_build/
+
+# IPython
+profile_default/
+ipython_config.py
