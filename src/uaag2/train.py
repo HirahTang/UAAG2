@@ -88,21 +88,25 @@ def main(hparams):
     # test_data
     # convert the UAAG2Dataset parameters in test_data
 
-    with open(hparams.metadata_path, "rb") as f:
-        metadata = pickle.load(f)
-    weights = []
-    for i in range(len(train_data)):
-        key = f"{i:08}".encode("ascii")
-        source_name = metadata[key]
-        if source_name in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
-            weights.append(hparams.pdbbind_weight)
-        else:
-            weights.append(1.0)
-    weights = np.array(weights)
-    weights = weights / weights.sum()
-
-    sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
-    # sampler = RandomSampler(train_data)
+    # Create sampler based on use_metadata_sampler flag
+    if hparams.use_metadata_sampler and hparams.metadata_path is not None:
+        print(f"Using WeightedRandomSampler with metadata from: {hparams.metadata_path}")
+        with open(hparams.metadata_path, "rb") as f:
+            metadata = pickle.load(f)
+        weights = []
+        for i in range(len(train_data)):
+            key = f"{i:08}".encode("ascii")
+            source_name = metadata[key]
+            if source_name in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
+                weights.append(hparams.pdbbind_weight)
+            else:
+                weights.append(1.0)
+        weights = np.array(weights)
+        weights = weights / weights.sum()
+        sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
+    else:
+        print("Using RandomSampler (no metadata weighting)")
+        sampler = RandomSampler(train_data)
 
     datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data, sampler=sampler)
 
@@ -188,14 +192,14 @@ if __name__ == "__main__":
     # parser = add_arguments(parser)
 
     parser.add_argument("--logger-type", default="wandb", type=str)
-
-    parser.add_argument("--dataset", type=str, default="drugs")
-
-    parser.add_argument(
-        "--data_info_path", type=str, default="/home/qcx679/hantang/UAAG2/data/full_graph/statistic.pkl"
-    )
-    parser.add_argument("--training_data", type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.lmdb")
-    parser.add_argument("--metadata_path", type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl")
+    
+    parser.add_argument('--dataset', type=str, default='drugs')
+    
+    parser.add_argument('--data_info_path', type=str, default="/home/qcx679/hantang/UAAG2/data/full_graph/statistic.pkl")
+    parser.add_argument('--training_data', type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.lmdb")
+    parser.add_argument('--metadata_path', type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl", help="Path to metadata file for weighted sampling")
+    parser.add_argument('--use-metadata-sampler', action='store_true', default=True, help="Use WeightedRandomSampler based on metadata (default: True)")
+    parser.add_argument('--no-metadata-sampler', dest='use_metadata_sampler', action='store_false', help="Use RandomSampler instead of metadata-based weighted sampling")
     # parser.add_argument(
     #     "--conf", "-c", type=open, action=LoadFromFile, help="Configuration yaml file"
     # )  # keep first
