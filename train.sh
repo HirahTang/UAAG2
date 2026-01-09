@@ -94,6 +94,20 @@ echo "PYTHONPATH: $PYTHONPATH"
 
 echo "Python: $(which python)"
 echo "Python version: $(python --version)"
+
+# Check PyTorch and CUDA availability
+echo ""
+echo "Checking PyTorch and CUDA setup..."
+python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda if torch.cuda.is_available() else \"N/A\"}'); print(f'GPU count: {torch.cuda.device_count() if torch.cuda.is_available() else 0}')"
+
+# Auto-detect if GPU is available and adjust NUM_GPUS accordingly
+GPU_AVAILABLE=$(python -c "import torch; print(1 if torch.cuda.is_available() and torch.cuda.device_count() > 0 else 0)")
+if [ "$GPU_AVAILABLE" = "0" ]; then
+    echo ""
+    echo "WARNING: No GPU detected! Falling back to CPU training."
+    echo "If you expect GPU to be available, check your PyTorch installation and CUDA setup."
+    NUM_GPUS=0
+fi
 echo ""
 
 # ==============================================================================
