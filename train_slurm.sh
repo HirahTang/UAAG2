@@ -5,6 +5,7 @@
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:1
 #SBATCH --time=48:00:00
+#SBATCH --exclude=hendrixgpu20fl,hendrixgpu13fl
 #SBATCH --output=logs/uaag2_%j.out
 #SBATCH --error=logs/uaag2_%j.err
 
@@ -118,14 +119,26 @@ echo ""
 
 # Activate conda environment
 echo "Activating conda environment..."
-source ~/.bashrc
+# Temporarily disable exit on error for conda activation
+set +e
+eval "$(conda shell.bash hook)"
 conda activate targetdiff
+ACTIVATION_STATUS=$?
+set -e
 
 # Verify activation
-if [ $? -ne 0 ]; then
+if [ $ACTIVATION_STATUS -ne 0 ]; then
     echo "ERROR: Failed to activate conda environment 'targetdiff'"
     exit 1
 fi
+
+# Double check the environment is actually active
+if [ "$CONDA_DEFAULT_ENV" != "targetdiff" ]; then
+    echo "ERROR: Environment activation reported success but targetdiff is not active"
+    echo "Current environment: $CONDA_DEFAULT_ENV"
+    exit 1
+fi
+echo "✓ Successfully activated conda environment: $CONDA_DEFAULT_ENV"
 
 # Set library path
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
