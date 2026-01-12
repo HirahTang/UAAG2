@@ -259,7 +259,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             hybridization=graph_data.hybridization,
             is_backbone=graph_data.is_backbone,
             is_ligand=graph_data.is_ligand,
-            ligand_size=torch.tensor(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
+            ligand_size=(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long().detach().clone(),
             id=graph_data.compound_id,
         )
         
