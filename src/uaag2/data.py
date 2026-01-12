@@ -1,6 +1,7 @@
 from operator import is_
 from os.path import join
 import os
+from pathlib import Path
 from typing import Optional
 import sys
 import numpy as np
@@ -11,6 +12,57 @@ sys.path.append("..")
 from rdkit import Chem
 
 import torch
+from huggingface_hub import hf_hub_download, snapshot_download
+
+
+HUGGINGFACE_REPO_ID = "yhsure/uaag2-data"
+
+
+def fetch_data(data_dir: str = "data", force: bool = False) -> None:
+    """Fetch protein data from Hugging Face Hub.
+
+    Downloads the following files (excludes MNIST data):
+    - aa_graph.json
+    - statistic.pkl
+    - pdb_subset.lmdb
+    - benchmarks/ENVZ_ECOLI.pt
+
+    Args:
+        data_dir: Directory to save the data. Defaults to "data".
+        force: If True, re-download even if files exist. Defaults to False.
+    """
+    data_path = Path(data_dir)
+    data_path.mkdir(parents=True, exist_ok=True)
+
+    # Files to download
+    files = [
+        "aa_graph.json",
+        "statistic.pkl",
+        "pdb_subset.lmdb",
+        "benchmarks/ENVZ_ECOLI.pt",
+    ]
+
+    print(f"Fetching data from Hugging Face: {HUGGINGFACE_REPO_ID}")
+
+    for filename in files:
+        local_path = data_path / filename
+        if local_path.exists() and not force:
+            print(f"  Skipping {filename} (already exists)")
+            continue
+
+        print(f"  Downloading {filename}...")
+        # Create parent directory if needed (for benchmarks/)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+
+        hf_hub_download(
+            repo_id=HUGGINGFACE_REPO_ID,
+            filename=filename,
+            repo_type="dataset",
+            local_dir=data_path,
+        )
+        print(f"  Downloaded {filename}")
+
+    print("Data fetch complete!")
 
 from torch.utils.data import Subset
 from torch_geometric.data import Dataset, DataLoader, Data

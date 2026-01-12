@@ -9,6 +9,8 @@ wheels/
 wandb/
 
 data/*
+!data/aa_graph.json
+!data/statistic.pkl
 
 # Virtual environments
 .venv
@@ -18,10 +20,12 @@ data/*
 *.ckpt
 *.yaml
 *.pkl
+!data/statistic.pkl
 *.out
 *.log
 *.pickle
 *.json
+!data/aa_graph.json
 *.mol
 *.pth
 *.pt
