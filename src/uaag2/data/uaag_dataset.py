@@ -127,9 +127,13 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         graph_data.edge_attr = graph_data.edge_attr.float()
         graph_data.edge_index = graph_data.edge_index.long()
 
-        charges_np = graph_data.charges.numpy()
-        mapped_np = np.vectorize(self.charge_emb.get)(charges_np)
-        charges = torch.from_numpy(mapped_np)
+        # Apply the self.charge_emb mapping.
+        charges_long = graph_data.charges.long()
+        mapped_charges = torch.empty_like(charges_long)
+
+        for original_key, mapped_value in self.charge_emb.items():
+            mapped_charges[charges_long == original_key] = mapped_value
+        charges = mapped_charges
         # graph_data.charges = graph_data.charges.long()
         # graph_data.charges = torch.tensor(self.charge_emb[i] for i in graph_data.charges).float()
         # map the value of charges by {-1: 0, 0: 1, 1: 2}
@@ -323,9 +327,13 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         graph_data.edge_index = graph_data.edge_index.long()
         # from IPython import embed; embed()
 
-        charges_np = graph_data.charges.numpy()
-        mapped_np = np.vectorize(self.charge_emb.get)(charges_np)
-        charges = torch.from_numpy(mapped_np)
+        # Apply the self.charge_emb mapping.
+        charges_long = graph_data.charges.long()
+        mapped_charges = torch.empty_like(charges_long)
+
+        for original_key, mapped_value in self.charge_emb.items():
+            mapped_charges[charges_long == original_key] = mapped_value
+        charges = mapped_charges
 
         graph_data.degree = graph_data.degree.float()
         graph_data.is_aromatic = graph_data.is_aromatic.float()
@@ -572,9 +580,16 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         graph_data.edge_index = graph_data.edge_index.long()
         # from IPython import embed; embed()
 
-        charges_np = graph_data.charges.numpy()
-        mapped_np = np.vectorize(self.charge_emb.get)(charges_np)
-        charges = torch.from_numpy(mapped_np)
+        # Apply the dictionary mapping using masked assignments for a general, parallel solution.
+        # This iterates through the dictionary's key-value pairs and directly maps
+        # each original_key to its mapped_value, without relying on assumptions
+        # about key contiguity or range.
+        charges_long = graph_data.charges.long()
+        mapped_charges = torch.empty_like(charges_long)
+
+        for original_key, mapped_value in self.charge_emb.items():
+            mapped_charges[charges_long == original_key] = mapped_value
+        charges = mapped_charges
 
         graph_data.degree = graph_data.degree.float()
         graph_data.is_aromatic = graph_data.is_aromatic.float()

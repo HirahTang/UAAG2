@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 import lmdb
 import pytest
+import torch
 from torch.utils.data import Dataset
 
 from tests import _PATH_DATA
@@ -40,6 +41,26 @@ class TestUAAG2Dataset:
         dataset = UAAG2Dataset(DATA_PATH, params=MockParams())
         item = dataset[0]
         assert item is not None
+
+    def test_getitem_device_consistency(self):
+        """Test that all tensors in a retrieved item are on the same device."""
+        dataset = UAAG2Dataset(DATA_PATH, params=MockParams())
+        item = dataset[0]
+
+        # Check initial device (should be CPU)
+        devices = {key: value.device for key, value in item if isinstance(value, torch.Tensor)}
+        assert len(set(devices.values())) == 1, f"Initial tensors are on multiple devices: {devices}"
+
+        # If GPU is available, test moving the item to the GPU
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+            item = item.to(device)
+
+            # Check device after moving
+            devices_after_move = {key: value.device for key, value in item if isinstance(value, torch.Tensor)}
+            assert (
+                len(set(devices_after_move.values())) == 1
+            ), f"Tensors are on multiple devices after .to(device): {devices_after_move}"
 
     @param("mask_rate", [0.0, 0.5, 1.0])
     @param("noise_scale", [0.1, 0.5])
