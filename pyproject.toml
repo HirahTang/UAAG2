@@ -95,4 +95,9 @@ filterwarnings = [
 line-length = 120
 
 [tool.coverage.run]
-omit = ["tests/*"]
+omit = [
+    "tests/*",
+    "/private/var/folders/*",
+    "/var/folders/*",
+    "*/_remote_module_non_scriptable.py",
+]
