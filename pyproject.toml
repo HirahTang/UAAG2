@@ -29,7 +29,7 @@ dependencies = [
     "pandas>=2.3.3",
     "posebusters>=0.6.3",
     "py3dmol>=2.5.3",
-    "pytorch-lightning==2.0",
+    "pytorch-lightning==2.6.0",
     "rdkit>=2025.9.3",
     "scikit-learn>=1.8.0",
     "scipy>=1.16.3",
