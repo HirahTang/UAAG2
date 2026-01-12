@@ -204,8 +204,8 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             graph_data.is_backbone = torch.cat([graph_data.is_backbone, torch.zeros(sample_n)])
             graph_data.is_ligand = torch.cat([graph_data.is_ligand, torch.ones(sample_n)])
             
-            virtual_new_id = torch.tensor(range(len(graph_data.x)))[-sample_n:]
-            virtual_existed = torch.tensor(range(len(graph_data.x)))[:-sample_n]
+            virtual_new_id = torch.arange(len(graph_data.x))[-sample_n:]
+            virtual_existed = torch.arange(len(graph_data.x))[:-sample_n]
             grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_existed)
             grid1 = grid1.flatten()
             grid2 = grid2.flatten()
@@ -216,7 +216,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
 
             edge_index_new = torch.cat([graph_data.edge_index, new_edge_index], dim=1)
             edge_attr_new = torch.cat([graph_data.edge_attr, torch.zeros(new_edge_index.size(1))])
-            edge_ligand_new = torch.cat([torch.tensor(graph_data.edge_ligand), torch.zeros(new_edge_index.size(1))])
+            edge_ligand_new = torch.cat([graph_data.edge_ligand.detach().clone(), torch.zeros(new_edge_index.size(1))])
             
             grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_new_id)
             mask = grid1 != grid2
@@ -251,7 +251,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             pos=graph_data.pos,
             edge_index=graph_data.edge_index,
             edge_attr=graph_data.edge_attr,
-            edge_ligand=torch.tensor(graph_data.edge_ligand).float(),
+            edge_ligand=graph_data.edge_ligand.detach().clone().float(),
             charges=graph_data.charges,
             degree=graph_data.degree,
             is_aromatic=graph_data.is_aromatic,
@@ -362,7 +362,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             pos=graph_data.pos,
             edge_index=graph_data.edge_index,
             edge_attr=graph_data.edge_attr,
-            edge_ligand=torch.tensor(graph_data.edge_ligand).float(),
+            edge_ligand=graph_data.edge_ligand.detach().clone().float(),
             charges=charges,
             degree=graph_data.degree,
             is_aromatic=graph_data.is_aromatic,
@@ -370,9 +370,9 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             hybridization=graph_data.hybridization,
             is_backbone=graph_data.is_backbone,
             is_ligand=graph_data.is_ligand,
-            ligand_size=torch.tensor(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
+            ligand_size=(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long().detach().clone(),
             id=graph_data.compound_id,
-            ids=torch.tensor(range(len(graph_data.x))),
+            ids=torch.arange(len(graph_data.x)),
         )
         
         return batch_graph_data
@@ -434,7 +434,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         # Add new edges, firstly interaction edge between ligand and pocket (edge_ligand=0)
         # Then adding the edges inside ligands (edge_ligand=1)
         
-        ids_new = torch.tensor(range(len(x_new)))
+        ids_new = torch.arange(len(x_new))
         ids_new_node = ids_new[-sample_size:]
         
         ids_backbone = ids_new[is_backbone_new==1]
@@ -606,7 +606,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
             pos=graph_data.pos,
             edge_index=graph_data.edge_index,
             edge_attr=graph_data.edge_attr,
-            edge_ligand=torch.tensor(graph_data.edge_ligand).float(),
+            edge_ligand=graph_data.edge_ligand.detach().clone().float(),
             charges=charges,
             degree=graph_data.degree,
             is_aromatic=graph_data.is_aromatic,
@@ -614,9 +614,9 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
             hybridization=graph_data.hybridization,
             is_backbone=graph_data.is_backbone,
             is_ligand=graph_data.is_ligand,
-            ligand_size=torch.tensor(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
+            ligand_size=(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long().detach().clone(),
             id=graph_data.compound_id,
-            ids=torch.tensor(range(len(graph_data.x))),
+            ids=torch.arange(len(graph_data.x)),
         )
         
         return batch_graph_data
@@ -671,7 +671,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         # Create fully connected graph among all ligand nodes
         # For n nodes, this creates n*(n-1) directed edges
         
-        ids_new = torch.tensor(range(len(x_new)))
+        ids_new = torch.arange(len(x_new))
         ids_new_node = ids_new[-sample_size:]
         
         ids_backbone = ids_new[is_backbone_new==1]
