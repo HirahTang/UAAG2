@@ -47,10 +47,9 @@ MAX_VIRTUAL_NODES=5
 MASK_RATE=0.0
 NUM_LAYERS=7
 
-# Data Paths
-DATA_PATH="/datasets/biochem/unaagi/debug_test.lmdb"
-METADATA_PATH="/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl"
-DATA_INFO_PATH="/home/qcx679/hantang/UAAG2/data/full_graph/statistic.pkl"
+# Data Paths UAAG2/data/pdb_subset.lmdb
+DATA_PATH="data/pdb_subset.lmdb"
+DATA_INFO_PATH="data/statistic.pkl"
 
 # Experiment Configuration
 EXPERIMENT_ID="uaag2_slurm_${SLURM_JOB_ID}_$(date +%Y%m%d_%H%M%S)"
@@ -251,7 +250,6 @@ python src/uaag2/train.py \
     --num-layers "$NUM_LAYERS" \
     --pdbbind-weight "$PDBBIND_WEIGHT" \
     --training_data "$DATA_PATH" \
-    --metadata_path "$METADATA_PATH" \
     --data_info_path "$DATA_INFO_PATH" \
     --save-dir "$SAVE_DIR" \
     --id "$EXPERIMENT_ID" \

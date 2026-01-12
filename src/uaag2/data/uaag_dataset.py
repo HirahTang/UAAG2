@@ -47,7 +47,12 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         if self.pocket_noise:
             self.noise_scale = noise_scale
         
-        self.env = lmdb.open(
+        # Store the path for lazy initialization (needed for multiprocessing)
+        self.data_path = data_path
+        self._env = None  # Will be lazily initialized
+        
+        # Get length by temporarily opening the database
+        env = lmdb.open(
             data_path,
             readonly=True,
             lock=False,
@@ -55,10 +60,10 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             readahead=False,
             meminit=False,
         )
-        
-        with self.env.begin() as txn:
+        with env.begin() as txn:
             self.length = pickle.loads(txn.get(b"__len__"))
-        # self.load_dataset()
+        env.close()
+        
         self.charge_emb = {
             -1: 0,
             0: 1,
@@ -66,6 +71,20 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             2: 3,
         }
         self.mask_rate = mask_rate
+    
+    @property
+    def env(self):
+        """Lazily initialize LMDB environment (needed for multiprocessing)."""
+        if self._env is None:
+            self._env = lmdb.open(
+                self.data_path,
+                readonly=True,
+                lock=False,
+                subdir=False,
+                readahead=False,
+                meminit=False,
+            )
+        return self._env
     # def load_dataset(self):
     #     for file in tqdm(self.root):
     #         print(f"Loading {file} \n")
