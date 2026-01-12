@@ -1,4 +1,3 @@
-
 aa_dict = {
     "ALA": 0,
     "ASX": 1,
