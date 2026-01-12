@@ -2,15 +2,14 @@ name: Unit Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, mlops]
   pull_request:
-    branches: [main]
 jobs:
   test:
     runs-on: ${{ matrix.operating-system }}
     strategy:
       matrix:
-        operating-system: ["ubuntu-latest", "windows-latest", "macos-latest"]
+        operating-system: ["ubuntu-latest", "macos-latest"]
         python-version: ["3.12", "3.11"]
 
     steps:

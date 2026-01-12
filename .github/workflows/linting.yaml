@@ -2,9 +2,8 @@ name: Code linting
 
 on:
   push:
-    branches: [main]
+    branches: [main, mlops]
   pull_request:
-    branches: [main]
 
 jobs:
   format:

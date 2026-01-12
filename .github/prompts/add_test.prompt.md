@@ -137,3 +137,4 @@ class TestInferencePipeline:
     def test_metrics_are_logged(self, mock_log_metrics, model, sample_batch):
         run_inference(model, sample_batch)
         mock_log_metrics.assert_called_once()
+```
