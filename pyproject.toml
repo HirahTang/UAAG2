@@ -16,7 +16,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
 ]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "biopython>=1.86",
     "fastapi==0.115.6",
@@ -35,13 +35,9 @@ dependencies = [
     "scipy>=1.16.3",
     "seaborn>=0.13.2",
     "tensorboard>=2.20.0",
-    "torch==2.9.1",
-    "torch-cluster>=1.6.3",
+    "torch==2.5.0",
     "torch-ema>=0.3",
     "torch-geometric==2.7",
-    "torch-scatter>=2.1.2",
-    "torch-sparse>=0.6.18",
-    "torch-spline-conv>=1.2.2",
     "tqdm>=4.67.1",
     "typer==0.15.1",
     "uvicorn==0.34.0",
@@ -61,25 +57,26 @@ dev = [
     "ipython>=9.9.0",
 ]
 
-
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cpu" },
-]
-torchvision = [
-    { index = "pytorch-cpu" },
+[tool.uv]
+environments = [
+    "sys_platform == 'darwin'",
 ]
 
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
+[[tool.uv.dependency-metadata]]
+name = "torch-cluster"
+requires-dist = ["torch", "setuptools"]
 
-[tool.uv.extra-build-dependencies]
-torch-scatter = ["torch"]
-torch-sparse = ["torch"]
-torch-cluster = ["torch"]
-torch-spline-conv = ["torch"]
+[[tool.uv.dependency-metadata]]
+name = "torch-scatter"
+requires-dist = ["torch", "setuptools"]
+
+[[tool.uv.dependency-metadata]]
+name = "torch-sparse"
+requires-dist = ["torch", "setuptools"]
+
+[[tool.uv.dependency-metadata]]
+name = "torch-spline-conv"
+requires-dist = ["torch", "setuptools"]
 
 [tool.pytest.ini_options]
 filterwarnings = [
