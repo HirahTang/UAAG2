@@ -16,7 +16,6 @@ data/*
 .DS_Store
 *.pdb
 *.ckpt
-*.yaml
 *.pkl
 *.out
 *.log
