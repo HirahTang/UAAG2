@@ -18,7 +18,6 @@ data/*
 .DS_Store
 *.pdb
 *.ckpt
-*.yaml
 *.pkl
 !data/statistic.pkl
 *.out
