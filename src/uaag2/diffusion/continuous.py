@@ -6,9 +6,10 @@ from torch import Tensor, nn
 
 import sys
 
-sys.path.append('.')
+sys.path.append(".")
 
 from uaag2.utils import zero_mean
+
 
 def sigmoid(x):
     return 1 / (np.exp(-x) + 1)
@@ -60,15 +61,10 @@ def get_beta_schedule(
             s = 0.008
         steps = num_diffusion_timesteps + 2
         x = torch.linspace(0, num_diffusion_timesteps, steps)
-        alphas_cumprod = (
-            torch.cos(((x / num_diffusion_timesteps) + s) / (1 + s) * torch.pi * 0.5)
-            ** 2
-        )
+        alphas_cumprod = torch.cos(((x / num_diffusion_timesteps) + s) / (1 + s) * torch.pi * 0.5) ** 2
         alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
         ### new included
-        alphas_cumprod = torch.from_numpy(
-            clip_noise_schedule(alphas_cumprod, clip_value=clamp_alpha_min)
-        )
+        alphas_cumprod = torch.from_numpy(clip_noise_schedule(alphas_cumprod, clip_value=clamp_alpha_min))
         alphas = alphas_cumprod[1:] / alphas_cumprod[:-1]
         alphas = alphas.clip(min=0.001)
         betas = 1 - alphas
@@ -100,15 +96,11 @@ def get_beta_schedule(
         nu_arr = np.array(nu)  # (components, )  # X, charges, E, y, pos
         _steps = steps
         # _steps = num_diffusion_timesteps
-        alphas_cumprod = (
-            np.cos(0.5 * np.pi * (((x / _steps) ** nu_arr) + s) / (1 + s)) ** 2
-        )  # ((components, steps))
+        alphas_cumprod = np.cos(0.5 * np.pi * (((x / _steps) ** nu_arr) + s) / (1 + s)) ** 2  # ((components, steps))
         # divide every element of alphas_cumprod by the first element of alphas_cumprod
         alphas_cumprod_new = alphas_cumprod / alphas_cumprod[:, 0]
         ### new included
-        alphas_cumprod_new = clip_noise_schedule(
-            alphas_cumprod_new.squeeze(), clip_value=clamp_alpha_min
-        )[None, ...]
+        alphas_cumprod_new = clip_noise_schedule(alphas_cumprod_new.squeeze(), clip_value=clamp_alpha_min)[None, ...]
         # remove the first element of alphas_cumprod and then multiply every element by the one before it
         alphas = alphas_cumprod_new[:, 1:] / alphas_cumprod_new[:, :-1]
         # alphas[:, alphas.shape[1]-1] = 0.001
@@ -215,23 +207,17 @@ class DiscreteDDPM(nn.Module):
             self._alphas_bar = torch.exp(log_alpha_bar)
             self._sigma2_bar = -torch.expm1(2 * log_alpha_bar)
             self._sigma_bar = torch.sqrt(self._sigma2_bar)
-            self._gamma = (
-                torch.log(-torch.special.expm1(2 * log_alpha_bar)) - 2 * log_alpha_bar
-            )
+            self._gamma = torch.log(-torch.special.expm1(2 * log_alpha_bar)) - 2 * log_alpha_bar
         else:
             alphas_cumprod = torch.cumprod(alphas, dim=0)
 
-        alphas_cumprod_prev = torch.nn.functional.pad(
-            alphas_cumprod[:-1], (1, 0), value=1.0
-        )
+        alphas_cumprod_prev = torch.nn.functional.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
         sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
         sqrt_1m_alphas_cumprod = torch.sqrt(1.0 - alphas_cumprod)
         sqrt_1m_alphas_cumprod = sqrt_1m_alphas_cumprod.clamp(min=1e-4)
 
         if scaled_reverse_posterior_sigma:
-            rev_variance = (
-                discrete_betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
-            )
+            rev_variance = discrete_betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
             rev_variance[0] = rev_variance[1] / 2.0
             reverse_posterior_sigma = torch.sqrt(rev_variance)
         else:
@@ -425,13 +411,9 @@ class DiscreteDDPM(nn.Module):
             sigmas2t = sigmast.pow(2)
 
             sqrt_alphas = self.sqrt_alphas[t].unsqueeze(-1)
-            sqrt_1m_alphas_cumprod_prev = torch.sqrt(
-                (1.0 - self.alphas_cumprod_prev[t]).clamp_min(1e-4)
-            ).unsqueeze(-1)
+            sqrt_1m_alphas_cumprod_prev = torch.sqrt((1.0 - self.alphas_cumprod_prev[t]).clamp_min(1e-4)).unsqueeze(-1)
             one_m_alphas_cumprod_prev = sqrt_1m_alphas_cumprod_prev.pow(2)
-            sqrt_alphas_cumprod_prev = torch.sqrt(
-                self.alphas_cumprod_prev[t].unsqueeze(-1)
-            )
+            sqrt_alphas_cumprod_prev = torch.sqrt(self.alphas_cumprod_prev[t].unsqueeze(-1))
             one_m_alphas = self.discrete_betas[t].unsqueeze(-1)
 
             mean = (
@@ -459,9 +441,7 @@ class DiscreteDDPM(nn.Module):
 
         noise_coords_true = torch.randn_like(pos)
         if remove_mean:
-            noise_coords_true = zero_mean(
-                noise_coords_true, batch=data_batch, dim_size=bs, dim=0
-            )
+            noise_coords_true = zero_mean(noise_coords_true, batch=data_batch, dim_size=bs, dim=0)
         # get signal and noise coefficients for coords
         mean_coords, std_coords = self.marginal_prob(x=pos, t=t[data_batch])
         # perturb coords
@@ -505,16 +485,12 @@ class DiscreteDDPM(nn.Module):
             sigma_sq_ratio = self.get_sigma_pos_sq_ratio(s_int=s, t_int=t)
 
             prefactor1 = self.get_sigma2_bar(t_int=t)
-            prefactor2 = self.get_sigma2_bar(t_int=s) * self.get_alpha_pos_ts_sq(
-                t_int=t, s_int=s
-            )
+            prefactor2 = self.get_sigma2_bar(t_int=s) * self.get_alpha_pos_ts_sq(t_int=t, s_int=s)
             sigma2_t_s = prefactor1 - prefactor2
             noise_prefactor_sq = sigma2_t_s * sigma_sq_ratio
             noise_prefactor = torch.sqrt(noise_prefactor_sq).unsqueeze(-1)
 
-            z_t_prefactor = (
-                self.get_alpha_pos_ts(t_int=t, s_int=s) * sigma_sq_ratio
-            ).unsqueeze(-1)
+            z_t_prefactor = (self.get_alpha_pos_ts(t_int=t, s_int=s) * sigma_sq_ratio).unsqueeze(-1)
             x_prefactor = self.get_x_pos_prefactor(s_int=s, t_int=t).unsqueeze(-1)
             mu = z_t_prefactor[batch] * xt + x_prefactor[batch] * model_out
             xt_m1 = mu + eta_ddim * noise_prefactor[batch] * noise
@@ -537,15 +513,9 @@ class DiscreteDDPM(nn.Module):
             a = 1.0 / alpha_t_given_s
             a = a[batch]
 
-            sigma_s, sigma_t = self.sigma(gamma_s).unsqueeze(-1), self.sigma(
-                gamma_t
-            ).unsqueeze(-1)
+            sigma_s, sigma_t = self.sigma(gamma_s).unsqueeze(-1), self.sigma(gamma_t).unsqueeze(-1)
 
-            mu = (
-                xt * a.clamp(max=2.5)
-                - (sigma2_t_given_s[batch] * a.clamp(max=2.5) / sigma_t[batch])
-                * model_out
-            )
+            mu = xt * a.clamp(max=2.5) - (sigma2_t_given_s[batch] * a.clamp(max=2.5) / sigma_t[batch]) * model_out
             sigma = sigma_t_given_s * sigma_s / sigma_t
             xt_m1 = mu + eta_ddim * sigma[batch] * noise
 
@@ -582,12 +552,11 @@ class DiscreteDDPM(nn.Module):
             if self.param == "noise":
                 # convert noise prediction back to data prediction
                 # TODO: Use direct sampling instead going back
-                alpha_bar, sigma_bar = self.alphas_cum_prod[t].unsqueeze(
-                    -1
-                ).sqrt(), self.sqrt_1m_alphas_cumprod[t].unsqueeze(-1)
-                model_out = (1.0 / alpha_bar[batch]) * xt - (
-                    sigma_bar[batch] / alpha_bar[batch]
-                ) * model_out
+                alpha_bar, sigma_bar = (
+                    self.alphas_cum_prod[t].unsqueeze(-1).sqrt(),
+                    self.sqrt_1m_alphas_cumprod[t].unsqueeze(-1),
+                )
+                model_out = (1.0 / alpha_bar[batch]) * xt - (sigma_bar[batch] / alpha_bar[batch]) * model_out
             rev_sigma = self.reverse_posterior_sigma[t].unsqueeze(-1)
             rev_sigma_ddim = eta_ddim * rev_sigma
 
@@ -600,18 +569,15 @@ class DiscreteDDPM(nn.Module):
             if self.param == "noise":
                 # convert noise prediction back to data prediction
                 # TODO: Use direct sampling instead going back
-                alpha_bar, sigma_bar = self.get_alpha_bar(t_int=t).unsqueeze(
-                    -1
-                ), self.get_sigma_bar(t_int=t).unsqueeze(-1)
-                model_out = (1.0 / alpha_bar[batch]) * xt - (
-                    sigma_bar[batch] / alpha_bar[batch]
-                ) * model_out
+                alpha_bar, sigma_bar = (
+                    self.get_alpha_bar(t_int=t).unsqueeze(-1),
+                    self.get_sigma_bar(t_int=t).unsqueeze(-1),
+                )
+                model_out = (1.0 / alpha_bar[batch]) * xt - (sigma_bar[batch] / alpha_bar[batch]) * model_out
 
             sigma_sq_ratio = self.get_sigma_pos_sq_ratio(s_int=t - 1, t_int=t)
             prefactor1 = self.get_sigma2_bar(t_int=t)
-            prefactor2 = self.get_sigma2_bar(t_int=t - 1) * self.get_alpha_pos_ts_sq(
-                t_int=t, s_int=t - 1
-            )
+            prefactor2 = self.get_sigma2_bar(t_int=t - 1) * self.get_alpha_pos_ts_sq(t_int=t, s_int=t - 1)
             sigma2_t_s = prefactor1 - prefactor2
             noise_prefactor_sq = sigma2_t_s * sigma_sq_ratio
             rev_sigma = torch.sqrt(noise_prefactor_sq).unsqueeze(-1)
@@ -620,17 +586,14 @@ class DiscreteDDPM(nn.Module):
             alphas_cumprod_prev = self.get_alpha_bar(t_int=t - 1).unsqueeze(-1)
             sqrt_alphas_cumprod_prev = alphas_cumprod_prev.sqrt()
             sqrt_alphas_cumprod = self.get_alpha_bar(t_int=t).sqrt().unsqueeze(-1)
-            sqrt_one_m_alphas_cumprod = (
-                (1.0 - self.get_alpha_bar(t_int=t).unsqueeze(-1)).clamp_min(0.0).sqrt()
-            )
+            sqrt_one_m_alphas_cumprod = (1.0 - self.get_alpha_bar(t_int=t).unsqueeze(-1)).clamp_min(0.0).sqrt()
 
         noise = torch.randn_like(xt)
 
         mean = sqrt_alphas_cumprod_prev[batch] * model_out + (
             1.0 - alphas_cumprod_prev - rev_sigma_ddim.pow(2)
         ).clamp_min(0.0).sqrt()[batch] * (
-            (xt - sqrt_alphas_cumprod[batch] * model_out)
-            / sqrt_one_m_alphas_cumprod[batch]
+            (xt - sqrt_alphas_cumprod[batch] * model_out) / sqrt_one_m_alphas_cumprod[batch]
         )
 
         if edge_index_global is not None:
@@ -661,13 +624,9 @@ class DiscreteDDPM(nn.Module):
             weights = weights.clamp_max(clamp_max)
         return weights.to(device)
 
-    def snr_t_weighting(
-        self, t, device, clamp_min: float = 0.05, clamp_max: float = 1.5
-    ):
+    def snr_t_weighting(self, t, device, clamp_min: float = 0.05, clamp_max: float = 1.5):
         weights = (
-            (self.alphas_cumprod[t] / (1.0 - self.alphas_cumprod[t]))
-            .clamp(min=clamp_min, max=clamp_max)
-            .to(device)
+            (self.alphas_cumprod[t] / (1.0 - self.alphas_cumprod[t])).clamp(min=clamp_min, max=clamp_max).to(device)
         )
         return weights
 
@@ -788,9 +747,7 @@ if __name__ == "__main__":
     plt.show()
     # plt.savefig("sigmoidal-weights.png")
 
-    plt.plot(
-        torch.arange(len(gamma)), torch.sigmoid(-gamma + 2), label="sigmoidal-weights"
-    )
+    plt.plot(torch.arange(len(gamma)), torch.sigmoid(-gamma + 2), label="sigmoidal-weights")
     plt.legend()
     plt.show()
     # plt.savefig("-gamma+2.png")

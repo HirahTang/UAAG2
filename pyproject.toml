@@ -81,8 +81,23 @@ torch-sparse = ["torch"]
 torch-cluster = ["torch"]
 torch-spline-conv = ["torch"]
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning:lightning_fabric.*",
+    "ignore::DeprecationWarning:pytorch_lightning.*",
+    "ignore::DeprecationWarning:torch_geometric.*",
+    "ignore::UserWarning:openbabel.*",
+    "ignore::UserWarning:lightning_fabric.*",
+    "ignore::DeprecationWarning:importlib.*",
+]
+
 [tool.ruff]
 line-length = 120
 
 [tool.coverage.run]
-omit = ["tests/*"]
+omit = [
+    "tests/*",
+    "/private/var/folders/*",
+    "/var/folders/*",
+    "*/_remote_module_non_scriptable.py",
+]

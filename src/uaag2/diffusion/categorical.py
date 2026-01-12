@@ -3,7 +3,8 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch_geometric.utils import sort_edge_index
 import sys
-sys.path.append('.')
+
+sys.path.append(".")
 from uaag2.diffusion.continuous import get_beta_schedule
 
 DEFAULT_BETAS = get_beta_schedule(kind="cosine", num_diffusion_timesteps=500)
@@ -13,9 +14,7 @@ ALPHAS_BAR = torch.cumprod(DEFAULT_ALPHAS, dim=0)
 
 def get_one_step_transition(alpha_t: float, terminal_distribution: torch.Tensor):
     stay_prob = torch.eye(len(terminal_distribution)) * alpha_t
-    diffuse_prob = (1.0 - alpha_t) * (
-        torch.ones(1, len(terminal_distribution)) * (terminal_distribution.unsqueeze(0))
-    )
+    diffuse_prob = (1.0 - alpha_t) * (torch.ones(1, len(terminal_distribution)) * (terminal_distribution.unsqueeze(0)))
     Q_t = stay_prob + diffuse_prob
     return Q_t
 
@@ -50,12 +49,7 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         self.register_buffer("alphas", alphas)
         self.register_buffer("alphas_bar", torch.cumprod(alphas, dim=0))
         self.register_buffer("one_minus_alphas_bar", 1.0 - self.alphas_bar)
-        Qt = [
-            get_one_step_transition(
-                alpha_t=a.item(), terminal_distribution=terminal_distribution
-            )
-            for a in alphas
-        ]
+        Qt = [get_one_step_transition(alpha_t=a.item(), terminal_distribution=terminal_distribution) for a in alphas]
         self.register_buffer("Qt", torch.stack(Qt, dim=0))
         Qt_prev = torch.eye(self.num_classes)
         Qt_bar = []
@@ -72,6 +66,7 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         self.register_buffer("Qt_bar_prev", Qt_bar_prev)
         # print("Current Script and line number: ", __file__, "line number: ", 71)
         # from IPython import embed; embed()
+
     def marginal_prob(self, x0: torch.Tensor, t: torch.Tensor):
         """_summary_
         Computes the forward categorical posterior q(xt | x0) ~ Cat(xt, p = x0_j . Qt_bar_ji)
@@ -211,13 +206,12 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         batch: Tensor,
         edge_index_global: Tensor,
         num_classes: int,
-    ):  
-        
+    ):
         # x0 = edges_pred[mask]
         # xt = edge_attr_global[mask]
         x0 = edges_pred
         xt = edge_attr_global
-        
+
         # t = t[batch[mask_i]]
         t = t[batch]
         reverse = self.reverse_posterior_for_every_x0(xt=xt, t=t)
@@ -230,7 +224,6 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         probs = unweighted_probs / unweighted_probs.sum(-1, keepdims=True)
         # convert the nan values to 1e-5
         probs[torch.isnan(probs)] = 1e-5
-        
 
         edges_triu = F.one_hot(
             probs.multinomial(
@@ -269,9 +262,7 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         mask_j = j[mask]
         edge_attr_triu = edge_attr_global[mask]
 
-        edge_attr_triu_ohe = F.one_hot(
-            edge_attr_triu.long(), num_classes=self.num_bond_types
-        ).float()
+        edge_attr_triu_ohe = F.one_hot(edge_attr_triu.long(), num_classes=self.num_bond_types).float()
         t_edge = t[data_batch[mask_i]]
         probs = self.marginal_prob(edge_attr_triu_ohe, t=t_edge)
         edges_t_given_0 = probs.multinomial(
@@ -280,9 +271,7 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         j = torch.concat([mask_j, mask_i])
         i = torch.concat([mask_i, mask_j])
         edge_index_global_perturbed = torch.stack([j, i], dim=0)
-        edge_attr_global_perturbed = torch.concat(
-            [edges_t_given_0, edges_t_given_0], dim=0
-        )
+        edge_attr_global_perturbed = torch.concat([edges_t_given_0, edges_t_given_0], dim=0)
         edge_index_global_perturbed, edge_attr_global_perturbed = sort_edge_index(
             edge_index=edge_index_global_perturbed,
             edge_attr=edge_attr_global_perturbed,
@@ -294,34 +283,28 @@ class CategoricalDiffusionKernel(torch.nn.Module):
             edge_attr=edge_attr_global,
             sort_by_row=False,
         )
-        
+
         # check edge_index_global_perturbed_2 == edge_index_global_perturbed
         assert torch.all(edge_index_global_perturbed_2 == edge_index_global_perturbed)
-        
+
         edge_attr_global_perturbed = (
-            F.one_hot(
-                edge_attr_global_perturbed, num_classes=self.num_bond_types
-            ).float()
+            F.one_hot(edge_attr_global_perturbed, num_classes=self.num_bond_types).float()
             if return_one_hot
             else edge_attr_global_perturbed
         )
         # from IPython import embed; embed()
-        edge_attr_global_original = F.one_hot(
-                edge_attr_global_original.long(), num_classes=self.num_bond_types
-        ).float()
-        
+        edge_attr_global_original = F.one_hot(edge_attr_global_original.long(), num_classes=self.num_bond_types).float()
+
         return edge_attr_global_perturbed, edge_attr_global_original
 
-    def sample_categorical(
-        self, t, x0, data_batch, dataset_info, num_classes=16, type="atoms"
-    ):
+    def sample_categorical(self, t, x0, data_batch, dataset_info, num_classes=16, type="atoms"):
         assert type in ["atoms", "charges", "ring", "aromatic", "hybridization", "degree"]
 
         # if type == "charges":
         #     x0 = dataset_info.one_hot_charges(x0)
         # else:
-            # print("Current Script and line number: ", __file__, "line number: ", 297)   
-            # from IPython import embed; embed()
+        # print("Current Script and line number: ", __file__, "line number: ", 297)
+        # from IPython import embed; embed()
         x0 = F.one_hot(x0.squeeze().long(), num_classes=num_classes).float()
         probs = self.marginal_prob(x0.float(), t[data_batch])
         x0_perturbed = probs.multinomial(
@@ -344,9 +327,7 @@ def _some_debugging():
         num_classes,
     )
     absorbing_distribution[0] = 1.0
-    absorbing_distribution = torch.tensor(
-        [9.5523e-01, 3.0681e-02, 2.0021e-03, 4.4172e-05, 1.2045e-02]
-    )
+    absorbing_distribution = torch.tensor([9.5523e-01, 3.0681e-02, 2.0021e-03, 4.4172e-05, 1.2045e-02])
 
     atoms_drugs = [
         4.4119e-01,
@@ -372,28 +353,24 @@ def _some_debugging():
     atoms_qm9 = [0.5122, 0.3526, 0.0562, 0.0777, 0.0013]
     edges_qm9 = [0.8818, 0.1104, 0.0060, 0.0018, 0.0000]
 
-    C0 = CategoricalDiffusionKernel(
-        terminal_distribution=uniform_distribution, alphas=DEFAULT_ALPHAS
-    )
+    C0 = CategoricalDiffusionKernel(terminal_distribution=uniform_distribution, alphas=DEFAULT_ALPHAS)
 
-    C1 = CategoricalDiffusionKernel(
-        terminal_distribution=torch.tensor(edges_drugs), alphas=DEFAULT_ALPHAS
-    )
+    C1 = CategoricalDiffusionKernel(terminal_distribution=torch.tensor(edges_drugs), alphas=DEFAULT_ALPHAS)
 
     t = 290
     a = C0.Qt_bar[t]
     alphas_bar_t = C0.alphas_bar[t].unsqueeze(-1)
-    b = alphas_bar_t * C0.eye + (
-        (1.0 - alphas_bar_t) * torch.ones_like(C0.terminal_distribution)
-    ).unsqueeze(-1) * C0.terminal_distribution.unsqueeze(0)
+    b = alphas_bar_t * C0.eye + ((1.0 - alphas_bar_t) * torch.ones_like(C0.terminal_distribution)).unsqueeze(
+        -1
+    ) * C0.terminal_distribution.unsqueeze(0)
 
     print(a - b)
 
     alphas_t = C0.alphas[t].unsqueeze(-1)
     a = C0.Qt[t]
-    b = alphas_t * C0.eye + (
-        (1.0 - alphas_t) * torch.ones_like(C0.terminal_distribution)
-    ).unsqueeze(-1) * C0.terminal_distribution.unsqueeze(0)
+    b = alphas_t * C0.eye + ((1.0 - alphas_t) * torch.ones_like(C0.terminal_distribution)).unsqueeze(
+        -1
+    ) * C0.terminal_distribution.unsqueeze(0)
 
     print(a - b)
     Qt = C1.Qt[t]

@@ -71,9 +71,7 @@ class Mixin:
         return d
 
     def valency_count(self, max_n_nodes):
-        valencies = torch.zeros(
-            3 * max_n_nodes - 2
-        )  # Max valency possible if everything is connected
+        valencies = torch.zeros(3 * max_n_nodes - 2)  # Max valency possible if everything is connected
 
         multiplier = torch.Tensor([0, 1, 2, 3, 1.5])
 
@@ -93,6 +91,7 @@ class Mixin:
         valencies = valencies / valencies.sum()
         return valencies
 
+
 class AbstractDataModule(Mixin, LightningDataset):
     def __init__(self, cfg, train_dataset, val_dataset, test_dataset):
         super().__init__(
@@ -105,5 +104,3 @@ class AbstractDataModule(Mixin, LightningDataset):
             pin_memory=getattr(cfg.dataset, "pin_memory", False),
         )
         self.cfg = cfg
-        
-    
