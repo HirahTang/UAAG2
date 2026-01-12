@@ -1,5 +1,3 @@
-from rdkit import Chem
-import json
 
 aa_dict = {
     "ALA": 0,

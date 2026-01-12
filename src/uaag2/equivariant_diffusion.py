@@ -1,25 +1,15 @@
-from calendar import c
 import logging
-from math import e
 import os
 from datetime import datetime
 import json
-import pickle
-from platform import architecture
-from re import L, S
-import re
-import wandb
 import sys
 
 sys.path.append(".")
-import pandas as pd
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 from torch import Tensor
 from torch_geometric.data import Batch
-from torch_geometric.utils import dense_to_sparse, sort_edge_index
-from torch_scatter import scatter_mean
 from tqdm import tqdm
 
 from uaag2.e3moldiffusion.coordsatomsbonds import DenoisingEdgeNetwork
@@ -1200,7 +1190,7 @@ class Trainer(pl.LightningModule):
                     pocket_mask=batch.is_ligand,
                     atom_decoder=self.dataset_info.atom_decoder,
                 )
-            except Exception as e:
+            except Exception:
                 print("No Pocket for this molecule")
                 return out_dict, connected_list, sanitized_list
             return out_dict, connected_list, sanitized_list

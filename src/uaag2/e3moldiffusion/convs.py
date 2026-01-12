@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 from torch_geometric.nn import MessagePassing
 from torch_geometric.nn.inits import reset
-from torch_geometric.typing import OptTensor
 from torch_sparse import SparseTensor
 from torch_scatter import scatter
 from torch_scatter.composite import scatter_softmax

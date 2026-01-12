@@ -3,21 +3,10 @@ import sys
 sys.path.append(".")
 import json
 import pickle
-from Bio.PDB import PDBParser
-from Bio.PDB import Selection
-from rdkit import Chem
-from rdkit.Chem.rdchem import BondType
-from rdkit.Chem import ChemicalFeatures
-from rdkit import RDConfig
 from tqdm import tqdm
-from IPython import embed
-from configs.datasets_config import aa_dict
 import os
 import pickle
-import numpy as np
 
-import argparse
-import random
 
 radius = 10
 

@@ -1,7 +1,4 @@
-from operator import is_
-from os.path import join
 import os
-from typing import Optional
 import sys
 import numpy as np
 
@@ -12,18 +9,11 @@ from rdkit import Chem
 
 import torch
 
-from torch.utils.data import Subset
-from torch_geometric.data import Dataset, DataLoader, Data
+from torch_geometric.data import DataLoader, Data
 
-from torch_geometric.data.lightning import LightningDataset
 
 # from torch_geometric.data import InMemoryDataset
-from tqdm import tqdm
-from uaag2.data.abstract_dataset import (
-    AbstractDataModule,
-)
 
-from torch_geometric.utils import sort_edge_index
 
 from uaag2.utils import visualize_mol
 import lmdb

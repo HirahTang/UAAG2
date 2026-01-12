@@ -1,7 +1,6 @@
 from typing import Union
 
 import torch
-import rdkit
 from rdkit import Chem
 from rdkit.Chem import GetPeriodicTable
 from torch import nn

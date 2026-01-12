@@ -14,7 +14,6 @@ from uaag2.e3moldiffusion.modules import (
     DenseLayer,
     GatedEquivariantBlock,
     GatedEquivBlock,
-    SE3Norm,
 )
 
 

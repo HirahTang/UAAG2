@@ -1,23 +1,16 @@
-import argparse
 import math
-from os.path import dirname, exists, join
-from typing import Tuple
 import os
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
 import numpy as np
 import torch
 import torch.nn.functional as F
-import yaml
-from pytorch_lightning.utilities import rank_zero_warn
 from rdkit import Chem
 from torch_geometric.data import Data
-from torch_geometric.nn import radius_graph
-from torch_geometric.utils import dense_to_sparse, sort_edge_index, subgraph
-from torch_geometric.utils.num_nodes import maybe_num_nodes
+from torch_geometric.utils import sort_edge_index
 
 # Removed duplicate imports that cause issues with newer torch_geometric versions
-from torch_scatter import scatter_add, scatter_mean
+from torch_scatter import scatter_mean
 from tqdm import tqdm
 from uaag2 import bond_analyze
 import openbabel as ob

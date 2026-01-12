@@ -1,8 +1,5 @@
-from operator import is_
-from os.path import join
 import os
 from pathlib import Path
-from typing import Optional
 import sys
 import numpy as np
 
@@ -12,7 +9,7 @@ sys.path.append("..")
 from rdkit import Chem
 
 import torch
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import hf_hub_download
 
 
 HUGGINGFACE_REPO_ID = "yhsure/uaag2-data"
@@ -65,18 +62,11 @@ def fetch_data(data_dir: str = "data", force: bool = False) -> None:
     print("Data fetch complete!")
 
 
-from torch.utils.data import Subset
-from torch_geometric.data import Dataset, DataLoader, Data
+from torch_geometric.data import DataLoader, Data
 
-from torch_geometric.data.lightning import LightningDataset
 
 # from torch_geometric.data import InMemoryDataset
-from tqdm import tqdm
-from uaag2.data.abstract_dataset import (
-    AbstractDataModule,
-)
 
-from torch_geometric.utils import sort_edge_index
 
 from uaag2.utils import visualize_mol
 import lmdb
