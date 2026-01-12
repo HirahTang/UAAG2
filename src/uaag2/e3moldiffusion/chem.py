@@ -97,7 +97,7 @@ def draw_mol_svg(mol, molSize=(450, 150), kekulize=False):
     if kekulize:
         try:
             Chem.Kekulize(mc)
-        except:
+        except Exception:
             mc = Chem.Mol(mol.ToBinary())
     if not mc.GetNumConformers():
         DP.Compute2DCoords(mc)

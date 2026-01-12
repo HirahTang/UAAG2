@@ -101,7 +101,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             key = f"{idx:08}".encode("ascii")
             byteflow = txn.get(key)
         graph_data = pickle.loads(byteflow)
-        assert isinstance(graph_data, Data), f"Expected torch_geometric.data.Data, got {type(graph)}"
+        assert isinstance(graph_data, Data), f"Expected torch_geometric.data.Data, got {type(graph_data)}"
         # TODO zero center the positions by the mean of the pocket atoms
 
         # graph_data = self.data[idx]
@@ -156,7 +156,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             gaussian_pocket_noise = torch.randn_like(graph_data.pos[reconstruct_mask == 1]) * self.noise_scale
             graph_data.pos[reconstruct_mask == 1] += gaussian_pocket_noise
 
-        reconstruct_size = (graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).item()
+        _reconstruct_size = (graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).item()
 
         # from IPython import embed; embed()
         if self.params.virtual_node:
@@ -552,7 +552,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         # graph_data = self.data[idx]
         pos = batch.pos
         if batch.is_ligand.sum() == len(batch.is_ligand):
-            pocket_mean = pos.mean(dim=0)
+            ligand_mean = pos.mean(dim=0)
         else:
             ligand_pos = batch.pos[batch.is_ligand == 1]
             ligand_mean = ligand_pos.mean(dim=0)
@@ -738,7 +738,7 @@ class UAAG2DataModule(pl.LightningDataModule):
         # TODO
         # Construct the dictionary & distributions for the dataset
 
-        full_length = len(self.train_data) + len(self.val_data) + len(self.test_data)
+        _full_length = len(self.train_data) + len(self.val_data) + len(self.test_data)
 
     def train_dataloader(self, shuffle=True):
         dataloader = DataLoader(

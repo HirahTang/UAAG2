@@ -4,10 +4,6 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-import sys
-
-sys.path.append(".")
-
 from uaag2.utils import zero_mean
 
 

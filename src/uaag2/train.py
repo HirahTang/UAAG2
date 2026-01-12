@@ -1,29 +1,25 @@
 import os
-import sys
-import torch
-import yaml
-
-sys.path.append(".")
-sys.path.append("..")
+import pickle
 import warnings
 from argparse import ArgumentParser
+
 import numpy as np
 import pytorch_lightning as pl
+import torch
+import yaml
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
     ModelCheckpoint,
     ModelSummary,
     TQDMProgressBar,
 )
-from uaag2.data.uaag_dataset import UAAG2DataModule, UAAG2Dataset, Dataset_Info
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+from pytorch_lightning.plugins.environments import LightningEnvironment
+from torch.utils.data import RandomSampler, WeightedRandomSampler
 
 from uaag2.callbacks.ema import ExponentialMovingAverage
+from uaag2.data.uaag_dataset import Dataset_Info, UAAG2DataModule, UAAG2Dataset
 from uaag2.equivariant_diffusion import Trainer
-from pytorch_lightning.plugins.environments import LightningEnvironment
-from torch.utils.data import WeightedRandomSampler, RandomSampler
-
-import pickle
 
 warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
 

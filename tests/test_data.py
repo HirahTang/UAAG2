@@ -5,12 +5,10 @@ import lmdb
 import pytest
 from torch.utils.data import Dataset
 
-param = pytest.mark.parametrize
-
+from tests import _PATH_DATA
 from uaag2.data.uaag_dataset import UAAG2Dataset
 
-from tests import _PATH_DATA
-
+param = pytest.mark.parametrize
 
 DATA_PATH = os.path.join(_PATH_DATA, "pdb_subset.lmdb")
 

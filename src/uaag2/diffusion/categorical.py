@@ -2,9 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 from torch_geometric.utils import sort_edge_index
-import sys
 
-sys.path.append(".")
 from uaag2.diffusion.continuous import get_beta_schedule
 
 DEFAULT_BETAS = get_beta_schedule(kind="cosine", num_diffusion_timesteps=500)
@@ -329,7 +327,7 @@ def _some_debugging():
     absorbing_distribution[0] = 1.0
     absorbing_distribution = torch.tensor([9.5523e-01, 3.0681e-02, 2.0021e-03, 4.4172e-05, 1.2045e-02])
 
-    atoms_drugs = [
+    _atoms_drugs = [
         4.4119e-01,
         1.0254e-06,
         4.0564e-01,
@@ -350,8 +348,8 @@ def _some_debugging():
 
     edges_drugs = [9.5523e-01, 3.0681e-02, 2.0021e-03, 4.4172e-05, 1.2045e-02]
 
-    atoms_qm9 = [0.5122, 0.3526, 0.0562, 0.0777, 0.0013]
-    edges_qm9 = [0.8818, 0.1104, 0.0060, 0.0018, 0.0000]
+    _atoms_qm9 = [0.5122, 0.3526, 0.0562, 0.0777, 0.0013]
+    _edges_qm9 = [0.8818, 0.1104, 0.0060, 0.0018, 0.0000]
 
     C0 = CategoricalDiffusionKernel(terminal_distribution=uniform_distribution, alphas=DEFAULT_ALPHAS)
 
@@ -373,5 +371,5 @@ def _some_debugging():
     ) * C0.terminal_distribution.unsqueeze(0)
 
     print(a - b)
-    Qt = C1.Qt[t]
+    _Qt = C1.Qt[t]
     return None

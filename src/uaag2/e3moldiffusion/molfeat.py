@@ -4,8 +4,7 @@ import torch
 from rdkit import Chem
 from rdkit.Chem import GetPeriodicTable
 from torch import nn
-from torch_geometric.data import Data
-from torch_geometric.data import Data, Batch
+from torch_geometric.data import Batch, Data
 
 
 PERIODIC_TABLE = GetPeriodicTable()
@@ -65,14 +64,14 @@ def atom_type_config(dataset: str = "qm9"):
     return mapping
 
 
-def safe_index(l, e):
+def safe_index(lst, e):
     """
-    Return index of element e in list l. If e is not present, return the last index
+    Return index of element e in list lst. If e is not present, return the last index
     """
     try:
-        return l.index(e)
-    except:
-        return len(l) - 1
+        return lst.index(e)
+    except ValueError:
+        return len(lst) - 1
 
 
 def atom_to_feature_vector(atom):

@@ -1,28 +1,23 @@
+import json
 import math
 import os
+
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
 import numpy as np
+import openbabel as ob
 import torch
 import torch.nn.functional as F
 from rdkit import Chem
 from torch_geometric.data import Data
 from torch_geometric.utils import sort_edge_index
-
-# Removed duplicate imports that cause issues with newer torch_geometric versions
 from torch_scatter import scatter_mean
 from tqdm import tqdm
+
 from uaag2 import bond_analyze
-import openbabel as ob
-import json
 
 obConversion = ob.OBConversion()
 obConversion.SetInAndOutFormats("xyz", "mol")
-# from torch_sparse import coalesces
-import sys
-
-sys.path.append(".")
-sys.path.append("..")
 
 with open("data/aa_graph.json", "rb") as json_file:
     AA_GRAPH_DICT = json.load(json_file)
@@ -55,7 +50,7 @@ def load_data(hparams, data_path: list, pdb_list: list) -> Data:
     np.random.shuffle(pdb_list)
     num_data = len(data)
     num_train = math.floor(num_data * hparams.train_size)
-    num_val = math.floor(num_data * hparams.val_size)
+    _num_val = math.floor(num_data * hparams.val_size)
     num_test = hparams.test_size
 
     train_data = data[:num_train]
@@ -206,14 +201,14 @@ def check_sanitize_connectivity(mol_file):
     mol = Chem.MolFromMolFile(mol_file)
     try:
         atoms = [atom.GetIdx() for atom in mol.GetAtoms()]
-    except:
+    except (AttributeError, TypeError):
         return False, False
     bonds = [(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) for bond in mol.GetBonds()]
     connected_mol = is_connected_molecule(atoms, bonds)
     try:
         Chem.SanitizeMol(mol)
         sanitized = True
-    except:
+    except Exception:
         sanitized = False
 
     return connected_mol, sanitized
@@ -265,7 +260,7 @@ def visualize_mol_bond_abandoned(pos, atoms, bonds, edge_index, edge_decoder, va
     try:
         Chem.SanitizeMol(final_mol)
         sanitized = True
-    except:
+    except Exception:
         sanitized = False
 
     mol_block = Chem.MolToMolBlock(final_mol)
@@ -327,7 +322,7 @@ def visualize_mol(atom_sets, val_check=False):
     try:
         Chem.SanitizeMol(final_mol)
         sanitized = True
-    except:
+    except Exception:
         sanitized = False
 
     mol_block = Chem.MolToMolBlock(final_mol)
@@ -374,7 +369,7 @@ def convert_edge_to_bond(
     ligand_edge_attr = out_dict["bonds_pred"].argmax(dim=-1)
 
     start_idx_ligand = 0
-    start_idx_backbone = 0
+    _start_idx_backbone = 0
     start_idx_edge = 0
 
     for i in range(len(backbone_size)):
@@ -387,7 +382,7 @@ def convert_edge_to_bond(
 
         ligand_atom_idx = batch_atom_idx_ligand[start_idx_ligand:end_idx_ligand_atom]
         ligand_bond_idx = ligand_edge_index[:, start_idx_edge:end_idx_ligand_edge]
-        ligand_bond_attr = ligand_edge_attr[start_idx_edge:end_idx_ligand_edge]
+        _ligand_bond_attr = ligand_edge_attr[start_idx_edge:end_idx_ligand_edge]
 
         ligand_pos_batch = batch_pos[ligand_atom_idx]
         ligand_atom_batch = batch_atom_type[ligand_atom_idx]
@@ -517,7 +512,7 @@ def get_molecules(
             pocket_mol_block = visualize_mol(pocket_set, val_check=False)
             with open(os.path.join(path_batch, "pocket.mol"), "w") as f:
                 f.write(pocket_mol_block)
-        except:
+        except Exception:
             print("Pocket is empty")
             pass
     return connected_list, sanitized_list

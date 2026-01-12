@@ -1,14 +1,10 @@
 import os
-import sys
 import warnings
 from argparse import ArgumentParser
 
 import torch
 import yaml
 from torch_geometric.data import DataLoader
-
-sys.path.append(".")
-sys.path.append("..")
 
 from uaag2.data.uaag_dataset import Dataset_Info, UAAG2Dataset_sampling
 from uaag2.equivariant_diffusion import Trainer

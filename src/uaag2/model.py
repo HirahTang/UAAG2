@@ -1,10 +1,9 @@
+import json
 import logging
 import os
-from datetime import datetime
-import json
 import sys
+from datetime import datetime
 
-sys.path.append(".")
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -12,19 +11,17 @@ from torch import Tensor
 from torch_geometric.data import Batch
 from tqdm import tqdm
 
-from uaag2.e3moldiffusion.coordsatomsbonds import DenoisingEdgeNetwork
-from uaag2.diffusion.continuous import DiscreteDDPM
-
 from uaag2.diffusion.categorical import CategoricalDiffusionKernel
-from uaag2.utils import (
-    load_model,
-    initialize_edge_attrs_reverse,
-    write_xyz_file_from_batch,
-    get_molecules,
-    convert_edge_to_bond,
-)
-
+from uaag2.diffusion.continuous import DiscreteDDPM
+from uaag2.e3moldiffusion.coordsatomsbonds import DenoisingEdgeNetwork
 from uaag2.losses import DiffusionLoss
+from uaag2.utils import (
+    convert_edge_to_bond,
+    get_molecules,
+    initialize_edge_attrs_reverse,
+    load_model,
+    write_xyz_file_from_batch,
+)
 
 
 logging.getLogger("lightning").setLevel(logging.WARNING)
@@ -366,7 +363,7 @@ class Trainer(pl.LightningModule):
         elif self.hparams.loss_weighting == "uniform":
             weights = None
 
-        pocket_mask = (1 - batch.is_ligand + batch.is_backbone).long()
+        _pocket_mask = (1 - batch.is_ligand + batch.is_backbone).long()
         ligand_mask = (batch.is_ligand - batch.is_backbone).long()
 
         # skip the current batch if batch.x.shape[0] > 1600
@@ -474,8 +471,8 @@ class Trainer(pl.LightningModule):
         bond_edge_index = batch.edge_index
         bond_edge_attr = batch.edge_attr
 
-        n = batch.num_nodes
-        bs = batch.batch.max() + 1
+        _n = batch.num_nodes
+        _bs = batch.batch.max() + 1
 
         ring_feat = batch.is_in_ring
         aromatic_feat = batch.is_aromatic
@@ -739,16 +736,16 @@ class Trainer(pl.LightningModule):
             num_graphs = len(batch.batch.bincount())
 
             if not self.hparams.variational_sampling and not self.hparams.virtual_node:
-                num_nodes_lig = batch.ligand_size
+                _num_nodes_lig = batch.ligand_size
             elif self.hparams.virtual_node:
                 print("Using virtual node sampling")
                 # get the self.hparams.max_virtual_nodes and make it the same shape as batch.ligand_size
 
-                num_nodes_lig = torch.tensor([self.hparams.max_virtual_nodes] * batch.ligand_size.shape[0])
+                _num_nodes_lig = torch.tensor([self.hparams.max_virtual_nodes] * batch.ligand_size.shape[0])
             else:
                 # TODO: Implement sampling from empirical distribution
                 # Sampling from empirical distribution, not implemented yet
-                num_nodes_lig = torch.randint(
+                _num_nodes_lig = torch.randint(
                     low=dataset_info.min_num_nodes,
                     high=dataset_info.max_num_nodes + 1,
                     size=(num_graphs,),
@@ -896,7 +893,7 @@ class Trainer(pl.LightningModule):
         atom_types = F.one_hot(atom_types, num_classes=self.num_atom_types).float()
 
         charge_types = torch.multinomial(self.charges_prior, num_samples=n, replacement=True).to(self.device)
-        charge_types_ligand = batch.charges[reconstruct_mask == 1]
+        _charge_types_ligand = batch.charges[reconstruct_mask == 1]
 
         compound_charges = batch.charges.long().to(self.device)
         compound_charges[reconstruct_mask == 1] = charge_types
@@ -905,7 +902,7 @@ class Trainer(pl.LightningModule):
 
         # ring
         ring_feat = torch.multinomial(self.is_in_ring_prior, num_samples=n, replacement=True).to(self.device)
-        ring_feat_ligand = batch.is_in_ring[reconstruct_mask == 1]
+        _ring_feat_ligand = batch.is_in_ring[reconstruct_mask == 1]
 
         compound_ring_feat = batch.is_in_ring.long().to(self.device)
         compound_ring_feat[reconstruct_mask == 1] = ring_feat
@@ -914,7 +911,7 @@ class Trainer(pl.LightningModule):
 
         # aromatic
         aromatic_feat = torch.multinomial(self.is_aromatic_prior, num_samples=n, replacement=True).to(self.device)
-        aromatic_feat_ligand = batch.is_aromatic[reconstruct_mask == 1]
+        _aromatic_feat_ligand = batch.is_aromatic[reconstruct_mask == 1]
 
         compound_aromatic_feat = batch.is_aromatic.long().to(self.device)
         compound_aromatic_feat[reconstruct_mask == 1] = aromatic_feat
@@ -925,7 +922,7 @@ class Trainer(pl.LightningModule):
         hybridization_feat = torch.multinomial(self.hybridization_prior, num_samples=n, replacement=True).to(
             self.device
         )
-        hybridization_feat_ligand = batch.hybridization[reconstruct_mask == 1]
+        _hybridization_feat_ligand = batch.hybridization[reconstruct_mask == 1]
 
         compound_hybridization_feat = batch.hybridization.long().to(self.device)
         compound_hybridization_feat[reconstruct_mask == 1] = hybridization_feat
@@ -934,7 +931,7 @@ class Trainer(pl.LightningModule):
 
         # degree
         degree_feat = torch.multinomial(self.degree_prior, num_samples=n, replacement=True).to(self.device)
-        degree_feat_ligand = batch.degree[reconstruct_mask == 1]
+        _degree_feat_ligand = batch.degree[reconstruct_mask == 1]
 
         compound_degree_feat = batch.degree.long().to(self.device)
         compound_degree_feat[reconstruct_mask == 1] = degree_feat
@@ -942,7 +939,7 @@ class Trainer(pl.LightningModule):
         degree_feat = F.one_hot(degree_feat, num_classes=self.num_degree).float()
 
         edge_index_ligand = batch.edge_index.t()[batch.edge_ligand == 1].t()
-        edge_attr_ligand = batch.edge_attr[batch.edge_ligand == 1]
+        _edge_attr_ligand = batch.edge_attr[batch.edge_ligand == 1]
 
         (
             edge_attr_global_lig,
@@ -980,10 +977,10 @@ class Trainer(pl.LightningModule):
 
         pocket_mask = (1 - batch.is_ligand + batch.is_backbone).long()
 
-        pos_traj = []
-        atom_type_traj = []
-        charge_type_traj = []
-        edge_type_traj = []
+        _pos_traj = []
+        _atom_type_traj = []
+        _charge_type_traj = []
+        _edge_type_traj = []
 
         if self.hparams.continuous_param == "data":
             chain = range(0, self.hparams.timesteps)
