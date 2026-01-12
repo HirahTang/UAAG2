@@ -96,7 +96,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             key = f"{idx:08}".encode("ascii")
             byteflow = txn.get(key)
         graph_data = pickle.loads(byteflow)
-        assert isinstance(graph_data, Data), f"Expected torch_geometric.data.Data, got {type(graph)}"
+        assert isinstance(graph_data, Data), f"Expected torch_geometric.data.Data, got {type(graph_data)}"
         # TODO zero center the positions by the mean of the pocket atoms
 
         # graph_data = self.data[idx]

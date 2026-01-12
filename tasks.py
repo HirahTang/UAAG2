@@ -15,9 +15,98 @@ def preprocess_data(ctx: Context) -> None:
 
 
 @task
-def train(ctx: Context) -> None:
+def train(
+    ctx: Context,
+    batch_size: int = 8,
+    num_epochs: int = 5000,
+    train_size: float = 0.99,
+    test_size: int = 32,
+    lr: float = 5e-4,
+    max_virtual_nodes: int = 5,
+    mask_rate: float = 0.0,
+    num_layers: int = 7,
+    gpus: int = 1,
+    logger_type: str = "wandb",
+    save_dir: str = "models/",
+    data_path: str = "data/pdb_subset.lmdb",
+    data_info_path: str = "data/statistic.pkl",
+    pdbbind_weight: float = 10.0,
+    use_metadata_sampler: bool = False,
+    experiment_id: str = "",
+) -> None:
     """Train model."""
-    ctx.run(f"uv run src/{PROJECT_NAME}/train.py", echo=True, pty=not WINDOWS)
+    import datetime
+
+    if not experiment_id:
+        experiment_id = f"uaag2_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    sampler_flag = "--use-metadata-sampler" if use_metadata_sampler else "--no-metadata-sampler"
+
+    ctx.run(
+        f"uv run src/{PROJECT_NAME}/train.py "
+        f"--logger-type {logger_type} "
+        f"--batch-size {batch_size} "
+        f"--gpus {gpus} "
+        f"--num-epochs {num_epochs} "
+        f"--train-size {train_size} "
+        f"--test-size {test_size} "
+        f"--lr {lr} "
+        f"--mask-rate {mask_rate} "
+        f"--max-virtual-nodes {max_virtual_nodes} "
+        f"--num-layers {num_layers} "
+        f"--pdbbind-weight {pdbbind_weight} "
+        f"--training_data {data_path} "
+        f"--data_info_path {data_info_path} "
+        f"--save-dir {save_dir} "
+        f"--id {experiment_id} "
+        f"{sampler_flag}",
+        echo=True,
+        pty=not WINDOWS,
+    )
+
+
+@task
+def evaluate(
+    ctx: Context,
+    load_ckpt: str = "",
+    benchmark_path: str = "data/benchmarks/ENVZ_ECOLI.pt",
+    data_info_path: str = "data/statistic.pkl",
+    save_dir: str = "ProteinGymSampling",
+    batch_size: int = 32,
+    num_samples: int = 500,
+    virtual_node_size: int = 15,
+    split_index: int = 0,
+    num_workers: int = 4,
+    num_layers: int = 7,
+    logger_type: str = "wandb",
+    experiment_id: str = "",
+) -> None:
+    """Evaluate model on benchmark."""
+    import datetime
+
+    if not load_ckpt:
+        raise ValueError("--load-ckpt is required for evaluation")
+
+    if not experiment_id:
+        experiment_id = f"eval_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    ctx.run(
+        f"uv run src/{PROJECT_NAME}/evaluate.py "
+        f"--load-ckpt {load_ckpt} "
+        f"--benchmark-path {benchmark_path} "
+        f"--data_info_path {data_info_path} "
+        f"--save-dir {save_dir} "
+        f"--batch-size {batch_size} "
+        f"--num-samples {num_samples} "
+        f"--virtual_node_size {virtual_node_size} "
+        f"--split_index {split_index} "
+        f"--num-workers {num_workers} "
+        f"--num-layers {num_layers} "
+        f"--logger-type {logger_type} "
+        f"--id {experiment_id}",
+        echo=True,
+        pty=not WINDOWS,
+    )
 
 
 @task
