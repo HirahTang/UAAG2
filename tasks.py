@@ -9,6 +9,47 @@ PYTHON_VERSION = "3.12"
 
 # Project commands
 @task
+def fetch_data(ctx: Context, data_dir: str = "data", force: bool = False) -> None:
+    """Fetch protein data from Hugging Face Hub."""
+    # Note: We inline the fetch logic here to avoid importing uaag2 package,
+    # which requires data files to exist during import.
+    fetch_script = f'''
+from pathlib import Path
+from huggingface_hub import hf_hub_download
+
+HUGGINGFACE_REPO_ID = "yhsure/uaag2-data"
+data_path = Path("{data_dir}")
+data_path.mkdir(parents=True, exist_ok=True)
+force = {force}
+
+files = [
+    "aa_graph.json",
+    "statistic.pkl",
+    "pdb_subset.lmdb",
+    "benchmarks/ENVZ_ECOLI.pt",
+]
+
+print(f"Fetching data from Hugging Face: {{HUGGINGFACE_REPO_ID}}")
+for filename in files:
+    local_path = data_path / filename
+    if local_path.exists() and not force:
+        print(f"  Skipping {{filename}} (already exists)")
+        continue
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"  Downloading {{filename}}...")
+    hf_hub_download(
+        repo_id=HUGGINGFACE_REPO_ID,
+        filename=filename,
+        repo_type="dataset",
+        local_dir=data_path,
+    )
+    print(f"  Downloaded {{filename}}")
+print("Data fetch complete!")
+'''
+    ctx.run(f'uv run python -c \'{fetch_script}\'', echo=True, pty=not WINDOWS)
+
+
+@task
 def preprocess_data(ctx: Context) -> None:
     """Preprocess data."""
     ctx.run(f"uv run src/{PROJECT_NAME}/data.py data/raw data/processed", echo=True, pty=not WINDOWS)
