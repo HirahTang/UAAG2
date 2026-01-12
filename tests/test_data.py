@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 
-from uaag2.data import MyDataset
+from uaag2.data import UAAG2Dataset
 
 
 def test_my_dataset():
