@@ -8,6 +8,10 @@ wheels/
 .vscode/
 wandb/
 
+# Model outputs
+models/
+3DcoordsAtomsBonds*/
+
 data/*
 !data/aa_graph.json
 !data/statistic.pkl
