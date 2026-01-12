@@ -363,7 +363,6 @@ class Trainer(pl.LightningModule):
         elif self.hparams.loss_weighting == "uniform":
             weights = None
 
-        _pocket_mask = (1 - batch.is_ligand + batch.is_backbone).long()
         ligand_mask = (batch.is_ligand - batch.is_backbone).long()
 
         # skip the current batch if batch.x.shape[0] > 1600
@@ -470,9 +469,6 @@ class Trainer(pl.LightningModule):
         data_batch: Tensor = batch.batch
         bond_edge_index = batch.edge_index
         bond_edge_attr = batch.edge_attr
-
-        _n = batch.num_nodes
-        _bs = batch.batch.max() + 1
 
         ring_feat = batch.is_in_ring
         aromatic_feat = batch.is_aromatic
@@ -733,23 +729,6 @@ class Trainer(pl.LightningModule):
         start = datetime.now()
 
         for i, batch in enumerate(dataloader):
-            num_graphs = len(batch.batch.bincount())
-
-            if not self.hparams.variational_sampling and not self.hparams.virtual_node:
-                _num_nodes_lig = batch.ligand_size
-            elif self.hparams.virtual_node:
-                print("Using virtual node sampling")
-                # get the self.hparams.max_virtual_nodes and make it the same shape as batch.ligand_size
-
-                _num_nodes_lig = torch.tensor([self.hparams.max_virtual_nodes] * batch.ligand_size.shape[0])
-            else:
-                # TODO: Implement sampling from empirical distribution
-                # Sampling from empirical distribution, not implemented yet
-                _num_nodes_lig = torch.randint(
-                    low=dataset_info.min_num_nodes,
-                    high=dataset_info.max_num_nodes + 1,
-                    size=(num_graphs,),
-                )
             molecules, connected_ele, sanitized_ele = self.reverse_sampling(
                 batch=batch,
                 device=device,
@@ -893,8 +872,6 @@ class Trainer(pl.LightningModule):
         atom_types = F.one_hot(atom_types, num_classes=self.num_atom_types).float()
 
         charge_types = torch.multinomial(self.charges_prior, num_samples=n, replacement=True).to(self.device)
-        _charge_types_ligand = batch.charges[reconstruct_mask == 1]
-
         compound_charges = batch.charges.long().to(self.device)
         compound_charges[reconstruct_mask == 1] = charge_types
         compound_charges = F.one_hot(compound_charges, num_classes=self.num_charge_classes).float()
@@ -902,7 +879,6 @@ class Trainer(pl.LightningModule):
 
         # ring
         ring_feat = torch.multinomial(self.is_in_ring_prior, num_samples=n, replacement=True).to(self.device)
-        _ring_feat_ligand = batch.is_in_ring[reconstruct_mask == 1]
 
         compound_ring_feat = batch.is_in_ring.long().to(self.device)
         compound_ring_feat[reconstruct_mask == 1] = ring_feat
@@ -911,7 +887,6 @@ class Trainer(pl.LightningModule):
 
         # aromatic
         aromatic_feat = torch.multinomial(self.is_aromatic_prior, num_samples=n, replacement=True).to(self.device)
-        _aromatic_feat_ligand = batch.is_aromatic[reconstruct_mask == 1]
 
         compound_aromatic_feat = batch.is_aromatic.long().to(self.device)
         compound_aromatic_feat[reconstruct_mask == 1] = aromatic_feat
@@ -922,7 +897,6 @@ class Trainer(pl.LightningModule):
         hybridization_feat = torch.multinomial(self.hybridization_prior, num_samples=n, replacement=True).to(
             self.device
         )
-        _hybridization_feat_ligand = batch.hybridization[reconstruct_mask == 1]
 
         compound_hybridization_feat = batch.hybridization.long().to(self.device)
         compound_hybridization_feat[reconstruct_mask == 1] = hybridization_feat
@@ -931,7 +905,6 @@ class Trainer(pl.LightningModule):
 
         # degree
         degree_feat = torch.multinomial(self.degree_prior, num_samples=n, replacement=True).to(self.device)
-        _degree_feat_ligand = batch.degree[reconstruct_mask == 1]
 
         compound_degree_feat = batch.degree.long().to(self.device)
         compound_degree_feat[reconstruct_mask == 1] = degree_feat
@@ -939,7 +912,6 @@ class Trainer(pl.LightningModule):
         degree_feat = F.one_hot(degree_feat, num_classes=self.num_degree).float()
 
         edge_index_ligand = batch.edge_index.t()[batch.edge_ligand == 1].t()
-        _edge_attr_ligand = batch.edge_attr[batch.edge_ligand == 1]
 
         (
             edge_attr_global_lig,
@@ -976,11 +948,6 @@ class Trainer(pl.LightningModule):
         )
 
         pocket_mask = (1 - batch.is_ligand + batch.is_backbone).long()
-
-        _pos_traj = []
-        _atom_type_traj = []
-        _charge_type_traj = []
-        _edge_type_traj = []
 
         if self.hparams.continuous_param == "data":
             chain = range(0, self.hparams.timesteps)

@@ -156,8 +156,6 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             gaussian_pocket_noise = torch.randn_like(graph_data.pos[reconstruct_mask == 1]) * self.noise_scale
             graph_data.pos[reconstruct_mask == 1] += gaussian_pocket_noise
 
-        _reconstruct_size = (graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).item()
-
         # from IPython import embed; embed()
         if self.params.virtual_node:
             # adding random n of virtual nodes by the maximum max-virtual-node
@@ -737,8 +735,7 @@ class UAAG2DataModule(pl.LightningDataModule):
     def setup(self, stage):
         # TODO
         # Construct the dictionary & distributions for the dataset
-
-        _full_length = len(self.train_data) + len(self.val_data) + len(self.test_data)
+        pass
 
     def train_dataloader(self, shuffle=True):
         dataloader = DataLoader(

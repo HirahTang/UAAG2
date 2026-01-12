@@ -327,33 +327,7 @@ def _some_debugging():
     absorbing_distribution[0] = 1.0
     absorbing_distribution = torch.tensor([9.5523e-01, 3.0681e-02, 2.0021e-03, 4.4172e-05, 1.2045e-02])
 
-    _atoms_drugs = [
-        4.4119e-01,
-        1.0254e-06,
-        4.0564e-01,
-        6.4677e-02,
-        6.6144e-02,
-        4.8741e-03,
-        0.0000e00,
-        9.1150e-07,
-        1.0847e-04,
-        1.2260e-02,
-        4.0306e-03,
-        0.0000e00,
-        1.0503e-03,
-        1.9806e-05,
-        0.0000e00,
-        7.5958e-08,
-    ]
-
-    edges_drugs = [9.5523e-01, 3.0681e-02, 2.0021e-03, 4.4172e-05, 1.2045e-02]
-
-    _atoms_qm9 = [0.5122, 0.3526, 0.0562, 0.0777, 0.0013]
-    _edges_qm9 = [0.8818, 0.1104, 0.0060, 0.0018, 0.0000]
-
     C0 = CategoricalDiffusionKernel(terminal_distribution=uniform_distribution, alphas=DEFAULT_ALPHAS)
-
-    C1 = CategoricalDiffusionKernel(terminal_distribution=torch.tensor(edges_drugs), alphas=DEFAULT_ALPHAS)
 
     t = 290
     a = C0.Qt_bar[t]
@@ -371,5 +345,4 @@ def _some_debugging():
     ) * C0.terminal_distribution.unsqueeze(0)
 
     print(a - b)
-    _Qt = C1.Qt[t]
     return None

@@ -50,7 +50,6 @@ def load_data(hparams, data_path: list, pdb_list: list) -> Data:
     np.random.shuffle(pdb_list)
     num_data = len(data)
     num_train = math.floor(num_data * hparams.train_size)
-    _num_val = math.floor(num_data * hparams.val_size)
     num_test = hparams.test_size
 
     train_data = data[:num_train]
@@ -366,10 +365,7 @@ def convert_edge_to_bond(
     ligand_size = batch.batch[batch.is_ligand == 1].bincount()
     edge_size = ligand_edge_batches.bincount()
 
-    ligand_edge_attr = out_dict["bonds_pred"].argmax(dim=-1)
-
     start_idx_ligand = 0
-    _start_idx_backbone = 0
     start_idx_edge = 0
 
     for i in range(len(backbone_size)):
@@ -382,7 +378,6 @@ def convert_edge_to_bond(
 
         ligand_atom_idx = batch_atom_idx_ligand[start_idx_ligand:end_idx_ligand_atom]
         ligand_bond_idx = ligand_edge_index[:, start_idx_edge:end_idx_ligand_edge]
-        _ligand_bond_attr = ligand_edge_attr[start_idx_edge:end_idx_ligand_edge]
 
         ligand_pos_batch = batch_pos[ligand_atom_idx]
         ligand_atom_batch = batch_atom_type[ligand_atom_idx]
