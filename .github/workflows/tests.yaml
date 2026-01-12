@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, mlops]
   pull_request:
+    branches: [main, mlops]
 jobs:
   test:
     runs-on: ${{ matrix.operating-system }}
