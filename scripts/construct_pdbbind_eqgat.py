@@ -1,11 +1,10 @@
 import sys
-
-sys.path.append(".")
 import json
 import pickle
 from tqdm import tqdm
 import os
-import pickle
+
+sys.path.append(".")
 
 
 radius = 10

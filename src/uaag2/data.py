@@ -1,15 +1,17 @@
 import os
 from pathlib import Path
-import sys
 import numpy as np
-
-sys.path.append(".")
-sys.path.append("..")
 
 from rdkit import Chem
 
 import torch
 from huggingface_hub import hf_hub_download
+
+from torch_geometric.data import DataLoader, Data
+from uaag2.utils import visualize_mol
+import lmdb
+import pytorch_lightning as pl
+import pickle
 
 
 HUGGINGFACE_REPO_ID = "yhsure/uaag2-data"
@@ -60,20 +62,6 @@ def fetch_data(data_dir: str = "data", force: bool = False) -> None:
         print(f"  Downloaded {filename}")
 
     print("Data fetch complete!")
-
-
-from torch_geometric.data import DataLoader, Data
-
-
-# from torch_geometric.data import InMemoryDataset
-
-
-from uaag2.utils import visualize_mol
-import lmdb
-import pytorch_lightning as pl
-import pickle
-# from experiments.data.geom.geom_dataset_adaptive import GeomDrugsDataset
-# from experiments.data.utils import train_subset
 
 
 class UAAG2Dataset(torch.utils.data.Dataset):
@@ -194,7 +182,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             gaussian_pocket_noise = torch.randn_like(graph_data.pos[reconstruct_mask == 1]) * self.noise_scale
             graph_data.pos[reconstruct_mask == 1] += gaussian_pocket_noise
 
-        reconstruct_size = (graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).item()
+        # reconstruct_size = (graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).item()
 
         # from IPython import embed; embed()
         if self.params.virtual_node:
@@ -590,7 +578,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         # graph_data = self.data[idx]
         pos = batch.pos
         if batch.is_ligand.sum() == len(batch.is_ligand):
-            pocket_mean = pos.mean(dim=0)
+            ligand_mean = pos.mean(dim=0)
         else:
             ligand_pos = batch.pos[batch.is_ligand == 1]
             ligand_mean = ligand_pos.mean(dim=0)
@@ -776,7 +764,7 @@ class UAAG2DataModule(pl.LightningDataModule):
         # TODO
         # Construct the dictionary & distributions for the dataset
 
-        full_length = len(self.train_data) + len(self.val_data) + len(self.test_data)
+        _full_length = len(self.train_data) + len(self.val_data) + len(self.test_data)
 
     def train_dataloader(self, shuffle=True):
         dataloader = DataLoader(

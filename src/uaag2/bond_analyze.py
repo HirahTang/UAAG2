@@ -202,10 +202,10 @@ def single_bond_only(threshold, length, margin1=5):
     return 0
 
 
-def geom_predictor(p, l, margin1=5, limit_bonds_to_one=False):
+def geom_predictor(p, L, margin1=5, limit_bonds_to_one=False):
     """p: atom pair (couple of str)
-    l: bond length (float)"""
-    bond_order = get_bond_order(p[0], p[1], l, check_exists=True)
+    L: bond length (float)"""
+    bond_order = get_bond_order(p[0], p[1], L, check_exists=True)
 
     # If limit_bonds_to_one is enabled, every bond type will return 1.
     if limit_bonds_to_one:
