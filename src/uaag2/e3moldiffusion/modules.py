@@ -163,7 +163,7 @@ class LayerNorm(nn.Module):
         return out
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(dims={self.dims}, " f"affine={self.affine})"
+        return f"{self.__class__.__name__}(dims={self.dims}, affine={self.affine})"
 
 
 class AdaptiveLayerNorm(nn.Module):
@@ -223,7 +223,7 @@ class AdaptiveLayerNorm(nn.Module):
         return out
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(dims={self.dims}, " f"affine={self.affine})"
+        return f"{self.__class__.__name__}(dims={self.dims}, affine={self.affine})"
 
 
 class SE3Norm(nn.Module):
