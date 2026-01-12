@@ -64,6 +64,7 @@ def fetch_data(data_dir: str = "data", force: bool = False) -> None:
 
     print("Data fetch complete!")
 
+
 from torch.utils.data import Subset
 from torch_geometric.data import Dataset, DataLoader, Data
 

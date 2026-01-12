@@ -13,7 +13,7 @@ def fetch_data(ctx: Context, data_dir: str = "data", force: bool = False) -> Non
     """Fetch protein data from Hugging Face Hub."""
     # Note: We inline the fetch logic here to avoid importing uaag2 package,
     # which requires data files to exist during import.
-    fetch_script = f'''
+    fetch_script = f"""
 from pathlib import Path
 from huggingface_hub import hf_hub_download
 
@@ -45,8 +45,8 @@ for filename in files:
     )
     print(f"  Downloaded {{filename}}")
 print("Data fetch complete!")
-'''
-    ctx.run(f'uv run python -c \'{fetch_script}\'', echo=True, pty=not WINDOWS)
+"""
+    ctx.run(f"uv run python -c '{fetch_script}'", echo=True, pty=not WINDOWS)
 
 
 @task
