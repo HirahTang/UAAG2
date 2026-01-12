@@ -31,22 +31,14 @@ class PredictionHeadEdge(nn.Module):
         self.sdim, self.vdim = hn_dim
         self.num_atom_features = num_atom_features
 
-        self.shared_mapping = DenseLayer(
-            self.sdim, self.sdim, bias=True, activation=nn.SiLU()
-        )
+        self.shared_mapping = DenseLayer(self.sdim, self.sdim, bias=True, activation=nn.SiLU())
 
         self.bond_mapping = DenseLayer(edge_dim, self.sdim, bias=True)
 
-        self.bonds_lin_0 = DenseLayer(
-            in_features=self.sdim + 1, out_features=self.sdim, bias=True
-        )
-        self.bonds_lin_1 = DenseLayer(
-            in_features=self.sdim, out_features=num_bond_types, bias=True
-        )
+        self.bonds_lin_0 = DenseLayer(in_features=self.sdim + 1, out_features=self.sdim, bias=True)
+        self.bonds_lin_1 = DenseLayer(in_features=self.sdim, out_features=num_bond_types, bias=True)
         self.coords_lin = DenseLayer(in_features=self.vdim, out_features=1, bias=False)
-        self.atoms_lin = DenseLayer(
-            in_features=self.sdim, out_features=num_atom_features, bias=True
-        )
+        self.atoms_lin = DenseLayer(in_features=self.sdim, out_features=num_atom_features, bias=True)
 
         self.coords_param = coords_param
 
@@ -90,39 +82,30 @@ class PredictionHeadEdge(nn.Module):
         if self.coords_param == "data":
             # s = s[pocket_mask.squeeze()==0, :]
             if edge_mask is not None:
-                j, i = edge_index_global[:, edge_mask==1]
+                j, i = edge_index_global[:, edge_mask == 1]
             else:
                 j, i = edge_index_global
-            
-            
+
             n = s.size(0)
             coords_pred = p + coords_pred
 
             # coords_pred = (
             #     coords_pred - scatter_mean(coords_pred, index=batch_lig, dim=0)[batch_lig]
             # )
-            d = (
-                (coords_pred[i] - coords_pred[j]).pow(2).sum(-1, keepdim=True)
-            )  # .sqrt()
+            d = (coords_pred[i] - coords_pred[j]).pow(2).sum(-1, keepdim=True)  # .sqrt()
         else:
             if edge_mask is not None:
-                j, i = edge_index_global[:, edge_mask==1]
+                j, i = edge_index_global[:, edge_mask == 1]
             else:
                 j, i = edge_index_global
-            atoms_pred = atoms_pred[pocket_mask.squeeze()==0, :]
-            coords_pred = coords_pred[pocket_mask.squeeze()==0, :]
-            p = p[pocket_mask.squeeze()==0, :]
+            atoms_pred = atoms_pred[pocket_mask.squeeze() == 0, :]
+            coords_pred = coords_pred[pocket_mask.squeeze() == 0, :]
+            p = p[pocket_mask.squeeze() == 0, :]
             n = s.size(0)
             d = (p[i] - p[j]).pow(2).sum(-1, keepdim=True)  # .sqrt()
-            coords_pred = (
-                coords_pred - scatter_mean(coords_pred, index=batch, dim=0)[batch]
-            )
-
+            coords_pred = coords_pred - scatter_mean(coords_pred, index=batch, dim=0)[batch]
 
         if edge_mask is not None and edge_index_global_lig is not None:
-            
-            
-            
             n = len(batch_lig)
             e = (e * edge_mask.unsqueeze(1))[edge_mask]
             e_dense = torch.zeros(n, n, e.size(-1), device=e.device)
@@ -134,19 +117,14 @@ class PredictionHeadEdge(nn.Module):
             e_dense[edge_index_global[0], edge_index_global[1], :] = e
             e_dense = 0.5 * (e_dense + e_dense.permute(1, 0, 2))
             e = e_dense[edge_index_global[0], edge_index_global[1], :]
-        
 
-        
         if edge_mask is not None and pocket_mask is not None:
-            
-            e = e[edge_mask==1]
+            e = e[edge_mask == 1]
             # d = d[edge_mask==1]
-            
-            atoms_pred = atoms_pred[pocket_mask.squeeze()==0, :]
-            coords_pred = coords_pred[pocket_mask.squeeze()==0, :]
-            
-            
-            
+
+            atoms_pred = atoms_pred[pocket_mask.squeeze() == 0, :]
+            coords_pred = coords_pred[pocket_mask.squeeze() == 0, :]
+
         f = s[i] + s[j] + self.bond_mapping(e)
         edge = torch.cat([f, d], dim=-1)
 
@@ -172,12 +150,8 @@ class PropertyPredictionHead(nn.Module):
         self.sdim, self.vdim = hn_dim
         self.num_context_features = num_context_features
 
-        self.scalar_mapping = DenseLayer(
-            self.sdim, self.sdim, bias=True, activation=nn.SiLU()
-        )
-        self.vector_mapping = DenseLayer(
-            in_features=self.vdim, out_features=self.sdim, bias=False
-        )
+        self.scalar_mapping = DenseLayer(self.sdim, self.sdim, bias=True, activation=nn.SiLU())
+        self.vector_mapping = DenseLayer(in_features=self.vdim, out_features=self.sdim, bias=False)
 
         self.output_network = nn.ModuleList(
             [
@@ -187,9 +161,7 @@ class PropertyPredictionHead(nn.Module):
                     activation="silu",
                     scalar_activation=True,
                 ),
-                GatedEquivariantBlock(
-                    self.sdim // 2, num_context_features, activation="silu"
-                ),
+                GatedEquivariantBlock(self.sdim // 2, num_context_features, activation="silu"),
             ]
         )
 
@@ -210,6 +182,7 @@ class PropertyPredictionHead(nn.Module):
         out = s + v.sum() * 0
 
         return out
+
 
 # the network we are using
 class DenoisingEdgeNetwork(nn.Module):
@@ -339,9 +312,7 @@ class DenoisingEdgeNetwork(nn.Module):
             self.bond_mapping.reset_parameters()
         self.time_mapping_atom.reset_parameters()
         self.atom_time_mapping.reset_parameters()
-        if self.context_mapping and hasattr(
-            self.atom_context_mapping, "reset_parameters"
-        ):
+        if self.context_mapping and hasattr(self.atom_context_mapping, "reset_parameters"):
             self.atom_context_mapping.reset_parameters()
         if self.context_mapping and hasattr(self.context_mapping, "reset_parameters"):
             self.context_mapping.reset_parameters()
@@ -414,19 +385,10 @@ class DenoisingEdgeNetwork(nn.Module):
 
         if self.bond_prediction:
             # symmetric initial edge-feature
-            d = (
-                (pos[edge_index_global[1]] - pos[edge_index_global[0]])
-                .pow(2)
-                .sum(-1, keepdim=True)
-                .sqrt()
-            )
-            edge_attr_global = torch.concat(
-                [x[edge_index_global[1]] + x[edge_index_global[0]], d], dim=-1
-            )
+            d = (pos[edge_index_global[1]] - pos[edge_index_global[0]]).pow(2).sum(-1, keepdim=True).sqrt()
+            edge_attr_global = torch.concat([x[edge_index_global[1]] + x[edge_index_global[0]], d], dim=-1)
         edge_attr_global_transformed = self.bond_mapping(edge_attr_global)
-        edge_attr_global_transformed = self.bond_time_mapping(
-            edge_attr_global_transformed + tedge_global
-        )
+        edge_attr_global_transformed = self.bond_time_mapping(edge_attr_global_transformed + tedge_global)
 
         # edge_dense = torch.zeros(x.size(0), x.size(0), edge_attr_global_transformed.size(-1), device=s.device)
         # edge_dense[edge_index_global[0], edge_index_global[1], :] = edge_attr_global_transformed
@@ -463,7 +425,7 @@ class DenoisingEdgeNetwork(nn.Module):
             batch_lig=batch_lig,
             pocket_mask=pocket_mask,
         )
-        
+
         out = self.prediction_head(
             x=out,
             batch=batch,
@@ -531,9 +493,7 @@ class LatentEncoderNetwork(nn.Module):
             self.bond_mapping.reset_parameters()
         self.gnn.reset_parameters()
 
-    def calculate_edge_attrs(
-        self, edge_index: Tensor, edge_attr: OptTensor, pos: Tensor, sqrt: bool = True
-    ):
+    def calculate_edge_attrs(self, edge_index: Tensor, edge_attr: OptTensor, pos: Tensor, sqrt: bool = True):
         source, target = edge_index
         r = pos[target] - pos[source]
         a = pos[target] * pos[source]
@@ -606,12 +566,8 @@ class SoftMaxAttentionAggregation(nn.Module):
     def __init__(self, dim: int):
         super(SoftMaxAttentionAggregation, self).__init__()
 
-        self.node_net = nn.Sequential(
-            DenseLayer(dim, dim, activation=nn.SiLU()), DenseLayer(dim, dim)
-        )
-        self.gate_net = nn.Sequential(
-            DenseLayer(dim, dim, activation=nn.SiLU()), DenseLayer(dim, 1)
-        )
+        self.node_net = nn.Sequential(DenseLayer(dim, dim, activation=nn.SiLU()), DenseLayer(dim, dim))
+        self.gate_net = nn.Sequential(DenseLayer(dim, dim, activation=nn.SiLU()), DenseLayer(dim, 1))
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -650,18 +606,12 @@ class EdgePredictionHead(nn.Module):
         self.sdim, self.vdim = hn_dim
         self.num_atom_features = num_atom_features
 
-        self.shared_mapping = DenseLayer(
-            self.sdim, self.sdim, bias=True, activation=nn.SiLU()
-        )
+        self.shared_mapping = DenseLayer(self.sdim, self.sdim, bias=True, activation=nn.SiLU())
 
         self.bond_mapping = DenseLayer(edge_dim, self.sdim, bias=True)
 
-        self.bonds_lin_0 = DenseLayer(
-            in_features=self.sdim + 1, out_features=self.sdim, bias=True
-        )
-        self.bonds_lin_1 = DenseLayer(
-            in_features=self.sdim, out_features=num_bond_types, bias=True
-        )
+        self.bonds_lin_0 = DenseLayer(in_features=self.sdim + 1, out_features=self.sdim, bias=True)
+        self.bonds_lin_1 = DenseLayer(in_features=self.sdim, out_features=num_bond_types, bias=True)
         self.coords_lin = DenseLayer(in_features=self.vdim, out_features=1, bias=False)
 
         self.reset_parameters()
@@ -740,9 +690,7 @@ class EdgePredictionNetwork(nn.Module):
             self.atom_mapping = nn.Identity()
 
         if bond_mapping:
-            self.bond_mapping = DenseLayer(
-                num_atom_features, edge_dim
-            )  # BOND PREDICTION
+            self.bond_mapping = DenseLayer(num_atom_features, edge_dim)  # BOND PREDICTION
         else:
             self.bond_mapping = nn.Identity()
 
@@ -797,9 +745,7 @@ class EdgePredictionNetwork(nn.Module):
         self.gnn.reset_parameters()
         self.prediction_head.reset_parameters()
 
-    def calculate_edge_attrs(
-        self, edge_index: Tensor, edge_attr: OptTensor, pos: Tensor, sqrt: bool = True
-    ):
+    def calculate_edge_attrs(self, edge_index: Tensor, edge_attr: OptTensor, pos: Tensor, sqrt: bool = True):
         source, target = edge_index
         r = pos[target] - pos[source]
         a = pos[target] * pos[source]
@@ -841,9 +787,7 @@ class EdgePredictionNetwork(nn.Module):
         edge_attr_global = x[edge_index_global[1]]
 
         edge_attr_global_transformed = self.bond_mapping(edge_attr_global)
-        edge_attr_global_transformed = self.bond_time_mapping(
-            edge_attr_global_transformed + tedge_global
-        )
+        edge_attr_global_transformed = self.bond_time_mapping(edge_attr_global_transformed + tedge_global)
 
         # global
         edge_attr_global_transformed = self.calculate_edge_attrs(
@@ -867,9 +811,7 @@ class EdgePredictionNetwork(nn.Module):
             batch=batch,
         )
 
-        out = self.prediction_head(
-            x=out, batch=batch, edge_index_global=edge_index_global
-        )
+        out = self.prediction_head(x=out, batch=batch, edge_index_global=edge_index_global)
 
         return out
 
@@ -901,9 +843,7 @@ class EQGATEnergyNetwork(nn.Module):
             use_cross_product=use_cross_product,
             vector_aggr=vector_aggr,
         )
-        self.energy_head = GatedEquivBlock(
-            in_dims=hn_dim, out_dims=(1, None), use_mlp=True
-        )
+        self.energy_head = GatedEquivBlock(in_dims=hn_dim, out_dims=(1, None), use_mlp=True)
 
     def calculate_edge_attrs(self, edge_index: Tensor, pos: Tensor):
         source, target = edge_index
@@ -915,24 +855,16 @@ class EQGATEnergyNetwork(nn.Module):
         edge_attr = (d, r_norm)
         return edge_attr
 
-    def forward(
-        self, x: Tensor, pos: Tensor, t: Tensor, batch: OptTensor = None
-    ) -> Dict:
-        edge_index = radius_graph(
-            x=pos, r=self.cutoff, batch=batch, max_num_neighbors=128
-        )
+    def forward(self, x: Tensor, pos: Tensor, t: Tensor, batch: OptTensor = None) -> Dict:
+        edge_index = radius_graph(x=pos, r=self.cutoff, batch=batch, max_num_neighbors=128)
         ta = self.time_mapping_atom(t)
         tnode = ta[batch]
         s = self.atom_mapping(x)
         s = self.atom_time_mapping(s + tnode)
-        v = torch.zeros(
-            size=(x.size(0), 3, self.vdim), device=x.device, dtype=pos.dtype
-        )
+        v = torch.zeros(size=(x.size(0), 3, self.vdim), device=x.device, dtype=pos.dtype)
 
         edge_attr = self.calculate_edge_attrs(edge_index, pos)
-        s, v = self.gnn(
-            s=s, v=v, edge_index=edge_index, edge_attr=edge_attr, batch=batch
-        )
+        s, v = self.gnn(s=s, v=v, edge_index=edge_index, edge_attr=edge_attr, batch=batch)
         energy_atoms, v = self.energy_head((s, v))
         energy_atoms = energy_atoms + v.sum() * 0
         bs = len(batch.unique())

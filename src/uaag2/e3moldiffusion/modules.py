@@ -67,9 +67,7 @@ class GatedEquivBlock(nn.Module):
             self.Ws = DenseLayer(self.hv_dim + self.si, self.vo + self.so, bias=True)
         else:
             self.Ws = nn.Sequential(
-                DenseLayer(
-                    self.hv_dim + self.si, self.si, bias=True, activation=nn.SiLU()
-                ),
+                DenseLayer(self.hv_dim + self.si, self.si, bias=True, activation=nn.SiLU()),
                 DenseLayer(self.si, self.vo + self.so, bias=True),
             )
             if self.vo > 0:
@@ -186,9 +184,7 @@ class AdaptiveLayerNorm(nn.Module):
         if affine:
             self.weight_bias = DenseLayer(latent_dim, 2 * self.sdim, bias=True)
         else:
-            print(
-                "Affine was set to False. This layer should used the affine transformation"
-            )
+            print("Affine was set to False. This layer should used the affine transformation")
             raise ValueError
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
@@ -255,7 +251,7 @@ class SE3Norm(nn.Module):
     ):
         # if pocket_mask is not None:
         #     norm = torch.norm(pos, dim=-1, keepdim=True) * pocket_mask  # n, 1
-            
+
         # else:
         #     norm = torch.norm(pos, dim=-1, keepdim=True)
         norm = torch.norm(pos, dim=-1, keepdim=True)
@@ -324,9 +320,7 @@ class GatedEquivariantBlock(nn.Module):
         vec1_buffer = self.vec1_proj(v)
 
         # detach zero-entries to avoid NaN gradients during force loss backpropagation
-        vec1 = torch.zeros(
-            vec1_buffer.size(0), vec1_buffer.size(2), device=vec1_buffer.device
-        )
+        vec1 = torch.zeros(vec1_buffer.size(0), vec1_buffer.size(2), device=vec1_buffer.device)
         mask = (vec1_buffer != 0).view(vec1_buffer.size(0), -1).any(dim=1)
         vec1[mask] = torch.norm(vec1_buffer[mask], dim=-2)
 

@@ -76,9 +76,7 @@ class BesselExpansion(nn.Module):
         ax = x.unsqueeze(-1) / self.max_value
         ax = ax * self.frequency
         sinax = torch.sin(ax)
-        norm = torch.where(
-            x == 0.0, torch.tensor(1.0, dtype=x.dtype, device=x.device), x
-        )
+        norm = torch.where(x == 0.0, torch.tensor(1.0, dtype=x.dtype, device=x.device), x)
         out = sinax / norm[..., None]
         out *= math.sqrt(2 / self.max_value)
         return out
@@ -123,9 +121,7 @@ class EQGATConv(MessagePassing):
         )
         self.cutoff_fnc = PolynomialCutoff(cutoff, p=6)
         self.edge_net = nn.Sequential(
-            DenseLayer(
-                2 * self.si + self.num_rbfs, self.si, bias=True, activation=nn.SiLU()
-            ),
+            DenseLayer(2 * self.si + self.num_rbfs, self.si, bias=True, activation=nn.SiLU()),
             DenseLayer(self.si, self.v_mul * self.vi + self.si, bias=True),
         )
         self.scalar_net = DenseLayer(self.si, self.si, bias=True)
@@ -181,9 +177,7 @@ class EQGATConv(MessagePassing):
         dim_size: Optional[int] = None,
     ) -> Tuple[Tensor, Tensor]:
         s = scatter(inputs[0], index=index, dim=0, reduce="add", dim_size=dim_size)
-        v = scatter(
-            inputs[1], index=index, dim=0, reduce=self.vector_aggr, dim_size=dim_size
-        )
+        v = scatter(inputs[1], index=index, dim=0, reduce=self.vector_aggr, dim_size=dim_size)
         return s, v
 
     def message(
@@ -266,9 +260,7 @@ class EQGATGlobalEdgeConvFinal(MessagePassing):
         edge_mp: bool = False,
         use_pos_norm: bool = True,
     ):
-        super(EQGATGlobalEdgeConvFinal, self).__init__(
-            node_dim=0, aggr=None, flow="source_to_target"
-        )
+        super(EQGATGlobalEdgeConvFinal, self).__init__(node_dim=0, aggr=None, flow="source_to_target")
 
         assert edge_dim is not None
 
@@ -304,9 +296,7 @@ class EQGATGlobalEdgeConvFinal(MessagePassing):
 
         self.edge_net = nn.Sequential(
             DenseLayer(input_edge_dim, self.si, bias=True, activation=nn.SiLU()),
-            DenseLayer(
-                self.si, self.v_mul * self.vi + self.si + 1 + edge_dim, bias=True
-            ),
+            DenseLayer(self.si, self.v_mul * self.vi + self.si + 1 + edge_dim, bias=True),
         )
         self.edge_post = DenseLayer(edge_dim, edge_dim)
 
@@ -355,9 +345,7 @@ class EQGATGlobalEdgeConvFinal(MessagePassing):
         value = torch.arange(source.size(0), device=source.device)
         # as row-index select the target (column) nodes --> transpose
         # create neighbours from j
-        adj_t = SparseTensor(
-            row=target, col=source, value=value, sparse_sizes=(num_nodes, num_nodes)
-        )
+        adj_t = SparseTensor(row=target, col=source, value=value, sparse_sizes=(num_nodes, num_nodes))
         # get neighbours from j
         adj_t_row = adj_t[source]
         # returns the target nodes (k) that include the source (j)
@@ -404,16 +392,12 @@ class EQGATGlobalEdgeConvFinal(MessagePassing):
 
         edge_ij = E_full[j, i, :]
 
-        edge_index_knn, idx_i, idx_j, idx_k, idx_kj, idx_ji = self.get_triplet(
-            edge_index_knn, num_nodes=num_nodes
-        )
+        edge_index_knn, idx_i, idx_j, idx_k, idx_kj, idx_ji = self.get_triplet(edge_index_knn, num_nodes=num_nodes)
 
         p_jk = -1.0 * p_ij_n[idx_kj]
         p_ji = p_ij_n[idx_ji]
 
-        theta_ijk = torch.sum(p_jk * p_ji, -1, keepdim=True).clamp_(
-            -1.0 + 1e-7, 1.0 - 1e-7
-        )
+        theta_ijk = torch.sum(p_jk * p_ji, -1, keepdim=True).clamp_(-1.0 + 1e-7, 1.0 - 1e-7)
         theta_ijk = torch.arccos(theta_ijk)
         d_ji = d_ij[idx_ji]
         d_jk = d_ij[idx_kj]
@@ -452,9 +436,7 @@ class EQGATGlobalEdgeConvFinal(MessagePassing):
         e = self.edge_pre(e)
 
         if self.edge_mp:
-            e = self.edge_message_passing(
-                p=p, batch=batch, k=4, edge_index_full=edge_index, edge_attr_full=e
-            )
+            e = self.edge_message_passing(p=p, batch=batch, k=4, edge_index_full=edge_index, edge_attr_full=e)
 
         ms, mv, mp, me = self.propagate(
             sa=s,
@@ -496,12 +478,8 @@ class EQGATGlobalEdgeConvFinal(MessagePassing):
         dim_size: Optional[int] = None,
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         s = scatter(inputs[0], index=index, dim=0, reduce="add", dim_size=dim_size)
-        v = scatter(
-            inputs[1], index=index, dim=0, reduce=self.vector_aggr, dim_size=dim_size
-        )
-        p = scatter(
-            inputs[2], index=index, dim=0, reduce=self.vector_aggr, dim_size=dim_size
-        )
+        v = scatter(inputs[1], index=index, dim=0, reduce=self.vector_aggr, dim_size=dim_size)
+        p = scatter(inputs[2], index=index, dim=0, reduce=self.vector_aggr, dim_size=dim_size)
         edge = inputs[3]
         return s, v, p, edge
 
@@ -530,9 +508,7 @@ class EQGATGlobalEdgeConvFinal(MessagePassing):
                 torch.pow(p_j, 2).sum(-1, keepdim=True).clamp(min=1e-6).sqrt(),
             )
         else:
-            d_i, d_j = torch.zeros_like(a0).to(a.device), torch.zeros_like(a0).to(
-                a.device
-            )
+            d_i, d_j = torch.zeros_like(a0).to(a.device), torch.zeros_like(a0).to(a.device)
         aij = torch.cat([torch.cat([sa_i, sa_j], dim=-1), de0, a0, e, d_i, d_j], dim=-1)
         # else:
         #     aij = torch.cat([torch.cat([sa_i, sa_j], dim=-1), de0, a0, e], dim=-1)
@@ -601,9 +577,7 @@ class EQGATLocalConvFinal(MessagePassing):
         vector_aggr: str = "mean",
         use_cross_product: bool = False,
     ):
-        super(EQGATLocalConvFinal, self).__init__(
-            node_dim=0, aggr=None, flow="source_to_target"
-        )
+        super(EQGATLocalConvFinal, self).__init__(node_dim=0, aggr=None, flow="source_to_target")
 
         assert edge_dim is not None
 
@@ -623,9 +597,7 @@ class EQGATLocalConvFinal(MessagePassing):
             self.vector_net = nn.Identity()
 
         self.edge_net = nn.Sequential(
-            DenseLayer(
-                2 * self.si + edge_dim + 2 + 2, self.si, bias=True, activation=nn.SiLU()
-            ),
+            DenseLayer(2 * self.si + edge_dim + 2 + 2, self.si, bias=True, activation=nn.SiLU()),
             DenseLayer(self.si, self.v_mul * self.vi + self.si, bias=True),
         )
         self.scalar_net = DenseLayer(self.si, self.si, bias=True)
@@ -685,9 +657,7 @@ class EQGATLocalConvFinal(MessagePassing):
         dim_size: Optional[int] = None,
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         s = scatter(inputs[0], index=index, dim=0, reduce="add", dim_size=dim_size)
-        v = scatter(
-            inputs[1], index=index, dim=0, reduce=self.vector_aggr, dim_size=dim_size
-        )
+        v = scatter(inputs[1], index=index, dim=0, reduce=self.vector_aggr, dim_size=dim_size)
         return s, v
 
     def message(
@@ -798,9 +768,7 @@ class TopoEdgeConvLayer(MessagePassing):
         edge = inputs[1]
         return s, edge
 
-    def message(
-        self, x_i: Tensor, x_j: Tensor, xu_j: Tensor, edge_attr: Tensor
-    ) -> Tensor:
+    def message(self, x_i: Tensor, x_j: Tensor, xu_j: Tensor, edge_attr: Tensor) -> Tensor:
         msg = torch.cat([x_i, x_j, edge_attr], dim=-1)
         msg, e = self.msg_mlp(msg).split([self.in_dim, self.edge_dim], dim=-1)
         x_j = msg * xu_j

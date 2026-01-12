@@ -192,14 +192,29 @@ if __name__ == "__main__":
     # parser = add_arguments(parser)
 
     parser.add_argument("--logger-type", default="wandb", type=str)
-    
-    parser.add_argument('--dataset', type=str, default='drugs')
-    
-    parser.add_argument('--data_info_path', type=str, default="data/statistic.pkl")
-    parser.add_argument('--training_data', type=str, default="data/pdb_subset.lmdb")
-    parser.add_argument('--metadata_path', type=str, default="data/unaagi_whole_v1.metadata.pkl", help="Path to metadata file for weighted sampling")
-    parser.add_argument('--use-metadata-sampler', action='store_true', default=False, help="Use WeightedRandomSampler based on metadata (default: True)")
-    parser.add_argument('--no-metadata-sampler', dest='use_metadata_sampler', action='store_false', help="Use RandomSampler instead of metadata-based weighted sampling")
+
+    parser.add_argument("--dataset", type=str, default="drugs")
+
+    parser.add_argument("--data_info_path", type=str, default="data/statistic.pkl")
+    parser.add_argument("--training_data", type=str, default="data/pdb_subset.lmdb")
+    parser.add_argument(
+        "--metadata_path",
+        type=str,
+        default="data/unaagi_whole_v1.metadata.pkl",
+        help="Path to metadata file for weighted sampling",
+    )
+    parser.add_argument(
+        "--use-metadata-sampler",
+        action="store_true",
+        default=False,
+        help="Use WeightedRandomSampler based on metadata (default: True)",
+    )
+    parser.add_argument(
+        "--no-metadata-sampler",
+        dest="use_metadata_sampler",
+        action="store_false",
+        help="Use RandomSampler instead of metadata-based weighted sampling",
+    )
     # parser.add_argument(
     #     "--conf", "-c", type=open, action=LoadFromFile, help="Configuration yaml file"
     # )  # keep first

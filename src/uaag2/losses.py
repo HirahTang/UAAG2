@@ -39,10 +39,9 @@ class DiffusionLoss(nn.Module):
         weights: Optional[Tensor] = None,
         batch_size: Optional[int] = None,
     ) -> Dict:
-
         if weights is not None:
             assert len(weights) == batch_size
-            
+
             regr_loss = F.mse_loss(
                 pred_data[self.regression_key],
                 true_data[self.regression_key],
@@ -64,9 +63,7 @@ class DiffusionLoss(nn.Module):
             atoms_loss = fnc(pred_data["atoms"], true_data["atoms"], reduction="none")
             if take_mean:
                 atoms_loss = atoms_loss.mean(dim=1)
-            atoms_loss = scatter_mean(
-                atoms_loss, index=batch, dim=0, dim_size=batch_size
-            )
+            atoms_loss = scatter_mean(atoms_loss, index=batch, dim=0, dim_size=batch_size)
             atoms_loss, m = self.loss_non_nans(atoms_loss, "atoms")
             atoms_loss *= weights[~m]
             atoms_loss = torch.sum(atoms_loss, dim=0)
@@ -78,16 +75,12 @@ class DiffusionLoss(nn.Module):
                 fnc = F.mse_loss
                 take_mean = True
 
-            charges_loss = fnc(
-                pred_data["charges"], true_data["charges"], reduction="none"
-            )
+            charges_loss = fnc(pred_data["charges"], true_data["charges"], reduction="none")
             if take_mean:
                 charges_loss = charges_loss.mean(dim=1)
-                
-            charges_loss = scatter_mean(
-                charges_loss, index=batch, dim=0, dim_size=batch_size
-            )
-            
+
+            charges_loss = scatter_mean(charges_loss, index=batch, dim=0, dim_size=batch_size)
+
             charges_loss, m = self.loss_non_nans(charges_loss, "charges")
             charges_loss *= weights[~m]
             charges_loss = torch.sum(charges_loss, dim=0)
@@ -98,18 +91,18 @@ class DiffusionLoss(nn.Module):
             else:
                 fnc = F.mse_loss
                 take_mean = True
-            
+
             bonds_loss = fnc(pred_data["bonds"], true_data["bonds"], reduction="none")
             if take_mean:
                 bonds_loss = bonds_loss.mean(dim=1)
-            
+
             bonds_loss = 0.5 * scatter_mean(
                 bonds_loss,
                 index=bond_aggregation_index,
                 dim=0,
                 dim_size=true_data["atoms"].size(0),
             )
-            
+
             # bonds_loss = 0.5 * scatter_mean(
             #     bonds_loss,
             #     index=bond_aggregation_index,
@@ -120,20 +113,14 @@ class DiffusionLoss(nn.Module):
             #     bonds_loss, index=bond_aggregation_index, dim=0, dim_size=batch_size
             # )
 
-            bonds_loss = scatter_mean(
-                bonds_loss, index=batch, dim=0, dim_size=batch_size
-            )
-            
+            bonds_loss = scatter_mean(bonds_loss, index=batch, dim=0, dim_size=batch_size)
+
             bonds_loss, m = self.loss_non_nans(bonds_loss, "bonds")
             bonds_loss *= weights[~m]
             bonds_loss = bonds_loss.sum(dim=0)
             if "ring" in self.modalities:
-                ring_loss = F.cross_entropy(
-                    pred_data["ring"], true_data["ring"], reduction="none"
-                )
-                ring_loss = scatter_mean(
-                    ring_loss, index=batch, dim=0, dim_size=batch_size
-                )
+                ring_loss = F.cross_entropy(pred_data["ring"], true_data["ring"], reduction="none")
+                ring_loss = scatter_mean(ring_loss, index=batch, dim=0, dim_size=batch_size)
                 ring_loss, m = self.loss_non_nans(ring_loss, "ring")
                 ring_loss *= weights[~m]
                 ring_loss = torch.sum(ring_loss, dim=0)
@@ -141,49 +128,36 @@ class DiffusionLoss(nn.Module):
                 ring_loss = None
 
             if "aromatic" in self.modalities:
-                aromatic_loss = F.cross_entropy(
-                    pred_data["aromatic"], true_data["aromatic"], reduction="none"
-                )
-                aromatic_loss = scatter_mean(
-                    aromatic_loss, index=batch, dim=0, dim_size=batch_size
-                )
+                aromatic_loss = F.cross_entropy(pred_data["aromatic"], true_data["aromatic"], reduction="none")
+                aromatic_loss = scatter_mean(aromatic_loss, index=batch, dim=0, dim_size=batch_size)
                 aromatic_loss, m = self.loss_non_nans(aromatic_loss, "aromatic")
                 aromatic_loss *= weights[~m]
                 aromatic_loss = torch.sum(aromatic_loss, dim=0)
             else:
                 aromatic_loss = None
-            
+
             if "hybridization" in self.modalities:
                 hybridization_loss = F.cross_entropy(
                     pred_data["hybridization"],
                     true_data["hybridization"],
                     reduction="none",
                 )
-                hybridization_loss = scatter_mean(
-                    hybridization_loss, index=batch, dim=0, dim_size=batch_size
-                )
-                hybridization_loss, m = self.loss_non_nans(
-                    hybridization_loss, "hybridization"
-                )
+                hybridization_loss = scatter_mean(hybridization_loss, index=batch, dim=0, dim_size=batch_size)
+                hybridization_loss, m = self.loss_non_nans(hybridization_loss, "hybridization")
                 hybridization_loss *= weights[~m]
                 hybridization_loss = torch.sum(hybridization_loss, dim=0)
             else:
                 hybridization_loss = None
 
             if "degree" in self.modalities:
-                degree_loss = F.cross_entropy(
-                    pred_data["degree"], true_data["degree"], reduction="none"
-                )
-                degree_loss = scatter_mean(
-                    degree_loss, index=batch, dim=0, dim_size=batch_size
-                )
+                degree_loss = F.cross_entropy(pred_data["degree"], true_data["degree"], reduction="none")
+                degree_loss = scatter_mean(degree_loss, index=batch, dim=0, dim_size=batch_size)
                 degree_loss, m = self.loss_non_nans(degree_loss, "degree")
                 degree_loss *= weights[~m]
                 degree_loss = torch.sum(degree_loss, dim=0)
             else:
                 degree_loss = None
-            
-        
+
         else:
             regr_loss = F.mse_loss(
                 pred_data[self.regression_key],
@@ -199,9 +173,7 @@ class DiffusionLoss(nn.Module):
                 fnc = F.cross_entropy
             else:
                 fnc = F.mse_loss
-            charges_loss = fnc(
-                pred_data["charges"], true_data["charges"], reduction="mean"
-            )
+            charges_loss = fnc(pred_data["charges"], true_data["charges"], reduction="mean")
             if self.param[self.modalities.index("bonds")] == "data":
                 fnc = F.cross_entropy
             else:
@@ -209,16 +181,12 @@ class DiffusionLoss(nn.Module):
             bonds_loss = fnc(pred_data["bonds"], true_data["bonds"], reduction="mean")
 
             if "ring" in self.modalities:
-                ring_loss = F.cross_entropy(
-                    pred_data["ring"], true_data["ring"], reduction="mean"
-                )
+                ring_loss = F.cross_entropy(pred_data["ring"], true_data["ring"], reduction="mean")
             else:
                 ring_loss = None
 
             if "aromatic" in self.modalities:
-                aromatic_loss = F.cross_entropy(
-                    pred_data["aromatic"], true_data["aromatic"], reduction="mean"
-                )
+                aromatic_loss = F.cross_entropy(pred_data["aromatic"], true_data["aromatic"], reduction="mean")
             else:
                 aromatic_loss = None
 
@@ -239,7 +207,7 @@ class DiffusionLoss(nn.Module):
                 )
             else:
                 degree_loss = None
-        
+
         loss = {
             self.regression_key: regr_loss,
             "atoms": atoms_loss,

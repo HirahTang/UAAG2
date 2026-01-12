@@ -18,6 +18,7 @@ DATA_PATH = os.path.join(_PATH_DATA, "pdb_subset.lmdb")
 @dataclass
 class MockParams:
     """Mock params object for testing."""
+
     virtual_node: bool = False
 
 

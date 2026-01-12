@@ -30,17 +30,13 @@ class ExponentialMovingAverage(Callback):
         self.ema.store()
         self.ema.copy_to()
 
-    def on_train_epoch_start(
-        self, trainer: Trainer, pl_module: LightningModule
-    ) -> None:
+    def on_train_epoch_start(self, trainer: Trainer, pl_module: LightningModule) -> None:
         self.ema.restore()
 
     def on_train_batch_end(self, trainer, pl_module: LightningModule, *args, **kwargs):
         self.ema.update()
 
-    def on_validation_epoch_start(
-        self, trainer: Trainer, pl_module: LightningModule, *args, **kwargs
-    ):
+    def on_validation_epoch_start(self, trainer: Trainer, pl_module: LightningModule, *args, **kwargs):
         self.ema.store()
         self.ema.copy_to()
 

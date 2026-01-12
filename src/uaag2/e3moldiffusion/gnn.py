@@ -141,9 +141,7 @@ class EQGATEdgeGNN(nn.Module):
         else:
             norm_module = LayerNorm
 
-        self.norms = nn.ModuleList(
-            [norm_module(dims=hn_dim, latent_dim=latent_dim) for _ in range(num_layers)]
-        )
+        self.norms = nn.ModuleList([norm_module(dims=hn_dim, latent_dim=latent_dim) for _ in range(num_layers)])
 
         self.reset_parameters()
 
@@ -214,10 +212,10 @@ class EQGATEdgeGNN(nn.Module):
 
             if context is not None and (i == 1 or i == len(self.convs) - 1):
                 s = s + context
-                
+
             # error shows up
             s, v = self.norms[i](x={"s": s, "v": v, "z": z}, batch=batch)
-            
+
             out = self.convs[i](
                 x=(s, v, p),
                 batch=batch,
@@ -319,9 +317,7 @@ class EQGATEdgeLocalGlobalGNN(nn.Module):
         else:
             norm_module = LayerNorm
 
-        self.norms = nn.ModuleList(
-            [norm_module(dims=hn_dim, latent_dim=latent_dim) for _ in range(num_layers)]
-        )
+        self.norms = nn.ModuleList([norm_module(dims=hn_dim, latent_dim=latent_dim) for _ in range(num_layers)])
 
         self.reset_parameters()
 
@@ -530,17 +526,11 @@ class TopoEdgeGNN(nn.Module):
         convs = []
 
         for i in range(num_layers):
-            convs.append(
-                TopoEdgeConvLayer(
-                    in_dim=in_dim, out_dim=in_dim, edge_dim=edge_dim, aggr="mean"
-                )
-            )
+            convs.append(TopoEdgeConvLayer(in_dim=in_dim, out_dim=in_dim, edge_dim=edge_dim, aggr="mean"))
 
         self.convs = nn.ModuleList(convs)
 
-        self.norms = nn.ModuleList(
-            [LayerNorm(dims=(in_dim, None)) for _ in range(num_layers)]
-        )
+        self.norms = nn.ModuleList([LayerNorm(dims=(in_dim, None)) for _ in range(num_layers)])
 
         self.reset_parameters()
 
@@ -549,14 +539,10 @@ class TopoEdgeGNN(nn.Module):
             conv.reset_parameters()
             norm.reset_parameters()
 
-    def forward(
-        self, s: Tensor, edge_index: Tensor, edge_attr: Tensor, batch: Tensor
-    ) -> Dict:
+    def forward(self, s: Tensor, edge_index: Tensor, edge_attr: Tensor, batch: Tensor) -> Dict:
         for i in range(len(self.convs)):
             s, _ = self.norms[i](x={"s": s, "v": None}, batch=batch)
-            out, edge_attr = self.convs[i](
-                x=s, edge_index=edge_index, edge_attr=edge_attr
-            )
+            out, edge_attr = self.convs[i](x=s, edge_index=edge_index, edge_attr=edge_attr)
         out = {"s": s, "e": edge_attr}
 
         return out
