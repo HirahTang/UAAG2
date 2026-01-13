@@ -58,9 +58,9 @@ class TestUAAG2Dataset:
 
             # Check device after moving
             devices_after_move = {key: value.device for key, value in item if isinstance(value, torch.Tensor)}
-            assert (
-                len(set(devices_after_move.values())) == 1
-            ), f"Tensors are on multiple devices after .to(device): {devices_after_move}"
+            assert len(set(devices_after_move.values())) == 1, (
+                f"Tensors are on multiple devices after .to(device): {devices_after_move}"
+            )
 
     @param("mask_rate", [0.0, 0.5, 1.0])
     @param("noise_scale", [0.1, 0.5])
