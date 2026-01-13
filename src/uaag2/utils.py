@@ -5,7 +5,7 @@ import os
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
 import numpy as np
-import openbabel as ob
+from openbabel import openbabel as ob
 import torch
 import torch.nn.functional as F
 from rdkit import Chem
