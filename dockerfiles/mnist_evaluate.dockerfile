@@ -19,4 +19,3 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
 
 ENTRYPOINT ["uv", "run", "src/uaag2/mnist_evaluate.py"]
-
