@@ -5,7 +5,8 @@ from rdkit import Chem
 
 import torch
 
-from torch_geometric.data import DataLoader, Data
+from torch_geometric.data import Data
+from torch_geometric.loader import DataLoader
 
 
 # from torch_geometric.data import InMemoryDataset
@@ -715,7 +716,7 @@ class UAAG2DataModule(pl.LightningDataModule):
         self.cfg = cfg
         # split into train, val, test with test & valid consisting 2000 samples each
         # self._log_hyperparams = True
-        self.pin_memory = True
+        self.pin_memory = not torch.backends.mps.is_available()
         self.train_data = train_data
         self.val_data = val_data
         self.test_data = test_data
@@ -744,7 +745,7 @@ class UAAG2DataModule(pl.LightningDataModule):
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
             shuffle=False,
-            persistent_workers=False,
+            persistent_workers=True,
             drop_last=True,
             sampler=self.sampler,
         )
@@ -757,7 +758,7 @@ class UAAG2DataModule(pl.LightningDataModule):
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
             shuffle=False,
-            persistent_workers=False,
+            persistent_workers=True,
             drop_last=True,
         )
         return dataloader
@@ -769,7 +770,7 @@ class UAAG2DataModule(pl.LightningDataModule):
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
             shuffle=False,
-            persistent_workers=False,
+            persistent_workers=True,
         )
         return dataloader
 

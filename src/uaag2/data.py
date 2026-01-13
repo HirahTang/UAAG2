@@ -743,7 +743,7 @@ class UAAG2DataModule(pl.LightningDataModule):
         self.cfg = cfg
         # split into train, val, test with test & valid consisting 2000 samples each
         # self._log_hyperparams = True
-        self.pin_memory = True
+        self.pin_memory = not torch.backends.mps.is_available()
         self.train_data = train_data
         self.val_data = val_data
         self.test_data = test_data
