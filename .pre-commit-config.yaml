@@ -13,3 +13,5 @@ repos:
     - id: ruff-check
       args: [ --fix ]
     - id: ruff-format
+    # validate if all is fine with preview mode
+    - id: ruff
