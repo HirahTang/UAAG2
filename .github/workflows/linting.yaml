@@ -20,5 +20,11 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: Perform pre-commit checks
-        uses: pre-commit/action@v3.0.1
+      - name: Install dependencies
+        run: |
+          uv sync --locked --dev
+          uv tree
+
+      - name: Lint/perform precommit checks
+        run: |
+          uv run pre-commit run --show-diff-on-failure --color=always --all-files
