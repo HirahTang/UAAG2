@@ -531,7 +531,12 @@ class EQGATGlobalEdgeConvFinal(MessagePassing):
             vij0 = vij0.unsqueeze(1)
 
         # feature attention
-        aij = scatter_softmax(aij, index=index, dim=0, dim_size=dim_size)
+        # Workaround for torch-scatter incompatibility with MPS backend for scatter_softmax.
+        # Temporarily moves tensors to CPU for scatter_softmax and then back to MPS.
+        if aij.device.type == "mps":
+            aij = scatter_softmax(aij.cpu(), index=index.cpu(), dim=0, dim_size=dim_size).to(aij.device)
+        else:
+            aij = scatter_softmax(aij, index=index, dim=0, dim_size=dim_size)
         ns_j = aij * sb_j
         nv0_j = r.unsqueeze(-1) * vij0
 
