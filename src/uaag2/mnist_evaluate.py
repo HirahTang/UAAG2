@@ -15,7 +15,7 @@ def evaluate(model_checkpoint: str) -> None:
     model.load_state_dict(torch.load(model_checkpoint))
 
     _, test_set = corrupt_mnist()
-    test_dataloader = torch.utils.data.DataLoader(test_set, batch_size=32)
+    test_dataloader = torch.utils.data.DataLoader(test_set, batch_size=32, persistent_workers=True)
 
     model.eval()
     correct, total = 0, 0

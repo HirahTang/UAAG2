@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 
 import torch
 import yaml
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 
 from uaag2.data.uaag_dataset import Dataset_Info, UAAG2Dataset_sampling
 from uaag2.equivariant_diffusion import Trainer
@@ -63,7 +63,7 @@ def main(hparams):
             dataset=dataset,
             batch_size=hparams.batch_size,
             num_workers=hparams.num_workers,
-            pin_memory=True,
+            pin_memory=not torch.backends.mps.is_available(),
             shuffle=False,
         )
 
