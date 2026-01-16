@@ -18,14 +18,14 @@
             docker
             docker-buildx
             google-cloud-sdk
+            git
           ];
         };
 
         shellHook = ''
-          if ! colima status > /dev/null 2>&1; then
-            colima start
-          fi
-          echo "🐳 Docker is ready!"
+          echo "🐳 Docker Environment Loaded"
+          echo "   - Run 'colima start' to boot the VM"
+          echo "   - Run 'docker ps' to verify connection"
         '';
       }
     );
