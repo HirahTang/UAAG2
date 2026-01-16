@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import os
 import warnings
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 
 import torch
 import yaml
@@ -13,8 +15,13 @@ from uaag2.logging_config import configure_file_logging, logger
 warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
 
 
-def main(hparams):
-    log_dir = os.path.join(hparams.save_dir, f"run{hparams.id}", "logs")
+def main(hparams: Namespace) -> None:
+    """Run evaluation on a benchmark dataset using a trained model.
+
+    Args:
+        hparams: Configuration namespace containing model and evaluation parameters.
+    """
+    log_dir: str = os.path.join(hparams.save_dir, f"run{hparams.id}", "logs")
     configure_file_logging(log_dir)
     logger.info("Starting evaluation run {}", hparams.id)
 
@@ -22,12 +29,12 @@ def main(hparams):
     data_file = torch.load(hparams.benchmark_path, weights_only=False)
 
     # Split data into partitions based on split_index
-    NUM_PARTITIONS = 10
-    index = list(range(len(data_file)))
-    part_size = len(index) // NUM_PARTITIONS
+    NUM_PARTITIONS: int = 10
+    index: list[int] = list(range(len(data_file)))
+    part_size: int = len(index) // NUM_PARTITIONS
 
     # Create partitions
-    partitions = []
+    partitions: list[list[int]] = []
     for i in range(NUM_PARTITIONS - 1):
         partitions.append(index[i * part_size : (i + 1) * part_size])
     # Last partition gets any remaining elements
@@ -45,12 +52,12 @@ def main(hparams):
     logger.info("Number of Residues: {}", len(index))
 
     for graph_num in index:
-        seq_position = int(data_file[graph_num].compound_id.split("_")[-3])
-        seq_res = data_file[graph_num].compound_id.split("_")[-4]
+        seq_position: int = int(data_file[graph_num].compound_id.split("_")[-3])
+        seq_res: str = data_file[graph_num].compound_id.split("_")[-4]
         graph = data_file[graph_num]
         logger.info("Sampling for: {} {}", seq_res, seq_position)
 
-        save_path = os.path.join("Samples", f"{seq_res}_{seq_position}")
+        save_path: str = os.path.join("Samples", f"{seq_res}_{seq_position}")
 
         dataset = UAAG2Dataset_sampling(
             graph,
@@ -62,7 +69,7 @@ def main(hparams):
         )
 
         # Note: MPS is not used because torch_scatter doesn't support it
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         dataloader = DataLoader(
             dataset=dataset,
@@ -83,9 +90,9 @@ def main(hparams):
         model.generate_ligand(dataloader, save_path=save_path, verbose=True)
 
     # Save the configuration
-    config_path = os.path.join(hparams.save_dir, f"run{hparams.id}", "config.yaml")
+    config_path: str = os.path.join(hparams.save_dir, f"run{hparams.id}", "config.yaml")
     os.makedirs(os.path.dirname(config_path), exist_ok=True)
-    args_dict = vars(hparams)
+    args_dict: dict[str, object] = vars(hparams)
     with open(config_path, "w") as f:
         yaml.dump(args_dict, f)
 
