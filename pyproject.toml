@@ -13,7 +13,6 @@ license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
 dependencies = [
-    # --- Standard Libraries ---
     "biopython>=1.86",
     "fastapi==0.115.6",
     "huggingface-hub[cli]>=1.3.1",
@@ -38,23 +37,28 @@ dependencies = [
     "wandb>=0.23.1",
     "loguru>=0.7.0",
 
-    # --- PyTorch Stack ---
     "torch==2.7.0",
     "torch-ema>=0.3",
     "torch-geometric>=2.7.0",
 
-    # --- PyG Extensions ---
-    # Mac/ARM (Local): Clean versions (found on PyPI)
+    # Platform-specific wheels for PyG extensions to match PyTorch versions
+    # Mac (ARM/Intel): Clean CPU versions
     "torch-cluster==1.6.3; sys_platform == 'darwin'",
     "torch-scatter==2.1.2; sys_platform == 'darwin'",
     "torch-sparse==0.6.18; sys_platform == 'darwin'",
     "torch-spline-conv==1.2.2; sys_platform == 'darwin'",
 
-    # Linux (Docker): "Dirty" CUDA 12.8 versions (found in find-links)
-    "torch-cluster==1.6.3+pt27cu128; sys_platform == 'linux'",
-    "torch-scatter==2.1.2+pt27cu128; sys_platform == 'linux'",
-    "torch-sparse==0.6.18+pt27cu128; sys_platform == 'linux'",
-    "torch-spline-conv==1.2.2+pt27cu128; sys_platform == 'linux'",
+    # Linux ARM (Docker CPU): CPU versions with +pt27cpu suffix
+    "torch-cluster==1.6.3+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "torch-scatter==2.1.2+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "torch-sparse==0.6.18+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "torch-spline-conv==1.2.2+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
+
+    # Linux x86 (Docker GPU): CUDA 12.8 versions with +pt27cu128 suffix
+    "torch-cluster==1.6.3+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "torch-scatter==2.1.2+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "torch-sparse==0.6.18+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "torch-spline-conv==1.2.2+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
 [dependency-groups]
@@ -90,17 +94,18 @@ find-links = [
 
 environments = [
     "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
-    { index = "pytorch-gpu", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-gpu", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cpu", marker = "sys_platform != 'linux' or platform_machine == 'aarch64'" },
 ]
 torchvision = [
-    { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
-    { index = "pytorch-gpu", marker = "sys_platform == 'linux'" }
+    { index = "pytorch-gpu", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cpu", marker = "sys_platform != 'linux' or platform_machine == 'aarch64'" },
 ]
 
 [tool.ruff]
