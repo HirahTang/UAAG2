@@ -10,11 +10,6 @@ authors = [
   { name = "Han Tang", email = "your@email.com" },
 ]
 license = { file = "LICENSE" }
-keywords = ["machine learning", "MLOps"]
-classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Programming Language :: Python :: 3",
-]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -36,10 +31,11 @@ dependencies = [
     "scipy>=1.16.3",
     "seaborn>=0.13.2",
     "tensorboard>=2.20.0",
-    "torch==2.9.1",
+    # Pinned to 2.7.1, which is compatible with 2.7.0 wheels
+    "torch==2.7.1",
     "torch-cluster>=1.6.3",
     "torch-ema>=0.3",
-    "torch-geometric==2.7",
+    "torch-geometric>=2.7.0",
     "torch-scatter>=2.1.2",
     "torch-sparse>=0.6.18",
     "torch-spline-conv>=1.2.2",
@@ -65,43 +61,28 @@ dev = [
     "google-api-python-client>=2.188.0",
 ]
 
+# --- CONFIGURATION ---
 
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cpu" },
-]
-torchvision = [
-    { index = "pytorch-cpu" },
-]
-
+# 1. Main PyTorch Index (This is a proper repository, so it stays in [[index]])
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-[tool.uv.extra-build-dependencies]
-torch-scatter = ["torch"]
-torch-sparse = ["torch"]
-torch-cluster = ["torch"]
-torch-spline-conv = ["torch"]
-
-[tool.pytest.ini_options]
-filterwarnings = [
-    "ignore::DeprecationWarning:lightning_fabric.*",
-    "ignore::DeprecationWarning:pytorch_lightning.*",
-    "ignore::DeprecationWarning:torch_geometric.*",
-    "ignore::UserWarning:openbabel.*",
-    "ignore::UserWarning:lightning_fabric.*",
-    "ignore::DeprecationWarning:importlib.*",
+# 2. PyTorch Geometric "Find Links" (CRITICAL FIX)
+# We moved this from [[index]] to find-links because it is a flat HTML page.
+[tool.uv]
+find-links = [
+  "https://data.pyg.org/whl/torch-2.7.0+cpu.html"
 ]
 
-[tool.ruff]
-line-length = 120
+# --- SOURCE MAPPINGS ---
 
-[tool.coverage.run]
-omit = [
-    "tests/*",
-    "/private/var/folders/*",
-    "/var/folders/*",
-    "*/_remote_module_non_scriptable.py",
-]
+[tool.uv.sources]
+# Force torch to use the CPU index
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+
+# NOTE: We REMOVED the specific sources for torch-cluster/sparse/etc.
+# Since 'find-links' is global, uv will automatically find the wheels there
+# without needing explicit source pinning for each package.
