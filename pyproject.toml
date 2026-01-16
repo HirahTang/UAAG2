@@ -31,19 +31,23 @@ dependencies = [
     "scipy>=1.16.3",
     "seaborn>=0.13.2",
     "tensorboard>=2.20.0",
-    # Pinned to 2.7.1, which is compatible with 2.7.0 wheels
-    "torch==2.7.1",
-    "torch-cluster>=1.6.3",
-    "torch-ema>=0.3",
-    "torch-geometric>=2.7.0",
-    "torch-scatter>=2.1.2",
-    "torch-sparse>=0.6.18",
-    "torch-spline-conv>=1.2.2",
     "tqdm>=4.67.1",
     "typer==0.15.1",
     "uvicorn==0.34.0",
     "wandb>=0.23.1",
     "loguru>=0.7.0",
+    # Torch
+    "torch==2.8.0",
+    "torch-ema>=0.3",
+    "torch-geometric>=2.7.0",
+    "torch-cluster==1.6.3; sys_platform == 'darwin'",
+    "torch-cluster==1.6.3+pt28cpu; sys_platform == 'linux'",
+    "torch-scatter==2.1.2; sys_platform == 'darwin'",
+    "torch-scatter==2.1.2+pt28cpu; sys_platform == 'linux'",
+    "torch-sparse==0.6.18; sys_platform == 'darwin'",
+    "torch-sparse==0.6.18+pt28cpu; sys_platform == 'linux'",
+    "torch-spline-conv==1.2.2; sys_platform == 'darwin'",
+    "torch-spline-conv==1.2.2+pt28cpu; sys_platform == 'linux'",
 ]
 
 [dependency-groups]
@@ -61,28 +65,23 @@ dev = [
     "google-api-python-client>=2.188.0",
 ]
 
-# --- CONFIGURATION ---
-
-# 1. Main PyTorch Index (This is a proper repository, so it stays in [[index]])
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-# 2. PyTorch Geometric "Find Links" (CRITICAL FIX)
-# We moved this from [[index]] to find-links because it is a flat HTML page.
+# Darwin is for local development on macOS. Require also linux for building
+# docker images on macOS.
 [tool.uv]
-find-links = [
-  "https://data.pyg.org/whl/torch-2.7.0+cpu.html"
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
-# --- SOURCE MAPPINGS ---
+find-links = [
+  "https://data.pyg.org/whl/torch-2.8.0+cpu.html"
+]
 
 [tool.uv.sources]
-# Force torch to use the CPU index
 torch = [{ index = "pytorch-cpu" }]
 torchvision = [{ index = "pytorch-cpu" }]
-
-# NOTE: We REMOVED the specific sources for torch-cluster/sparse/etc.
-# Since 'find-links' is global, uv will automatically find the wheels there
-# without needing explicit source pinning for each package.
