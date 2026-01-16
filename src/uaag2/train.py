@@ -25,9 +25,6 @@ from uaag2.logging_config import configure_file_logging, logger
 
 warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
 
-# from eqgat_diff.experiments.data.distributions import DistributionProperty
-# from eqgat_diff.experiments.hparams import add_arguments
-
 
 def main(hparams):
     # Configure file logging to save logs alongside checkpoints
@@ -43,10 +40,18 @@ def main(hparams):
         save_last=True,
     )
     lr_logger = LearningRateMonitor()
+
+    # Initialize wandb run manually so we control it
+    wandb_run = None
+    if hparams.logger_type == "wandb":
+        wandb_run = wandb.init(
+            project="uaag2",
+            name=f"run{hparams.id}",
+        )
+
     wandb_logger = WandbLogger(
-        log_model="all",
-        project="uaag2",
-        name=f"run{hparams.id}",
+        experiment=wandb_run,  # Pass our run to the logger
+        log_model=False,
     )
     tb_logger = TensorBoardLogger(hparams.save_dir + f"/run{hparams.id}/", default_hp_metric=False)
     if hparams.logger_type == "wandb":
@@ -199,25 +204,23 @@ def main(hparams):
         ckpt_path=ckpt_path if hparams.load_ckpt is not None else None,
     )
 
-    # Log final model as wandb artifact
-    if hparams.logger_type == "wandb" and checkpoint_callback.best_model_path:
-        logger.info("Logging model artifact to wandb")
+    # Log model artifact to wandb
+    if hparams.logger_type == "wandb" and wandb_run is not None:
+        ckpt_path = checkpoint_callback.best_model_path or checkpoint_callback.last_model_path or hparams.load_ckpt
+        if not ckpt_path:
+            ckpt_path = os.path.join(hparams.save_dir, f"run{hparams.id}", "model.ckpt")
+            os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
+            trainer.save_checkpoint(ckpt_path)
+
         artifact = wandb.Artifact(
-            name=f"uaag2-model-run{hparams.id}",
+            name="uaag2_model",
             type="model",
-            description="UAAG2 diffusion model checkpoint",
-            metadata={
-                "epoch": trainer.current_epoch,
-                "val_loss": float(checkpoint_callback.best_model_score)
-                if checkpoint_callback.best_model_score
-                else None,
-                "learning_rate": hparams.lr,
-                "num_layers": hparams.num_layers,
-            },
+            metadata={"run_id": str(hparams.id), "epoch": trainer.current_epoch},
         )
-        artifact.add_file(checkpoint_callback.best_model_path)
-        wandb.log_artifact(artifact)
-        logger.info("Model artifact logged: {}", checkpoint_callback.best_model_path)
+        artifact.add_file(ckpt_path)
+        wandb_run.log_artifact(artifact)
+        wandb_run.finish()
+        logger.info("Model artifact logged to wandb")
 
 
 if __name__ == "__main__":
