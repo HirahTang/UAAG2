@@ -1,6 +1,6 @@
-# UAAG2 API Dockerfile
-# Build: docker build -f dockerfiles/api.dockerfile -t uaag2-api .
-# Run:   docker run --rm -p 8000:8000 -v $(pwd)/models:/app/models uaag2-api
+# UAAG2 Evaluation/Sampling Dockerfile
+# Build: docker build -f dockerfiles/evaluate.dockerfile -t uaag2-evaluate .
+# Run:   docker run --rm -v $(pwd)/data:/app/data -v $(pwd)/models:/app/models -v $(pwd)/Samples:/app/Samples uaag2-evaluate [args]
 
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS base
 
@@ -39,15 +39,13 @@ COPY src src/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
 
-# Create necessary directories
-RUN mkdir -p models data
+# Create necessary directories for outputs
+RUN mkdir -p models data Samples ProteinGymSampling
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Expose the API port
-EXPOSE 8000
-
-# Run the FastAPI server with uvicorn
-ENTRYPOINT ["uv", "run", "uvicorn", "uaag2.api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default entrypoint runs the evaluation script
+# Users can override with additional arguments
+ENTRYPOINT ["uv", "run", "python", "-m", "uaag2.evaluate"]
