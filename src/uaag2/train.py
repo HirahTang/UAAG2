@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 import numpy as np
 import pytorch_lightning as pl
 import torch
+import wandb
 import yaml
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
@@ -50,6 +51,21 @@ def main(hparams):
     tb_logger = TensorBoardLogger(hparams.save_dir + f"/run{hparams.id}/", default_hp_metric=False)
     if hparams.logger_type == "wandb":
         pl_logger = wandb_logger
+        # Log key hyperparameters to wandb
+        wandb_logger.experiment.config.update(
+            {
+                "learning_rate": hparams.lr,
+                "batch_size": hparams.batch_size,
+                "num_epochs": hparams.num_epochs,
+                "num_layers": hparams.num_layers,
+                "sdim": hparams.sdim,
+                "vdim": hparams.vdim,
+                "timesteps": hparams.timesteps,
+                "noise_scheduler": hparams.noise_scheduler,
+                "mask_rate": hparams.mask_rate,
+                "seed": hparams.seed,
+            }
+        )
     elif hparams.logger_type == "tensorboard":
         pl_logger = tb_logger
     else:
@@ -176,12 +192,32 @@ def main(hparams):
 
     with open(hparams_path, "w") as f:
         yaml.safe_dump(vars(hparams), f)
-    # from IPython import embed; embed()
+
     trainer.fit(
         model=model,
         datamodule=datamodule,
         ckpt_path=ckpt_path if hparams.load_ckpt is not None else None,
     )
+
+    # Log final model as wandb artifact
+    if hparams.logger_type == "wandb" and checkpoint_callback.best_model_path:
+        logger.info("Logging model artifact to wandb")
+        artifact = wandb.Artifact(
+            name=f"uaag2-model-run{hparams.id}",
+            type="model",
+            description="UAAG2 diffusion model checkpoint",
+            metadata={
+                "epoch": trainer.current_epoch,
+                "val_loss": float(checkpoint_callback.best_model_score)
+                if checkpoint_callback.best_model_score
+                else None,
+                "learning_rate": hparams.lr,
+                "num_layers": hparams.num_layers,
+            },
+        )
+        artifact.add_file(checkpoint_callback.best_model_path)
+        wandb.log_artifact(artifact)
+        logger.info("Model artifact logged: {}", checkpoint_callback.best_model_path)
 
 
 if __name__ == "__main__":

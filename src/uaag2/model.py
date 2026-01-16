@@ -6,6 +6,7 @@ from datetime import datetime
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
+import wandb
 from torch import Tensor
 from torch_geometric.data import Batch
 from tqdm import tqdm
@@ -241,6 +242,18 @@ class Trainer(pl.LightningModule):
             logger.error("RuntimeError during training step {}: {}", batch_idx, e)
             loss = torch.tensor(0.0, device=batch.x.device, requires_grad=True)
         return loss
+
+    def on_before_optimizer_step(self, optimizer):
+        # Log gradient histogram every 500 steps
+        if self.global_step % 500 == 0 and self.global_step > 0:
+            if isinstance(self.logger, pl.loggers.WandbLogger):
+                grads = []
+                for param in self.model.parameters():
+                    if param.grad is not None:
+                        grads.append(param.grad.flatten())
+                if grads:
+                    all_grads = torch.cat(grads)
+                    wandb.log({"gradients": wandb.Histogram(all_grads.cpu().numpy())}, step=self.global_step)
 
     def validation_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
