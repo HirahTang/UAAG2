@@ -5,15 +5,15 @@ steps:
     'build',
     '.',
     '-t',
-    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/mnist-train',
+    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train',
     '-f',
-    'dockerfiles/mnist_train.dockerfile'
+    'dockerfiles/train.dockerfile'
   ]
 - name: 'gcr.io/cloud-builders/docker'
   id: 'Push container image'
   args: [
     'push',
-    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/mnist-train'
+    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train'
   ]
 options:
   logging: CLOUD_LOGGING_ONLY
