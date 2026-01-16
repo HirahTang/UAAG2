@@ -49,4 +49,5 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 # Default entrypoint runs the training script
 # Users can override with additional arguments
+ENV WANDB_MODE=offline
 ENTRYPOINT ["uv", "run", "invoke", "fetch-data", "train", "--num-epochs=1"]
