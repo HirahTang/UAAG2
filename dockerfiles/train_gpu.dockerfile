@@ -58,5 +58,4 @@ RUN mkdir -p models data reports/figures 3DcoordsAtomsBonds_0
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Default entrypoint runs the training script
-ENTRYPOINT ["uv", "run", "python", "-m", "uaag2.train"]
+ENTRYPOINT ["uv", "run", "invoke", "fetch-data", "train", "--num-epochs=1"]
