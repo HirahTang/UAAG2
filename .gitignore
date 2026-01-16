@@ -19,6 +19,9 @@ data/*
 # Virtual environments
 .venv
 
+# secrets
+.env
+
 .DS_Store
 *.pdb
 *.ckpt
