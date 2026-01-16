@@ -85,9 +85,7 @@ def train(
     if not experiment_id:
         experiment_id = f"uaag2_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    sampler_flag = (
-        "--use-metadata-sampler" if use_metadata_sampler else "--no-metadata-sampler"
-    )
+    sampler_flag = "--use-metadata-sampler" if use_metadata_sampler else "--no-metadata-sampler"
 
     ctx.run(
         f"uv run src/{PROJECT_NAME}/train.py "
@@ -164,7 +162,7 @@ def test(ctx: Context) -> None:
 
 
 @task
-def docker_build(ctx: Context, progress: str = "plain", nix: bool = False) -> None:
+def docker_build(ctx: Context, progress: str = "plain", nix: bool = False, gpu: bool = False) -> None:
     """Build docker images."""
 
     def with_nix(s):
@@ -172,18 +170,19 @@ def docker_build(ctx: Context, progress: str = "plain", nix: bool = False) -> No
 
     ctx.run(
         with_nix(
-            f"docker build -t train:latest . -f dockerfiles/train.dockerfile --progress={progress}"
+            f"docker build {'--platform linux/amd64' if gpu else ''} -t train{'-gpu' if gpu else ''}:latest . -f dockerfiles/train{'_gpu' if gpu else ''}.dockerfile --progress={progress}"
         ),
         echo=True,
         pty=not WINDOWS,
     )
-    ctx.run(
-        with_nix(
-            f"docker build -t api:latest . -f dockerfiles/api.dockerfile --progress={progress}"
-        ),
-        echo=True,
-        pty=not WINDOWS,
-    )
+    # TODO api
+    # ctx.run(
+    #     with_nix(
+    #         f"docker build -t api:latest . -f dockerfiles/api.dockerfile --progress={progress}"
+    #     ),
+    #     echo=True,
+    #     pty=not WINDOWS,
+    # )
 
 
 # Documentation commands
@@ -200,9 +199,7 @@ def build_docs(ctx: Context) -> None:
 @task
 def serve_docs(ctx: Context) -> None:
     """Serve documentation."""
-    ctx.run(
-        "uv run mkdocs serve --config-file docs/mkdocs.yaml", echo=True, pty=not WINDOWS
-    )
+    ctx.run("uv run mkdocs serve --config-file docs/mkdocs.yaml", echo=True, pty=not WINDOWS)
 
 
 # ------------------------------------------------------------

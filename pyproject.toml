@@ -11,8 +11,9 @@ authors = [
 ]
 license = { file = "LICENSE" }
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12, <3.13"
 dependencies = [
+    # --- Standard Libraries ---
     "biopython>=1.86",
     "fastapi==0.115.6",
     "huggingface-hub[cli]>=1.3.1",
@@ -36,18 +37,24 @@ dependencies = [
     "uvicorn==0.34.0",
     "wandb>=0.23.1",
     "loguru>=0.7.0",
-    # Torch
+
+    # --- PyTorch Stack ---
     "torch==2.7.0",
     "torch-ema>=0.3",
     "torch-geometric>=2.7.0",
+
+    # --- PyG Extensions ---
+    # Mac/ARM (Local): Clean versions (found on PyPI)
     "torch-cluster==1.6.3; sys_platform == 'darwin'",
-    "torch-cluster==1.6.3+pt27cpu; sys_platform == 'linux'",
     "torch-scatter==2.1.2; sys_platform == 'darwin'",
-    "torch-scatter==2.1.2+pt27cpu; sys_platform == 'linux'",
     "torch-sparse==0.6.18; sys_platform == 'darwin'",
-    "torch-sparse==0.6.18+pt27cpu; sys_platform == 'linux'",
     "torch-spline-conv==1.2.2; sys_platform == 'darwin'",
-    "torch-spline-conv==1.2.2+pt27cpu; sys_platform == 'linux'",
+
+    # Linux (Docker): "Dirty" CUDA 12.8 versions (found in find-links)
+    "torch-cluster==1.6.3+pt27cu128; sys_platform == 'linux'",
+    "torch-scatter==2.1.2+pt27cu128; sys_platform == 'linux'",
+    "torch-sparse==0.6.18+pt27cu128; sys_platform == 'linux'",
+    "torch-spline-conv==1.2.2+pt27cu128; sys_platform == 'linux'",
 ]
 
 [dependency-groups]
@@ -70,18 +77,31 @@ name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-# Darwin is for local development on macOS. Require also linux for building
-# docker images on macOS.
+[[tool.uv.index]]
+name = "pytorch-gpu"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
 [tool.uv]
-required-environments = [
+find-links = [
+  "https://data.pyg.org/whl/torch-2.7.0+cpu.html",
+  "https://data.pyg.org/whl/torch-2.7.0+cu128.html"
+]
+
+environments = [
     "sys_platform == 'darwin' and platform_machine == 'arm64'",
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
-find-links = [
-  "https://data.pyg.org/whl/torch-2.7.0+cpu.html"
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
+    { index = "pytorch-gpu", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
+    { index = "pytorch-gpu", marker = "sys_platform == 'linux'" }
 ]
 
-[tool.uv.sources]
-torch = [{ index = "pytorch-cpu" }]
-torchvision = [{ index = "pytorch-cpu" }]
+[tool.ruff]
+line-length = 120
