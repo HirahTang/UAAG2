@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import sys
 from datetime import datetime
 
 import pytorch_lightning as pl
@@ -14,6 +13,7 @@ from tqdm import tqdm
 from uaag2.diffusion.categorical import CategoricalDiffusionKernel
 from uaag2.diffusion.continuous import DiscreteDDPM
 from uaag2.e3moldiffusion.coordsatomsbonds import DenoisingEdgeNetwork
+from uaag2.logging_config import logger
 from uaag2.losses import DiffusionLoss
 from uaag2.utils import (
     convert_edge_to_bond,
@@ -22,7 +22,6 @@ from uaag2.utils import (
     load_model,
     write_xyz_file_from_batch,
 )
-
 
 logging.getLogger("lightning").setLevel(logging.WARNING)
 logging.getLogger("pytorch_lightning.utilities.rank_zero").addHandler(logging.NullHandler())
@@ -114,7 +113,7 @@ class Trainer(pl.LightningModule):
         self.num_bond_classes = len(bond_types_distribution)
 
         if self.hparams.load_ckpt_from_pretrained is not None:
-            print("Loading from pre-trained model checkpoint...")
+            logger.info("Loading from pre-trained model checkpoint: {}", self.hparams.load_ckpt_from_pretrained)
 
             self.model = load_model(
                 self.hparams.load_ckpt_from_pretrained,
@@ -239,7 +238,7 @@ class Trainer(pl.LightningModule):
         try:
             loss = self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
         except RuntimeError as e:
-            print(f"RuntimeError: {e}")
+            logger.error("RuntimeError during training step {}: {}", batch_idx, e)
             loss = torch.tensor(0.0, device=batch.x.device, requires_grad=True)
         return loss
 
@@ -443,7 +442,7 @@ class Trainer(pl.LightningModule):
 
         if torch.any(final_loss.isnan()):
             final_loss = final_loss[~final_loss.isnan()]
-            print(f"Detected NaNs. Terminating training at epoch {self.current_epoch}")
+            logger.critical("Detected NaNs. Terminating training at epoch {}", self.current_epoch)
             exit()
 
         self._log(
@@ -619,14 +618,10 @@ class Trainer(pl.LightningModule):
                 batch_lig=batch.batch[pocket_mask == 0],
             )
         except torch.cuda.OutOfMemoryError:
-            # Compact log instead of full traceback:
-
-            print(
-                f"[OOM {datetime.now()}]"
-                f"nodes_total={atom_feats_in_perturbed.shape[0]} "
-                f"edges_total={edge_attr_global_perturbed.shape[0]}",
-                file=sys.stdout,
-                flush=True,
+            logger.warning(
+                "CUDA OOM - nodes_total={} edges_total={}",
+                atom_feats_in_perturbed.shape[0],
+                edge_attr_global_perturbed.shape[0],
             )
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -660,7 +655,7 @@ class Trainer(pl.LightningModule):
         torch.cuda.empty_cache()
         if (self.current_epoch + 1) % self.hparams.test_interval == 0:
             if self.local_rank == 0:
-                print(f"Running evaluation in epoch {self.current_epoch + 1}")
+                logger.info("Running evaluation in epoch {}", self.current_epoch + 1)
             final_res = self.run_evaluation(
                 step=self.i,
                 device="cuda" if self.hparams.gpus > 1 else "cpu",
@@ -762,11 +757,11 @@ class Trainer(pl.LightningModule):
 
         if verbose:
             if self.local_rank == 0:
-                print(f"Run time={run_time}")
+                logger.info("Evaluation run time: {}", run_time)
 
         total_res = {"validity": sanitize_rate, "connectivity": connect_rate}
         if self.local_rank == 0:
-            print(total_res)
+            logger.info("Evaluation results: validity={:.4f}, connectivity={:.4f}", sanitize_rate, connect_rate)
 
         total_res["step"] = str(step)
         total_res["epoch"] = str(self.current_epoch)
@@ -790,7 +785,7 @@ class Trainer(pl.LightningModule):
         show_pocket: bool = False,
         device: str = "cpu",
     ):
-        print("Number of graphs: ", len(loader))
+        logger.info("Number of graphs: {}", len(loader))
         molecule_list = []
         connected_list = []
         sanitized_list = []
@@ -828,11 +823,11 @@ class Trainer(pl.LightningModule):
         run_time = datetime.now() - start
 
         if verbose:
-            print(f"Run time={run_time}")
+            logger.info("Ligand generation run time: {}", run_time)
 
         # save connect_rate and sanitize_rate to a json file
         total_res = {"validity": sanitize_rate, "connectivity": connect_rate}
-        print(total_res)
+        logger.info("Generation results: validity={:.4f}, connectivity={:.4f}", sanitize_rate, connect_rate)
 
         with open(os.path.join(self.save_dir, save_path, "results.json"), "w") as f:
             json.dump(total_res, f)
@@ -1156,7 +1151,7 @@ class Trainer(pl.LightningModule):
                     atom_decoder=self.dataset_info.atom_decoder,
                 )
             except Exception:
-                print("No Pocket for this molecule")
+                logger.warning("No Pocket for this molecule")
                 return out_dict, connected_list, sanitized_list
             return out_dict, connected_list, sanitized_list
         else:
