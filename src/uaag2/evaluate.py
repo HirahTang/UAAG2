@@ -8,12 +8,17 @@ from torch_geometric.loader import DataLoader
 
 from uaag2.data.uaag_dataset import Dataset_Info, UAAG2Dataset_sampling
 from uaag2.equivariant_diffusion import Trainer
+from uaag2.logging_config import configure_file_logging, logger
 
 warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
 
 
 def main(hparams):
-    print("Loading data from: ", hparams.benchmark_path)
+    log_dir = os.path.join(hparams.save_dir, f"run{hparams.id}", "logs")
+    configure_file_logging(log_dir)
+    logger.info("Starting evaluation run {}", hparams.id)
+
+    logger.info("Loading data from: {}", hparams.benchmark_path)
     data_file = torch.load(hparams.benchmark_path, weights_only=False)
 
     # Split data into partitions based on split_index
@@ -33,17 +38,17 @@ def main(hparams):
         raise ValueError(f"split_index must be between 0 and {NUM_PARTITIONS - 1}, got {hparams.split_index}")
 
     index = partitions[hparams.split_index]
-    print(f"Processing partition {hparams.split_index}/{NUM_PARTITIONS - 1} with {len(index)} residues")
+    logger.info("Processing partition {}/{} with {} residues", hparams.split_index, NUM_PARTITIONS - 1, len(index))
 
     dataset_info = Dataset_Info(hparams, hparams.data_info_path)
 
-    print("Number of Residues: ", len(index))
+    logger.info("Number of Residues: {}", len(index))
 
     for graph_num in index:
         seq_position = int(data_file[graph_num].compound_id.split("_")[-3])
         seq_res = data_file[graph_num].compound_id.split("_")[-4]
         graph = data_file[graph_num]
-        print("Sampling for: ", seq_res, seq_position)
+        logger.info("Sampling for: {} {}", seq_res, seq_position)
 
         save_path = os.path.join("Samples", f"{seq_res}_{seq_position}")
 
@@ -68,7 +73,7 @@ def main(hparams):
         )
 
         # Load the model and checkpoint
-        print("Loading model from checkpoint: ", hparams.load_ckpt)
+        logger.info("Loading model from checkpoint: {}", hparams.load_ckpt)
         model = Trainer.load_from_checkpoint(
             hparams.load_ckpt,
             hparams=hparams,

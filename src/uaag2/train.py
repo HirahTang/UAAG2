@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 import numpy as np
 import pytorch_lightning as pl
 import torch
+import wandb
 import yaml
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
@@ -20,6 +21,7 @@ from torch.utils.data import RandomSampler, WeightedRandomSampler
 from uaag2.callbacks.ema import ExponentialMovingAverage
 from uaag2.data.uaag_dataset import Dataset_Info, UAAG2DataModule, UAAG2Dataset
 from uaag2.equivariant_diffusion import Trainer
+from uaag2.logging_config import configure_file_logging, logger
 
 warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
 
@@ -28,6 +30,11 @@ warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is
 
 
 def main(hparams):
+    # Configure file logging to save logs alongside checkpoints
+    log_dir = os.path.join(hparams.save_dir, f"run{hparams.id}", "logs")
+    configure_file_logging(log_dir)
+    logger.info("Starting training run {}", hparams.id)
+
     ema_callback = ExponentialMovingAverage(decay=hparams.ema_decay)
     checkpoint_callback = ModelCheckpoint(
         dirpath=hparams.save_dir + f"/run{hparams.id}/",
@@ -43,19 +50,34 @@ def main(hparams):
     )
     tb_logger = TensorBoardLogger(hparams.save_dir + f"/run{hparams.id}/", default_hp_metric=False)
     if hparams.logger_type == "wandb":
-        logger = wandb_logger
+        pl_logger = wandb_logger
+        # Log key hyperparameters to wandb
+        wandb_logger.experiment.config.update(
+            {
+                "learning_rate": hparams.lr,
+                "batch_size": hparams.batch_size,
+                "num_epochs": hparams.num_epochs,
+                "num_layers": hparams.num_layers,
+                "sdim": hparams.sdim,
+                "vdim": hparams.vdim,
+                "timesteps": hparams.timesteps,
+                "noise_scheduler": hparams.noise_scheduler,
+                "mask_rate": hparams.mask_rate,
+                "seed": hparams.seed,
+            }
+        )
     elif hparams.logger_type == "tensorboard":
-        logger = tb_logger
+        pl_logger = tb_logger
     else:
         raise ValueError("Logger type not recognized")
 
-    print("Loading DataModule")
+    logger.info("Loading DataModule")
 
     dataset_info = Dataset_Info(hparams, hparams.data_info_path)
 
-    print("pocket noise: ", hparams.pocket_noise)
-    print("mask rate: ", hparams.mask_rate)
-    print("pocket noise scale: ", hparams.pocket_noise_scale)
+    logger.info("Pocket noise: {}", hparams.pocket_noise)
+    logger.info("Mask rate: {}", hparams.mask_rate)
+    logger.info("Pocket noise scale: {}", hparams.pocket_noise_scale)
     lmdb_data_path = hparams.training_data
     all_data = UAAG2Dataset(
         lmdb_data_path,
@@ -82,7 +104,7 @@ def main(hparams):
 
     # Create sampler based on use_metadata_sampler flag
     if hparams.use_metadata_sampler and hparams.metadata_path is not None:
-        print(f"Using WeightedRandomSampler with metadata from: {hparams.metadata_path}")
+        logger.info("Using WeightedRandomSampler with metadata from: {}", hparams.metadata_path)
         with open(hparams.metadata_path, "rb") as f:
             metadata = pickle.load(f)
         weights = []
@@ -97,7 +119,7 @@ def main(hparams):
         weights = weights / weights.sum()
         sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
     else:
-        print("Using RandomSampler (no metadata weighting)")
+        logger.info("Using RandomSampler (no metadata weighting)")
         sampler = RandomSampler(train_data)
 
     datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data, sampler=sampler)
@@ -126,7 +148,7 @@ def main(hparams):
         strategy=strategy,
         plugins=LightningEnvironment(),
         num_nodes=1,
-        logger=logger,
+        logger=pl_logger,
         enable_checkpointing=True,
         accumulate_grad_batches=hparams.accum_batch,
         val_check_interval=hparams.eval_freq,
@@ -146,12 +168,12 @@ def main(hparams):
     # print the model parameter size
 
     if hparams.load_ckpt is not None:
-        print("Loading from checkpoint ...")
+        logger.info("Loading from checkpoint: {}", hparams.load_ckpt)
 
         ckpt_path = hparams.load_ckpt
         ckpt = torch.load(ckpt_path)
         if ckpt["optimizer_states"][0]["param_groups"][0]["lr"] != hparams.lr:
-            print("Changing learning rate ...")
+            logger.info("Changing learning rate to {}", hparams.lr)
             ckpt["optimizer_states"][0]["param_groups"][0]["lr"] = hparams.lr
             ckpt["optimizer_states"][0]["param_groups"][0]["initial_lr"] = hparams.lr
             ckpt_path = "lr" + "_" + str(hparams.lr) + "_" + os.path.basename(hparams.load_ckpt)
@@ -170,12 +192,32 @@ def main(hparams):
 
     with open(hparams_path, "w") as f:
         yaml.safe_dump(vars(hparams), f)
-    # from IPython import embed; embed()
+
     trainer.fit(
         model=model,
         datamodule=datamodule,
         ckpt_path=ckpt_path if hparams.load_ckpt is not None else None,
     )
+
+    # Log final model as wandb artifact
+    if hparams.logger_type == "wandb" and checkpoint_callback.best_model_path:
+        logger.info("Logging model artifact to wandb")
+        artifact = wandb.Artifact(
+            name=f"uaag2-model-run{hparams.id}",
+            type="model",
+            description="UAAG2 diffusion model checkpoint",
+            metadata={
+                "epoch": trainer.current_epoch,
+                "val_loss": float(checkpoint_callback.best_model_score)
+                if checkpoint_callback.best_model_score
+                else None,
+                "learning_rate": hparams.lr,
+                "num_layers": hparams.num_layers,
+            },
+        )
+        artifact.add_file(checkpoint_callback.best_model_path)
+        wandb.log_artifact(artifact)
+        logger.info("Model artifact logged: {}", checkpoint_callback.best_model_path)
 
 
 if __name__ == "__main__":

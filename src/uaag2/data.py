@@ -1,18 +1,17 @@
 import os
+import pickle
 from pathlib import Path
+
+import lmdb
 import numpy as np
-
-from rdkit import Chem
-
+import pytorch_lightning as pl
 import torch
 from huggingface_hub import hf_hub_download
+from rdkit import Chem
+from torch_geometric.data import Data, DataLoader
 
-from torch_geometric.data import DataLoader, Data
+from uaag2.logging_config import logger
 from uaag2.utils import visualize_mol
-import lmdb
-import pytorch_lightning as pl
-import pickle
-
 
 HUGGINGFACE_REPO_ID = "yhsure/uaag2-data"
 
@@ -41,15 +40,15 @@ def fetch_data(data_dir: str = "data", force: bool = False) -> None:
         "benchmarks/ENVZ_ECOLI.pt",
     ]
 
-    print(f"Fetching data from Hugging Face: {HUGGINGFACE_REPO_ID}")
+    logger.info("Fetching data from Hugging Face: {}", HUGGINGFACE_REPO_ID)
 
     for filename in files:
         local_path = data_path / filename
         if local_path.exists() and not force:
-            print(f"  Skipping {filename} (already exists)")
+            logger.debug("Skipping {} (already exists)", filename)
             continue
 
-        print(f"  Downloading {filename}...")
+        logger.info("Downloading {}...", filename)
         # Create parent directory if needed (for benchmarks/)
         local_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -59,9 +58,9 @@ def fetch_data(data_dir: str = "data", force: bool = False) -> None:
             repo_type="dataset",
             local_dir=data_path,
         )
-        print(f"  Downloaded {filename}")
+        logger.debug("Downloaded {}", filename)
 
-    print("Data fetch complete!")
+    logger.info("Data fetch complete!")
 
 
 class UAAG2Dataset(torch.utils.data.Dataset):

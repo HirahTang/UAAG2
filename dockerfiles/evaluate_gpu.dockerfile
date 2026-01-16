@@ -1,15 +1,18 @@
-# UAAG2 Training Dockerfile
-# Build: docker build -f dockerfiles/train.dockerfile -t uaag2-train .
-# Run:   docker run --rm -v $(pwd)/data:/app/data -v $(pwd)/models:/app/models uaag2-train [args]
+# UAAG2 Evaluation/Sampling Dockerfile (GPU/CUDA)
+# Build: docker build -f dockerfiles/evaluate_gpu.dockerfile -t uaag2-evaluate-gpu .
+# Run:   docker run --rm --gpus all -v $(pwd)/data:/app/data -v $(pwd)/models:/app/models -v $(pwd)/Samples:/app/Samples uaag2-evaluate-gpu [args]
 
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS base
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS base
 
-# Install system dependencies required for scientific Python packages
-# - build-essential: C/C++ compilers for building extensions
-# - libxrender1, libxext6: Required by RDKit for molecule visualization
-# - libgomp1: OpenMP support for parallel computation
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
 RUN apt-get update && \
     apt-get install --no-install-recommends -y \
+        python3.12 \
+        python3.12-venv \
+        python3-pip \
         build-essential \
         gcc \
         g++ \
@@ -17,8 +20,13 @@ RUN apt-get update && \
         libxext6 \
         libgomp1 \
         git \
+        curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
 
@@ -40,12 +48,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
 
 # Create necessary directories for outputs
-RUN mkdir -p models data reports/figures 3DcoordsAtomsBonds_0
+RUN mkdir -p models data Samples ProteinGymSampling
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Default entrypoint runs the training script
-# Users can override with additional arguments
-ENTRYPOINT ["uv", "run", "python", "-m", "uaag2.train"]
+# Default entrypoint runs the evaluation script
+ENTRYPOINT ["uv", "run", "python", "-m", "uaag2.evaluate"]
