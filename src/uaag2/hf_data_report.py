@@ -34,7 +34,7 @@ def human_readable_size(num_bytes: int) -> str:
     return f"{size:.1f} {SIZE_UNITS[-1]}"
 
 
-def build_report(data_dir: str | Path = "data") -> str:
+def build_report(data_dir: Path = Path("data")) -> str:
     """Build a markdown report with basic dataset statistics.
 
     Args:
@@ -67,7 +67,7 @@ def build_report(data_dir: str | Path = "data") -> str:
     return "\n".join(lines)
 
 
-def dataset_statistics(data_dir: str | Path = "data") -> None:
+def dataset_statistics(data_dir: Path = Path("data")) -> None:
     """Print dataset statistics as a markdown report.
 
     Args:
