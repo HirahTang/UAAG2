@@ -6,11 +6,15 @@ on:
     paths:
       - "data/aa_graph.json"
       - "data/statistic.pkl"
+      - "data/pdb_subset.lmdb"
+      - "data/benchmarks/ENVZ_ECOLI.pt"
   push:
     branches: [main, mlops]
     paths:
       - "data/aa_graph.json"
       - "data/statistic.pkl"
+      - "data/pdb_subset.lmdb"
+      - "data/benchmarks/ENVZ_ECOLI.pt"
 
 permissions:
   contents: read

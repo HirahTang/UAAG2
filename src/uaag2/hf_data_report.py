@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import pickle
 from pathlib import Path
-from typing import Any
 
-import lmdb
 import typer
 
 HUGGINGFACE_REPO_ID = "yhsure/uaag2-data"
@@ -14,6 +11,8 @@ DATA_FILES = (
     "pdb_subset.lmdb",
     "benchmarks/ENVZ_ECOLI.pt",
 )
+BYTES_PER_UNIT = 1024
+SIZE_UNITS = ("B", "KB", "MB", "GB", "TB")
 
 
 def human_readable_size(num_bytes: int) -> str:
@@ -23,68 +22,19 @@ def human_readable_size(num_bytes: int) -> str:
         num_bytes: Size in bytes.
 
     Returns:
-        Human-readable size string.
+        Human-readable size string with unit suffix (e.g., "1.5 MB", "512 B").
     """
-    units = ("B", "KB", "MB", "GB", "TB")
     size = float(num_bytes)
-    for unit in units:
-        if size < 1024 or unit == units[-1]:
+    for unit in SIZE_UNITS:
+        if size < BYTES_PER_UNIT:
             if unit == "B":
                 return f"{int(size)} {unit}"
             return f"{size:.1f} {unit}"
-        size /= 1024
-    return f"{size:.1f} TB"
+        size /= BYTES_PER_UNIT
+    return f"{size:.1f} {SIZE_UNITS[-1]}"
 
 
-def get_lmdb_length(path: Path) -> int | None:
-    """Read the number of entries from an LMDB dataset.
-
-    Args:
-        path: Path to the LMDB file.
-
-    Returns:
-        The number of entries if the LMDB file exists, otherwise None.
-    """
-    if not path.exists():
-        return None
-
-    env = lmdb.open(
-        str(path),
-        readonly=True,
-        lock=False,
-        subdir=False,
-        readahead=False,
-        meminit=False,
-    )
-    try:
-        with env.begin() as txn:
-            length = pickle.loads(txn.get(b"__len__"))
-    finally:
-        env.close()
-    return int(length)
-
-
-def get_statistics_keys(path: Path) -> list[str]:
-    """Load the statistic pickle and return its top-level keys.
-
-    Args:
-        path: Path to the statistic.pkl file.
-
-    Returns:
-        List of keys if the file exists and contains a mapping; otherwise an empty list.
-    """
-    if not path.exists():
-        return []
-
-    with path.open("rb") as handle:
-        data: Any = pickle.load(handle)
-
-    if isinstance(data, dict):
-        return sorted(str(key) for key in data.keys())
-    return []
-
-
-def build_report(data_dir: str = "data") -> str:
+def build_report(data_dir: str | Path = "data") -> str:
     """Build a markdown report with basic dataset statistics.
 
     Args:
@@ -114,19 +64,10 @@ def build_report(data_dir: str = "data") -> str:
             status = "missing"
         lines.append(f"| `{filename}` | {status} | {size} |")
 
-    lmdb_length = get_lmdb_length(data_path / "pdb_subset.lmdb")
-    if lmdb_length is not None:
-        lines.extend(["", f"- LMDB entries: **{lmdb_length:,}**"])
-
-    statistic_keys = get_statistics_keys(data_path / "statistic.pkl")
-    if statistic_keys:
-        joined_keys = ", ".join(statistic_keys)
-        lines.extend(["", f"- Statistic keys: {joined_keys}"])
-
     return "\n".join(lines)
 
 
-def dataset_statistics(data_dir: str = "data") -> None:
+def dataset_statistics(data_dir: str | Path = "data") -> None:
     """Print dataset statistics as a markdown report.
 
     Args:
