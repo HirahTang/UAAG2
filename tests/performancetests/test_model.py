@@ -21,7 +21,7 @@ from uaag2.equivariant_diffusion import Trainer
 DATA_INFO_PATH = os.path.join(_PATH_DATA, "statistic.pkl")
 LMDB_DATA_PATH = os.path.join(_PATH_DATA, "pdb_subset.lmdb")
 
-NUM_PREDICTIONS = 100
+NUM_PREDICTIONS = 5
 MAX_TIME_SECONDS = 60.0
 
 

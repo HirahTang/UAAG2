@@ -49,6 +49,10 @@ jobs:
           uv sync
           uv pip list
 
+      - name: Fetch data
+        run: |
+          uv run invoke fetch-data
+
       - name: Test model
         run: |
           uv run pytest tests/performancetests/test_model.py
