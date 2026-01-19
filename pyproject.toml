@@ -67,7 +67,7 @@ dev = [
     "invoke==2.2.0",
     "pre-commit==4.1.0",
     "pytest==8.3.4",
-    "ruff==0.14.11",
+    "ruff==0.14.13",
     "mypy==1.19.1",
     "mkdocs-material==9.7.1",
     "mkdocstrings-python==2.0.1",
