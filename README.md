@@ -21,6 +21,9 @@ $ uv run python src/uaag2/hf_data_report.py
 ### Model
 The architecture is an **$E(3)$-equivariant Graph Neural Network** based on the EQGAT-diff framework, utilizing 7 message-passing layers and 3.6M parameters. It employs a multi-modal diffusion process that perturbs continuous atomic coordinates and discrete categorical features like atom types and formal charges. To accommodate variable atom counts, the model implements a **virtual node strategy**, allowing it to sample side chains of varying sizes within a unified generative paradigm. Denoising ensures Euclidean symmetry, and mutational effects are calculated by comparing sampled likelihoods of mutant versus wild-type residues.
 
+### Nix Development Environment
+A `flake.nix` file is provided to manage system-level dependencies (such as Docker, Colima, and the Google Cloud SDK) that are not managed by `uv`. Run `nix develop` to enter a shell with these tools pre-installed.
+
 ## Project structure
 
 The directory structure of the project looks like this:

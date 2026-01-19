@@ -13,7 +13,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY README.md README.md
 COPY LICENSE LICENSE
 COPY src src/
-COPY data data/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
