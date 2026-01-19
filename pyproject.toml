@@ -110,3 +110,8 @@ torchvision = [
 
 [tool.ruff]
 line-length = 120
+
+[tool.coverage.run]
+omit = [
+    "*/_remote_module_non_scriptable.py",
+]
