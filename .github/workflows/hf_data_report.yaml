@@ -50,7 +50,7 @@ jobs:
           uv run python src/uaag2/hf_data_report.py > hf_data_report.md
 
       - name: Setup CML
-        uses: iterative/setup-cml@v2
+        uses: iterative/setup-cml@v3
 
       - name: Comment on pull request
         if: github.event_name == 'pull_request'
