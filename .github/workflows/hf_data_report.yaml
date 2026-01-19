@@ -1,0 +1,60 @@
+name: Hugging Face data report
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    branches: [main, mlops]
+    paths:
+      - "data/aa_graph.json"
+      - "data/statistic.pkl"
+      - "data/pdb_subset.lmdb"
+      - "data/benchmarks/ENVZ_ECOLI.pt"
+  push:
+    branches: [main, mlops]
+    paths:
+      - "data/aa_graph.json"
+      - "data/statistic.pkl"
+      - "data/pdb_subset.lmdb"
+      - "data/benchmarks/ENVZ_ECOLI.pt"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  hf_data_report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: |
+          uv sync --locked --dev
+          uv tree
+
+      - name: Fetch Hugging Face data
+        run: |
+          uv run invoke fetch-data
+
+      - name: Generate data report
+        run: |
+          uv run python src/uaag2/hf_data_report.py > hf_data_report.md
+
+      - name: Setup CML
+        uses: iterative/setup-cml@v2
+
+      - name: Comment on pull request
+        if: github.event_name == 'pull_request'
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cml comment create hf_data_report.md --watermark-title="HF Data Checker"
