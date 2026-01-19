@@ -1,12 +1,14 @@
-name: Tests & Build
+name: Tests
 
 on:
   push:
     branches: [main, mlops]
   pull_request:
     branches: [main, mlops]
+
 jobs:
   test:
+    name: Run tests
     runs-on: ${{ matrix.operating-system }}
     strategy:
       matrix:
@@ -15,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -37,22 +39,3 @@ jobs:
         run: |
           uv run coverage run -m pytest tests/
           uv run coverage report -m
-
-  build:
-    needs: test
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/mlops' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Auth with GCP
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCLOUD_SERVICE_KEY }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Submit build
-        run: gcloud builds submit . --config configs/cloudbuild.yaml
