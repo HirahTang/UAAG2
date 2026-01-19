@@ -5,15 +5,17 @@ steps:
     'build',
     '.',
     '-t',
-    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train',
+    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train-gpu',
     '-f',
-    'dockerfiles/train.dockerfile'
+    'dockerfiles/train_gpu.dockerfile'
   ]
+  env:
+    - 'DOCKER_BUILDKIT=1'
 - name: 'gcr.io/cloud-builders/docker'
   id: 'Push container image'
   args: [
     'push',
-    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train'
+    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train-gpu'
   ]
 options:
   logging: CLOUD_LOGGING_ONLY
