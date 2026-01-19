@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
+from argparse import Namespace
+from dataclasses import asdict, dataclass
 
 import pytest
 import torch
@@ -140,9 +141,13 @@ class TestModelPerformance:
         """
         checkpoint_path = get_model_path_from_wandb(model_artifact_path)
 
+        # Convert dataclass to Namespace for pytorch-lightning compatibility
+        # Trainer expects hparams to be a Namespace (or dict, but Trainer uses dot access)
+        hparams = Namespace(**asdict(mock_params))
+
         model = Trainer.load_from_checkpoint(
             checkpoint_path,
-            hparams=mock_params,
+            hparams=hparams,
             dataset_info=dataset_info,
         ).to(device)
         model.eval()
