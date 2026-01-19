@@ -9,6 +9,15 @@ The project implements an **MLOps pipeline** for **UAAG2** (Uncanonical Amino Ac
 * **PDBBind**: Protein-ligand complexes are integrated to capture diverse non-covalent interactions.
 * **DMS Benchmarks**: Performance is validated against experimental Deep Mutational Scanning data, specifically PUMA and CP2 benchmarks.
 
+### Hugging Face data checks
+We mirror the primary dataset in the public Hugging Face repository `yhsure/uaag2-data`. To refresh local data and
+generate a basic markdown report, run:
+
+```bash
+$ uv run invoke fetch-data
+$ uv run python src/uaag2/hf_data_report.py
+```
+
 ### Model
 The architecture is an **$E(3)$-equivariant Graph Neural Network** based on the EQGAT-diff framework, utilizing 7 message-passing layers and 3.6M parameters. It employs a multi-modal diffusion process that perturbs continuous atomic coordinates and discrete categorical features like atom types and formal charges. To accommodate variable atom counts, the model implements a **virtual node strategy**, allowing it to sample side chains of varying sizes within a unified generative paradigm. Denoising ensures Euclidean symmetry, and mutational effects are calculated by comparing sampled likelihoods of mutant versus wild-type residues.
 

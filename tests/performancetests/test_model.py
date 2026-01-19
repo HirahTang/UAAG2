@@ -30,6 +30,7 @@ class MockParams:
     """Mock params object for model loading."""
 
     virtual_node: bool = True
+    max_virtual_nodes: int = 5
     sdim: int = 256
     vdim: int = 64
     num_layers: int = 7
