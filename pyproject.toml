@@ -10,16 +10,11 @@ authors = [
   { name = "Han Tang", email = "your@email.com" },
 ]
 license = { file = "LICENSE" }
-keywords = ["machine learning", "MLOps"]
-classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Programming Language :: Python :: 3",
-]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12, <3.13"
 dependencies = [
     "biopython>=1.86",
-    "fastapi==0.115.6",
+    "fastapi==0.128.0",
     "huggingface-hub[cli]>=1.3.1",
     "lmdb>=1.7.5",
     "matplotlib>=3.10.8",
@@ -36,28 +31,20 @@ dependencies = [
     "scipy>=1.16.3",
     "seaborn>=0.13.2",
     "tensorboard>=2.20.0",
-    "torch==2.9.1",
-    "torch-cluster>=1.6.3",
-    "torch-ema>=0.3",
-    "torch-geometric==2.7",
-    "torch-scatter>=2.1.2",
-    "torch-sparse>=0.6.18",
-    "torch-spline-conv>=1.2.2",
     "tqdm>=4.67.1",
     "typer==0.15.1",
     "uvicorn==0.34.0",
-    "wandb==0.23.0",
+    "wandb==0.24.0",
     "loguru>=0.7.0",
-    "dvc-gs",
 ]
 
 [dependency-groups]
 dev = [
-    "coverage==7.6.9",
+    "coverage==7.13.1",
     "invoke==2.2.0",
     "pre-commit==4.1.0",
     "pytest==8.3.4",
-    "ruff==0.14.11",
+    "ruff==0.14.13",
     "mypy==1.19.1",
     "mkdocs-material==9.7.1",
     "mkdocstrings-python==2.0.1",
@@ -66,22 +53,16 @@ dev = [
     "google-api-python-client>=2.188.0",
 ]
 
-
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cpu" },
-]
-torchvision = [
-    { index = "pytorch-cpu" },
-]
-
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-[tool.uv]
-no-build-isolation-package = ["torch-cluster", "torch-scatter", "torch-sparse", "torch-spline-conv"]
+[tool.uv.extra-build-dependencies]
+torch-scatter = ["torch"]
+torch-sparse = ["torch"]
+torch-cluster = ["torch"]
+torch-spline-conv = ["torch"]
 
 [tool.pytest.ini_options]
 filterwarnings = [
@@ -98,8 +79,5 @@ line-length = 120
 
 [tool.coverage.run]
 omit = [
-    "tests/*",
-    "/private/var/folders/*",
-    "/var/folders/*",
     "*/_remote_module_non_scriptable.py",
 ]

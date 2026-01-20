@@ -33,6 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Copy project files
 COPY README.md README.md
 COPY LICENSE LICENSE
+COPY tasks.py tasks.py
 COPY src src/
 
 # Install the project
@@ -48,4 +49,5 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 # Default entrypoint runs the training script
 # Users can override with additional arguments
-ENTRYPOINT ["uv", "run", "python", "-m", "uaag2.train"]
+ENV WANDB_MODE=offline
+ENTRYPOINT ["uv", "run", "invoke", "fetch-data", "train", "--num-epochs=1", "--gpus=0"]

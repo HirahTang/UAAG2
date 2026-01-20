@@ -8,14 +8,15 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
+from argparse import Namespace
+from dataclasses import asdict, dataclass
 
 import pytest
 import torch
 import wandb
 
 from tests import _PATH_DATA
-from uaag2.data.uaag_dataset import Dataset_Info, UAAG2Dataset
+from uaag2.datasets.uaag_dataset import Dataset_Info, UAAG2Dataset
 from uaag2.equivariant_diffusion import Trainer
 
 DATA_INFO_PATH = os.path.join(_PATH_DATA, "statistic.pkl")
@@ -30,6 +31,7 @@ class MockParams:
     """Mock params object for model loading."""
 
     virtual_node: bool = True
+    max_virtual_nodes: int = 5
     sdim: int = 256
     vdim: int = 64
     num_layers: int = 7
@@ -139,9 +141,13 @@ class TestModelPerformance:
         """
         checkpoint_path = get_model_path_from_wandb(model_artifact_path)
 
+        # Convert dataclass to Namespace for pytorch-lightning compatibility
+        # Trainer expects hparams to be a Namespace (or dict, but Trainer uses dot access)
+        hparams = Namespace(**asdict(mock_params))
+
         model = Trainer.load_from_checkpoint(
             checkpoint_path,
-            hparams=mock_params,
+            hparams=hparams,
             dataset_info=dataset_info,
         ).to(device)
         model.eval()

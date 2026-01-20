@@ -8,7 +8,7 @@ import torch
 import yaml
 from torch_geometric.loader import DataLoader
 
-from uaag2.data.uaag_dataset import Dataset_Info, UAAG2Dataset_sampling
+from uaag2.datasets.uaag_dataset import Dataset_Info, UAAG2Dataset_sampling
 from uaag2.equivariant_diffusion import Trainer
 from uaag2.logging_config import configure_file_logging, logger
 
