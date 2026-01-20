@@ -141,7 +141,7 @@ class TestAPIValidation:
 
         Following DTU MLOps course material - testing input validation.
         """
-        data = ["not", "a", "number"] * 262  # 786 elements, but strings
+        data = ["not", "a", "number"] * 261 + ["extra"]  # 784 elements, but strings
         response = client.post("/predict", json={"data": data})
         assert response.status_code == 422  # Validation error
 

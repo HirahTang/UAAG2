@@ -174,8 +174,8 @@ if __name__ == "__main__":
     import subprocess
 
     # Set default host if not already set
-    if "MYENDPOINT" not in os.environ:
-        os.environ["MYENDPOINT"] = "http://localhost:8000"
+    if "API_BASE_URL" not in os.environ:
+        os.environ["API_BASE_URL"] = "http://localhost:8000"
 
     # Run locust with default parameters
     subprocess.run(

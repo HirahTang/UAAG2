@@ -68,10 +68,10 @@ Set the endpoint as an environment variable:
 
 ```bash
 # Linux/Mac
-export MYENDPOINT=http://localhost:8000
+export API_BASE_URL=http://localhost:8000
 
 # Windows
-set MYENDPOINT=http://localhost:8000
+set API_BASE_URL=http://localhost:8000
 
 # Then run locust
 locust -f tests/performancetests/locustfile.py \
@@ -79,7 +79,7 @@ locust -f tests/performancetests/locustfile.py \
     --users 10 \
     --spawn-rate 1 \
     --run-time 1m \
-    --host $MYENDPOINT
+    --host $API_BASE_URL
 ```
 
 ### Testing a Deployed API
@@ -88,12 +88,12 @@ If you've deployed your API to Google Cloud Run or another cloud service:
 
 ```bash
 # Get the deployment URL from GCP (Linux/Mac)
-export MYENDPOINT=$(gcloud run services describe <service-name> \
+export API_BASE_URL=$(gcloud run services describe <service-name> \
     --region=<region> \
     --format="value(status.url)")
 
 # Windows
-for /f "delims=" %i in ('gcloud run services describe <service-name> --region=<region> --format="value(status.url)"') do set MYENDPOINT=%i
+for /f "delims=" %i in ('gcloud run services describe <service-name> --region=<region> --format="value(status.url)"') do set API_BASE_URL=%i
 
 # Run the load test
 locust -f tests/performancetests/locustfile.py \
@@ -101,7 +101,7 @@ locust -f tests/performancetests/locustfile.py \
     --users 100 \
     --spawn-rate 10 \
     --run-time 5m \
-    --host $MYENDPOINT \
+    --host $API_BASE_URL \
     --csv=results/locust
 ```
 
