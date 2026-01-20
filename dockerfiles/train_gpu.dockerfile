@@ -42,6 +42,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY README.md README.md
 COPY LICENSE LICENSE
 COPY tasks.py tasks.py
+
+# Add a build argument to bust cache for source code changes
+ARG CACHEBUST=1
 COPY src src/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
