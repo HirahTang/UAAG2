@@ -43,8 +43,6 @@ COPY README.md README.md
 COPY LICENSE LICENSE
 COPY tasks.py tasks.py
 
-# Add a build argument to bust cache for source code changes
-ARG CACHEBUST=1
 COPY src src/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -54,9 +52,6 @@ RUN mkdir -p models data reports/figures 3DcoordsAtomsBonds_0
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-
-ARG GIT_COMMIT_SHA
-ENV GIT_COMMIT_SHA=${GIT_COMMIT_SHA}
 
 # 5. Runtime
 ENTRYPOINT ["uv", "run", "invoke", "fetch-data", "train", "--num-epochs=1"]

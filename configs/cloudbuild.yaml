@@ -5,13 +5,9 @@ steps:
     'build',
     '.',
     '-t',
-    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train-gpu:debug',
+    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train-gpu:latest',
     '-f',
-    'dockerfiles/train_gpu.dockerfile',
-    '--build-arg',
-    'CACHEBUST=$BUILD_ID',
-    '--build-arg',
-    'GIT_COMMIT_SHA=$COMMIT_SHA'
+    'dockerfiles/train_gpu.dockerfile'
   ]
   env:
     - 'DOCKER_BUILDKIT=1'
@@ -19,7 +15,7 @@ steps:
   id: 'Push container image'
   args: [
     'push',
-    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train-gpu:debug'
+    'europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train-gpu:latest',
   ]
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -5,4 +5,7 @@ workerPoolSpecs:
       acceleratorCount: 1
     replicaCount: 1
     containerSpec:
-      imageUri: europe-west1-docker.pkg.dev/dtumlops-484716/mlops-docker/train-gpu:debug
+      imageUri: ${IMAGE_URI}
+      env:
+        - name: WANDB_API_KEY
+          value: ${WANDB_API_KEY}
