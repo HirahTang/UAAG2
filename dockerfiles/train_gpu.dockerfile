@@ -40,5 +40,7 @@ RUN mkdir -p models data reports/figures 3DcoordsAtomsBonds_0
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV WANDB_MODE=disabled
+ENV CI=true
 
-ENTRYPOINT ["uv", "run", "invoke", "fetch-data", "train", "--num-epochs=1"]
+ENTRYPOINT ["uv", "run", "invoke", "fetch-data", "train"]
