@@ -64,9 +64,13 @@ The directory structure of the project looks like this:
 │       └── visualize.py
 ├── tests/                    # Tests
 │   ├── __init__.py
-│   ├── test_api.py
+│   ├── test_api.py          # API integration tests (M24)
 │   ├── test_data.py
-│   └── test_model.py
+│   ├── test_model.py
+│   └── performancetests/    # Load testing (M24)
+│       ├── locustfile.py    # Locust load tests
+│       ├── test_model.py    # Model performance tests
+│       └── README.md
 ├── LICENSE
 ├── pyproject.toml            # Python project file
 ├── README.md                 # Project README
@@ -97,3 +101,76 @@ $ docker run --name mnist_eval --rm -v "$(pwd)/models/model.pth:/models/model.pt
 Project template created using [mlops_template](https://github.com/SkafteNicki/mlops_template),
 a [cookiecutter template](https://github.com/cookiecutter/cookiecutter) for getting
 started with Machine Learning Operations (MLOps).
+
+## API Deployment (M22 & M24)
+
+The project includes a FastAPI application for serving MNIST model predictions:
+
+### Running the API locally
+
+```bash
+# Using uvicorn directly
+uvicorn uaag2.api:app --reload
+
+# Or using uv
+uv run uvicorn uaag2.api:app --reload
+```
+
+The API will be available at `http://localhost:8000`. Visit `http://localhost:8000/docs` for the interactive API documentation.
+
+### API Endpoints
+
+- `GET /`: Welcome message
+- `GET /health`: Health check endpoint
+- `POST /predict`: Predict digit from MNIST image (784 float values)
+
+### Building and Running API with Docker
+
+```bash
+# Build the API image
+docker build -t uaag2-api:latest -f dockerfiles/api.dockerfile .
+
+# Run the API container
+docker run --rm -p 8000:8000 -v $(pwd)/models:/app/models uaag2-api:latest
+```
+
+## Testing (M16, M24)
+
+### Unit and Integration Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test files
+pytest tests/test_api.py -v
+pytest tests/test_data.py -v
+pytest tests/test_model.py -v
+```
+
+### Load Testing with Locust (M24)
+
+Following DTU MLOps course module M24, the project includes load testing for the API:
+
+```bash
+# Install dependencies
+uv sync --group dev
+
+# Start the API
+uv run uvicorn uaag2.api:app --reload
+
+# Run load tests (web UI mode)
+locust -f tests/performancetests/locustfile.py
+
+# Run load tests (headless mode)
+locust -f tests/performancetests/locustfile.py \
+    --headless \
+    --users 10 \
+    --spawn-rate 1 \
+    --run-time 1m \
+    --host http://localhost:8000
+```
+
+See [`tests/performancetests/README.md`](tests/performancetests/README.md) for detailed load testing documentation.
+
+For comprehensive API testing documentation, see [`reports/API_TESTING.md`](reports/API_TESTING.md).
