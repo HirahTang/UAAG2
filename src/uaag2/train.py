@@ -19,7 +19,7 @@ from pytorch_lightning.plugins.environments import LightningEnvironment
 from torch.utils.data import RandomSampler, WeightedRandomSampler
 
 from uaag2.callbacks.ema import ExponentialMovingAverage
-from uaag2.data.uaag_dataset import Dataset_Info, UAAG2DataModule, UAAG2Dataset
+from uaag2.datasets.uaag_dataset import Dataset_Info, UAAG2DataModule, UAAG2Dataset
 from uaag2.equivariant_diffusion import Trainer
 from uaag2.logging_config import configure_file_logging, logger
 

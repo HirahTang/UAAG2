@@ -28,3 +28,28 @@ jobs:
 
       - name: Submit build
         run: gcloud builds submit . --config configs/cloudbuild.yaml
+
+      - name: Train model on Vertex AI
+        env:
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+        run: |
+          # 1. Define IMAGE_URI
+          # We assume the project ID is available via gcloud (set in previous step)
+          PROJECT_ID=$(gcloud config get-value project)
+          export IMAGE_URI="europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train-gpu:latest"
+
+          echo "Using Image URI: $IMAGE_URI"
+
+          # 2. Substitute variables in configs/vertex.yaml
+          # We use envsubst which is usually available in ubuntu-latest (part of gettext)
+          envsubst < configs/vertex.yaml > vertex_config.yaml
+
+          echo "Generated Vertex AI Config:"
+          cat vertex_config.yaml
+
+          # 3. Submit Custom Job
+          SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+          gcloud ai custom-jobs create \
+            --region=europe-west1 \
+            --display-name="uaag2-train-$SHORT_SHA" \
+            --config=vertex_config.yaml

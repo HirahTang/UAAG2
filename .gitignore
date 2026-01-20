@@ -12,7 +12,7 @@ wandb/
 models/
 3DcoordsAtomsBonds*/
 
-data/*
+/data/*
 !data/aa_graph.json
 !data/statistic.pkl
 
