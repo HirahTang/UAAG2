@@ -51,6 +51,7 @@ RUN mkdir -p models data reports/figures 3DcoordsAtomsBonds_0
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV GIT_COMMIT_SHA=6703a2688c63e10a7cf6bc6a213a293743a9d150
 
 # 5. Runtime
 ENTRYPOINT ["uv", "run", "invoke", "fetch-data", "train", "--num-epochs=1"]

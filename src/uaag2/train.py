@@ -27,6 +27,7 @@ warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is
 
 
 def main(hparams):
+    print(f"Running with commit: {os.environ.get('GIT_COMMIT_SHA', 'Unknown')}")
     # Configure file logging to save logs alongside checkpoints
     log_dir = os.path.join(hparams.save_dir, f"run{hparams.id}", "logs")
     configure_file_logging(log_dir)
