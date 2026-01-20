@@ -46,7 +46,6 @@ dev = [
     "pytest==8.3.4",
     "pre-commit==4.1.0",
     "pytest==9.0.2",
-    "ruff==0.14.11",
     "pytest==8.3.4",
     "ruff==0.14.13",
     "mypy==1.19.1",
@@ -62,8 +61,11 @@ name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-[tool.uv]
-no-build-isolation-package = ["torch-cluster", "torch-scatter", "torch-sparse", "torch-spline-conv"]
+[tool.uv.extra-build-dependencies]
+torch-scatter = ["torch"]
+torch-sparse = ["torch"]
+torch-cluster = ["torch"]
+torch-spline-conv = ["torch"]
 
 [tool.pytest.ini_options]
 filterwarnings = [
