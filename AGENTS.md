@@ -15,6 +15,11 @@
     `tasks.py` file.
 * The project uses `pre-commit` for managing pre-commit hooks. To run all hooks on all files, use
     `uv run pre-commit run --all-files`. For more information, refer to the `.pre-commit-config.yaml` file.
+* The project uses `Hydra` for configuration management:
+    * Training configurations are in `configs/` directory with YAML files.
+    * To run training: `uv run python src/uaag2/train.py`
+    * To override config: `uv run python src/uaag2/train.py optimizer.lr=0.001 data.batch_size=64`
+    * See `docs/HYDRA_CONFIG.md` for detailed usage guide.
 
 # Code style
 
@@ -23,6 +28,14 @@
 * Use f-strings for formatting.
 * Use type hints
 * Do not add inline comments unless absolutely necessary.
+
+# Configuration Management
+
+* The project uses Hydra for configuration instead of argparse.
+* All training configurations are in YAML format under `configs/` directory.
+* Configuration is hierarchical: train.yaml → model/data/diffusion/optimizer configs.
+* Use command-line overrides for hyperparameter tuning without modifying files.
+* Each training run automatically saves the resolved configuration.
 
 # Documentation
 

@@ -1,0 +1,36 @@
+# Data configuration
+dataset: drugs
+dataset_root: "----"
+
+# Data paths
+data_info_path: data/statistic.pkl
+training_data: data/pdb_subset.lmdb
+metadata_path: data/unaagi_whole_v1.metadata.pkl
+
+# Data split settings
+train_size: 0.99
+val_size: 5000
+test_size: 100
+
+# Data processing
+remove_hs: false
+select_train_subset: false
+use_adaptive_loader: true
+no_h: false
+
+# Sampling settings
+use_metadata_sampler: false
+pdbbind_weight: 10.0
+
+# Batch settings
+batch_size: 32
+inference_batch_size: 32
+
+# Data augmentation
+pocket_noise: false
+mask_rate: 0.5  # 0 for full mask, 1 for no masking
+pocket_noise_scale: 0.01
+
+# Maximum settings
+max_num_conformers: 5
+max_num_neighbors: 128
