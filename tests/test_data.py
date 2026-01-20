@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import Dataset
 
 from tests import _PATH_DATA
-from uaag2.data.uaag_dataset import UAAG2Dataset
+from uaag2.datasets.uaag_dataset import UAAG2Dataset
 
 param = pytest.mark.parametrize
 

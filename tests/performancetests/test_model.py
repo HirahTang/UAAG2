@@ -16,7 +16,7 @@ import torch
 import wandb
 
 from tests import _PATH_DATA
-from uaag2.data.uaag_dataset import Dataset_Info, UAAG2Dataset
+from uaag2.datasets.uaag_dataset import Dataset_Info, UAAG2Dataset
 from uaag2.equivariant_diffusion import Trainer
 
 DATA_INFO_PATH = os.path.join(_PATH_DATA, "statistic.pkl")

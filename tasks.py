@@ -50,16 +50,6 @@ print("Data fetch complete!")
 
 
 @task
-def preprocess_data(ctx: Context) -> None:
-    """Preprocess data."""
-    ctx.run(
-        f"uv run src/{PROJECT_NAME}/data.py data/raw data/processed",
-        echo=True,
-        pty=not WINDOWS,
-    )
-
-
-@task
 def train(
     ctx: Context,
     batch_size: int = 8,

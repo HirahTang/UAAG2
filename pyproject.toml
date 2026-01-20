@@ -34,40 +34,19 @@ dependencies = [
     "tqdm>=4.67.1",
     "typer==0.15.1",
     "uvicorn==0.34.0",
-    "wandb==0.23.0",
+    "wandb==0.24.0",
     "loguru>=0.7.0",
-
-    "torch==2.7.0",
-    "torch-ema>=0.3",
-    "torch-geometric>=2.7.0",
-
-    # Platform-specific wheels for PyG extensions to match PyTorch versions
-    # Mac (ARM/Intel): Clean CPU versions
-    "torch-cluster==1.6.3; sys_platform == 'darwin'",
-    "torch-scatter==2.1.2; sys_platform == 'darwin'",
-    "torch-sparse==0.6.18; sys_platform == 'darwin'",
-    "torch-spline-conv==1.2.2; sys_platform == 'darwin'",
-
-    # Linux ARM (Docker CPU): CPU versions with +pt27cpu suffix
-    "torch-cluster==1.6.3+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
-    "torch-scatter==2.1.2+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
-    "torch-sparse==0.6.18+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
-    "torch-spline-conv==1.2.2+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
-
-    # Linux x86 (Docker GPU): CUDA 12.8 versions with +pt27cu128 suffix
-    "torch-cluster==1.6.3+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "torch-scatter==2.1.2+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "torch-sparse==0.6.18+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "torch-spline-conv==1.2.2+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
 [dependency-groups]
 dev = [
-    "coverage==7.6.9",
+    "coverage==7.13.1",
     "invoke==2.2.0",
     "pre-commit==4.1.0",
     "pytest==9.0.2",
     "ruff==0.14.11",
+    "pytest==8.3.4",
+    "ruff==0.14.13",
     "mypy==1.19.1",
     "mkdocs-material==9.7.1",
     "mkdocstrings-python==2.0.1",
@@ -81,31 +60,17 @@ name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-[[tool.uv.index]]
-name = "pytorch-gpu"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true
-
 [tool.uv]
-find-links = [
-  "https://data.pyg.org/whl/torch-2.7.0+cpu.html",
-  "https://data.pyg.org/whl/torch-2.7.0+cu128.html"
-]
+no-build-isolation-package = ["torch-cluster", "torch-scatter", "torch-sparse", "torch-spline-conv"]
 
-environments = [
-    "sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "sys_platform == 'linux' and platform_machine == 'aarch64'",
-    "sys_platform == 'linux' and platform_machine == 'x86_64'",
-]
-
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-gpu", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
-    { index = "pytorch-cpu", marker = "sys_platform != 'linux' or platform_machine == 'aarch64'" },
-]
-torchvision = [
-    { index = "pytorch-gpu", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
-    { index = "pytorch-cpu", marker = "sys_platform != 'linux' or platform_machine == 'aarch64'" },
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning:lightning_fabric.*",
+    "ignore::DeprecationWarning:pytorch_lightning.*",
+    "ignore::DeprecationWarning:torch_geometric.*",
+    "ignore::UserWarning:openbabel.*",
+    "ignore::UserWarning:lightning_fabric.*",
+    "ignore::DeprecationWarning:importlib.*",
 ]
 
 [tool.ruff]
