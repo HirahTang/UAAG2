@@ -30,13 +30,10 @@ The directory structure of the project looks like this:
 ```txt
 ├── configs/                  # Configuration files
 ├── data/                     # Data directory
-│   └── mnist/
-│       ├── processed/
-│       └── raw/
+
 ├── dockerfiles/              # Dockerfiles
 │   ├── api.dockerfile
-│   ├── mnist_evaluate.dockerfile
-│   ├── mnist_train.dockerfile
+
 │   └── train.dockerfile
 ├── docs/                     # Documentation
 │   ├── README.md
@@ -55,10 +52,7 @@ The directory structure of the project looks like this:
 │       ├── api.py
 │       ├── data.py
 │       ├── evaluate.py
-│       ├── mnist_data.py
-│       ├── mnist_evaluate.py
-│       ├── mnist_model.py
-│       ├── mnist_train.py
+
 │       ├── model.py
 │       ├── train.py
 │       └── visualize.py
@@ -76,23 +70,7 @@ The directory structure of the project looks like this:
 
 ## Docker images
 
-Build the MNIST image with
 
-```bash
-$ docker build -t mnist_train:latest . -f dockerfiles/mnist_train.dockerfile --progress=plain
-```
-
-Then, run the image with
-
-```bash
-$ docker run --name mnist-train --rm -v $(pwd)/models:/models/ mnist_train:latest
-```
-
-Similarly, the mnist_evaluate image can be built and run with
-```bash
-$ docker build -t mnist_evaluate:latest . -f dockerfiles/mnist_evaluate.dockerfile --progress=plain
-$ docker run --name mnist_eval --rm -v "$(pwd)/models/model.pth:/models/model.pth" mnist_evaluate:latest /models/model.pth
-```
 
 Project template created using [mlops_template](https://github.com/SkafteNicki/mlops_template),
 a [cookiecutter template](https://github.com/cookiecutter/cookiecutter) for getting
