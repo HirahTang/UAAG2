@@ -9,7 +9,9 @@ steps:
     '-f',
     'dockerfiles/train_gpu.dockerfile',
     '--build-arg',
-    'CACHEBUST=$BUILD_ID'
+    'CACHEBUST=$BUILD_ID',
+    '--build-arg',
+    'GIT_COMMIT_SHA=$COMMIT_SHA'
   ]
   env:
     - 'DOCKER_BUILDKIT=1'
