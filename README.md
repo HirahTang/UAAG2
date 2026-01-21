@@ -101,8 +101,33 @@ response = requests.post(url, files=files)
 print(response.json())
 ```
 
+## Docker Deployment
+
+To build and run the API using Docker (compatible with Google Cloud Run):
+
+### Build the Image
+```bash
+docker build -f dockerfiles/api.dockerfile -t uaag2-api .
+```
+
+### Run Locally
+```bash
+docker run -p 8080:8080 uaag2-api
+```
+The API will be available at `http://localhost:8080`.
+
+### Deploy to Google Cloud Run
+1.  **Tag and Push:**
+    ```bash
+    docker tag uaag2-api gcr.io/YOUR_PROJECT_ID/uaag2-api
+    docker push gcr.io/YOUR_PROJECT_ID/uaag2-api
+    ```
+2.  **Deploy:**
+    ```bash
+    gcloud run deploy uaag2-api --image gcr.io/YOUR_PROJECT_ID/uaag2-api --platform managed --region europe-north1 --allow-unauthenticated
+    ```
 
 
-Project template created using [mlops_template](https://github.com/SkafteNicki/mlops_template),
-a [cookiecutter template](https://github.com/cookiecutter/cookiecutter) for getting
-started with Machine Learning Operations (MLOps).
+
+
+*Project template created using [mlops_template](https://github.com/SkafteNicki/mlops_template), a [cookiecutter template](https://github.com/cookiecutter/cookiecutter) for getting started with Machine Learning Operations (MLOps).*
