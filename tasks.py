@@ -53,7 +53,7 @@ print("Data fetch complete!")
 def train(
     ctx: Context,
     batch_size: int = 8,
-    num_epochs: int = 5000,
+    num_epochs: int = 50,
     train_size: float = 0.99,
     test_size: int = 32,
     lr: float = 5e-4,

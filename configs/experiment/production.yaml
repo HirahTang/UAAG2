@@ -1,0 +1,41 @@
+# @package _global_
+# Production training configuration with optimal settings
+# Run with: uv run python src/uaag2/train.py +experiment=production
+
+defaults:
+  - override /optimizer: adam
+
+# Production settings
+num_epochs: 300
+seed: 42
+gpus: 2
+
+# Model settings - larger architecture
+model:
+  num_layers: 10
+  sdim: 512
+  vdim: 128
+  edim: 64
+  dropout_prob: 0.2
+
+# Data settings
+data:
+  batch_size: 64
+  train_size: 0.95
+  test_size: 1000
+  use_metadata_sampler: true
+
+# Diffusion settings
+diffusion:
+  timesteps: 1000
+  noise_scheduler: cosine
+
+# Optimizer settings
+optimizer:
+  lr: 0.0003
+  lr_scheduler: cosine_annealing
+  grad_clip_val: 5.0
+
+# Logger
+logger_type: wandb
+ema_decay: 0.9999
