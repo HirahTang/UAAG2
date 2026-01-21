@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 import pytest
 import torch
 import wandb
+from torch_geometric.data import Batch
 
 from tests import _PATH_DATA
 from uaag2.datasets.uaag_dataset import Dataset_Info, UAAG2Dataset
@@ -113,7 +114,7 @@ def sample_batch(mock_params: MockParams, device: torch.device) -> torch.Tensor:
     """Get a sample batch from the dataset for testing."""
     dataset = UAAG2Dataset(LMDB_DATA_PATH, params=mock_params)
     batch = dataset[0]
-    return batch.to(device)
+    return Batch.from_data_list([batch]).to(device)
 
 
 class TestModelPerformance:
