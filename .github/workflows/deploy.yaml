@@ -52,4 +52,31 @@ jobs:
           gcloud ai custom-jobs create \
             --region=europe-west1 \
             --display-name="uaag2-train-$SHORT_SHA" \
-            --config=vertex_config.yaml
+            --config=vertex_config.yaml > creation_log.txt 2>&1
+
+          cat creation_log.txt
+
+          JOB_ID=$(grep -o 'projects/.*/customJobs/[0-9]*' creation_log.txt | head -n 1)
+
+          if [ -z "$JOB_ID" ]; then
+            echo "Error: Could not extract Job ID from output."
+            exit 1
+          fi
+
+          echo "Extracted Job ID: $JOB_ID"
+
+          # 4. Poll for completion
+          while true; do
+            STATUS=$(gcloud ai custom-jobs describe $JOB_ID --region=europe-west1 --format="value(state)")
+            echo "Current job status: $STATUS"
+
+            if [[ "$STATUS" == "JOB_STATE_SUCCEEDED" ]]; then
+              echo "Job completed successfully."
+              break
+            elif [[ "$STATUS" == "JOB_STATE_FAILED" ]] || [[ "$STATUS" == "JOB_STATE_CANCELLED" ]]; then
+              echo "Job failed or cancelled."
+              exit 1
+            fi
+
+            sleep 60
+          done
