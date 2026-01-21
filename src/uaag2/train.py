@@ -134,18 +134,20 @@ def main(cfg: DictConfig):
 
     # Create a flattened config for backward compatibility with Trainer
     # The Trainer class expects top-level parameters, but Hydra provides nested config
-    flat_cfg = OmegaConf.create({
-        **cfg,
-        **cfg.model,
-        **cfg.diffusion,
-        **cfg.optimizer,
-        # Keep nested versions for code that uses them
-        "model": cfg.model,
-        "data": cfg.data,
-        "diffusion": cfg.diffusion,
-        # Don't overwrite optimizer string with dict
-        "optimizer": cfg.optimizer.name,
-    })
+    flat_cfg = OmegaConf.create(
+        {
+            **cfg,
+            **cfg.model,
+            **cfg.diffusion,
+            **cfg.optimizer,
+            # Keep nested versions for code that uses them
+            "model": cfg.model,
+            "data": cfg.data,
+            "diffusion": cfg.diffusion,
+            # Don't overwrite optimizer string with dict
+            "optimizer": cfg.optimizer.name,
+        }
+    )
 
     model = Trainer(
         hparams=flat_cfg,

@@ -15,10 +15,22 @@ DATA_PATH = os.path.join(_PATH_DATA, "pdb_subset.lmdb")
 
 
 @dataclass
+class MockModelParams:
+    """Mock model params for testing."""
+
+    virtual_node: bool = False
+    max_virtual_nodes: int = 11
+
+
+@dataclass
 class MockParams:
     """Mock params object for testing."""
 
-    virtual_node: bool = False
+    model: MockModelParams = None
+
+    def __post_init__(self):
+        if self.model is None:
+            self.model = MockModelParams()
 
 
 class TestUAAG2Dataset:
