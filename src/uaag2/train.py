@@ -132,8 +132,23 @@ def main(cfg: DictConfig):
 
     datamodule = UAAG2DataModule(cfg, train_data, val_data, test_data, sampler=sampler)
 
+    # Create a flattened config for backward compatibility with Trainer
+    # The Trainer class expects top-level parameters, but Hydra provides nested config
+    flat_cfg = OmegaConf.create({
+        **cfg,
+        **cfg.model,
+        **cfg.diffusion,
+        **cfg.optimizer,
+        # Keep nested versions for code that uses them
+        "model": cfg.model,
+        "data": cfg.data,
+        "diffusion": cfg.diffusion,
+        # Don't overwrite optimizer string with dict
+        "optimizer": cfg.optimizer.name,
+    })
+
     model = Trainer(
-        hparams=cfg,
+        hparams=flat_cfg,
         dataset_info=dataset_info,
     )
 
