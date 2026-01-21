@@ -1,16 +1,14 @@
 name: Deploy API to Cloud Run
 
 on:
-  workflow_run:
-    workflows: ["Deploy"]
-    types:
-      - completed
-    branches:
-      - mlops
+  push:
+    branches: [main, mlops]
+  pull_request:
+    branches: [main, mlops, api]
+
 
 jobs:
   deploy-api:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
