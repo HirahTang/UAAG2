@@ -68,7 +68,38 @@ The directory structure of the project looks like this:
 └── uv.lock                   # Dependency lock file
 ```
 
-## Docker images
+## API Usage
+
+The application provides a FastAPI backend for molecule generation.
+
+### Starting the Server
+```bash
+uv run python src/uaag2/api.py
+```
+The server will start at `http://localhost:8000`.
+
+### Using the Frontend
+Visit `http://localhost:8000` in your browser to inspect the UI.
+
+### Programmatic Access
+
+#### Using Curl
+You can generate molecules by sending a POST request to the `/generate` endpoint with a `.pt` file.
+
+```bash
+curl -X POST -F "file=@data/benchmarks/single_ecoli.pt" http://localhost:8000/generate
+```
+
+#### Using Python
+```python
+import requests
+
+url = "http://localhost:8000/generate"
+files = {'file': open('data/benchmarks/single_ecoli.pt', 'rb')}
+
+response = requests.post(url, files=files)
+print(response.json())
+```
 
 
 

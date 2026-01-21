@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UAAG2 Molecule Generator</title>
+    <!-- 3Dmol.js -->
+    <script src="https://3Dmol.csb.pitt.edu/build/3Dmol-min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        input[type="file"] {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .result-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .viewer-container {
+            height: 300px;
+            width: 100%;
+            position: relative;
+            background-color: #e1e1e1;
+        }
+        .card-header {
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-bottom: 1px solid #eee;
+            font-weight: bold;
+        }
+        .loading {
+            text-align: center;
+            display: none;
+            margin: 20px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 2s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: red;
+            text-align: center;
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>UAAG2 Molecule Generator</h1>
+
+    <div class="container">
+        <div class="controls">
+            <input type="file" id="fileInput" accept=".pt">
+            <button id="generateBtn">Generate Molecules</button>
+        </div>
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Generating molecules... This may take a while.</p>
+        </div>
+        <div id="error" class="error"></div>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a .pt file first.');
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const resultsDiv = document.getElementById('results');
+            const btn = document.getElementById('generateBtn');
+
+            loading.style.display = 'block';
+            errorDiv.textContent = '';
+            resultsDiv.innerHTML = '';
+            btn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Generation failed');
+                }
+
+                const data = await response.json();
+
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach((result, index) => {
+                        createResultCard(result, index);
+                    });
+                } else {
+                    errorDiv.textContent = 'No results returned.';
+                }
+
+            } catch (err) {
+                errorDiv.textContent = 'Error: ' + err.message;
+                console.error(err);
+            } finally {
+                loading.style.display = 'none';
+                btn.disabled = false;
+            }
+        });
+
+        function createResultCard(result, index) {
+            const resultsDiv = document.getElementById('results');
+
+            const card = document.createElement('div');
+            card.className = 'result-card';
+
+            const header = document.createElement('div');
+            header.className = 'card-header';
+            header.textContent = `Sample ${index + 1}`;
+
+            const viewerContainer = document.createElement('div');
+            viewerContainer.className = 'viewer-container';
+            viewerContainer.id = `viewer-${index}`;
+
+            card.appendChild(header);
+            card.appendChild(viewerContainer);
+            resultsDiv.appendChild(card);
+
+            // Initialize 3Dmol
+            const element = $(`#viewer-${index}`);
+            const config = { backgroundColor: 'white' };
+            const viewer = $3Dmol.createViewer(element, config);
+
+            viewer.addModel(result.content, result.format);
+            viewer.setStyle({}, {stick: {}});
+            viewer.zoomTo();
+            viewer.render();
+            viewer.zoom(1.2, 1000);
+        }
+    </script>
+    <!-- jQuery is required for 3Dmol default usage in some docs, but 3Dmol-min.js might include it or work without if using appropriate API.
+         Wait, $3Dmol.createViewer(element, config) where element can be ID or DOM?
+         The documentation says "element is a HTML element or an ID string".
+         However, 3Dmol often assumes jQuery structure if passed a selector.
+         Let's add jQuery just in case to be safe, as it's common with 3Dmol examples. -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</body>
+</html>

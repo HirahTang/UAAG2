@@ -320,6 +320,9 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             graph_data.compound_id = graph_data.componud_id
         if not hasattr(graph_data, "edge_ligand"):
             graph_data.edge_ligand = torch.ones(graph_data.edge_attr.size(0))
+        elif not isinstance(graph_data.edge_ligand, torch.Tensor):
+            graph_data.edge_ligand = torch.tensor(graph_data.edge_ligand)
+
         if not hasattr(graph_data, "id"):
             graph_data.id = graph_data.compound_id
         graph_data.x = graph_data.x.float()
