@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import os
 import time
-from argparse import Namespace
-from dataclasses import asdict, dataclass
+from omegaconf import OmegaConf, DictConfig
 
 import pytest
 import torch
@@ -25,39 +24,6 @@ LMDB_DATA_PATH = os.path.join(_PATH_DATA, "pdb_subset.lmdb")
 
 NUM_PREDICTIONS = 2
 MAX_TIME_SECONDS = 60.0
-
-
-@dataclass
-class MockParams:
-    """Mock params object for model loading."""
-
-    virtual_node: bool = True
-    max_virtual_nodes: int = 5
-    sdim: int = 256
-    vdim: int = 64
-    num_layers: int = 7
-    use_cross_product: bool = False
-    edim: int = 32
-    cutoff_local: float = 7.0
-    vector_aggr: str = "mean"
-    fully_connected: bool = True
-    local_global_model: bool = False
-    edge_mp: bool = False
-    context_mapping: bool = False
-    num_context_features: int = 0
-    bond_prediction: bool = False
-    property_prediction: bool = False
-    continuous_param: str = "data"
-    load_ckpt_from_pretrained: str | None = None
-    beta_min: float = 1e-4
-    beta_max: float = 2e-2
-    timesteps: int = 500
-    noise_scheduler: str = "cosine"
-    eps_min: float = 1e-3
-    loss_weighting: str = "snr_t"
-    gpus: int = 0
-    save_dir: str = "."
-    id: str = "test"
 
 
 def get_model_path_from_wandb(artifact_path: str) -> str:
@@ -98,19 +64,129 @@ def device() -> torch.device:
 
 
 @pytest.fixture
-def mock_params() -> MockParams:
+def mock_params() -> DictConfig:
     """Create mock parameters for model loading."""
-    return MockParams()
+    return OmegaConf.create(
+        {
+            "id": "test",
+            "gpus": 0,
+            "num_epochs": 1,
+            "save_dir": ".",
+            "seed": 42,
+            "eval_freq": 1,
+            "precision": 32,
+            "detect_anomaly": False,
+            "accum_batch": 1,
+            "ema_decay": 0.999,
+            "load_ckpt": None,
+            "load_ckpt_from_pretrained": None,
+            "backprop_local": False,
+            "model": {
+                "sdim": 256,
+                "vdim": 64,
+                "rbf_dim": 32,
+                "edim": 32,
+                "edge_mp": False,
+                "vector_aggr": "mean",
+                "num_layers": 7,
+                "fully_connected": True,
+                "local_global_model": False,
+                "local_edge_attrs": False,
+                "use_cross_product": False,
+                "cutoff_local": 7.0,
+                "cutoff_global": 10.0,
+                "energy_training": False,
+                "property_training": False,
+                "regression_property": "polarizability",
+                "energy_loss": "l2",
+                "use_pos_norm": False,
+                "additional_feats": True,
+                "use_qm_props": False,
+                "build_mol_with_addfeats": False,
+                "bond_guidance_model": False,
+                "bond_prediction": False,
+                "bond_model_guidance": False,
+                "energy_model_guidance": False,
+                "polarizabilty_model_guidance": False,
+                "ckpt_bond_model": None,
+                "ckpt_energy_model": None,
+                "ckpt_polarizabilty_model": None,
+                "guidance_scale": 1.0e-4,
+                "context_mapping": False,
+                "num_context_features": 0,
+                "properties_list": [],
+                "property_prediction": False,
+                "prior_beta": 1.0,
+                "sdim_latent": 256,
+                "vdim_latent": 64,
+                "latent_dim": None,
+                "edim_latent": 32,
+                "num_layers_latent": 7,
+                "latent_layers": 7,
+                "latentmodel": "diffusion",
+                "latent_detach": False,
+                "max_virtual_nodes": 5,
+                "virtual_node": True,
+                "dropout_prob": 0.3,
+                "weight_decay": 0.9999,
+            },
+            "data": {
+                "mask_rate": 0.0,
+                "pocket_noise": False,
+                "pocket_noise_scale": 0.2,  # Added default
+            },
+            "diffusion": {
+                "continuous": False,
+                "noise_scheduler": "cosine",
+                "eps_min": 1e-3,
+                "beta_min": 1e-4,
+                "beta_max": 2e-2,
+                "timesteps": 500,
+                "max_time": None,
+                "lc_coords": 3.0,
+                "lc_atoms": 0.4,
+                "lc_bonds": 2.0,
+                "lc_charges": 1.0,
+                "lc_mulliken": 1.5,
+                "lc_wbo": 2.0,
+                "loss_weighting": "snr_t",
+                "snr_clamp_min": 0.05,
+                "snr_clamp_max": 1.50,
+                "ligand_pocket_interaction": False,
+                "diffusion_pretraining": False,
+                "continuous_param": "data",
+                "atoms_categorical": True,
+                "bonds_categorical": True,
+                "atom_type_masking": True,
+                "use_absorbing_state": False,
+                "num_bond_classes": 5,
+                "num_charge_classes": 6,
+            },
+            "optimizer": {
+                "lr": 5e-4,  # Default from api inputs
+                "weight_decay": 0.9999,
+                "name": "adam",
+                "lr_scheduler": "reduce_on_plateau",
+                "grad_clip_val": 10.0,
+                "lr_min": 5e-5,
+                "lr_step_size": 10000,
+                "lr_frequency": 5,
+                "lr_patience": 20,
+                "lr_cooldown": 5,
+                "lr_factor": 0.75,
+            },
+        }
+    )
 
 
 @pytest.fixture
-def dataset_info(mock_params: MockParams) -> Dataset_Info:
+def dataset_info(mock_params: DictConfig) -> Dataset_Info:
     """Load dataset info for model initialization."""
     return Dataset_Info(mock_params, DATA_INFO_PATH)
 
 
 @pytest.fixture
-def sample_batch(mock_params: MockParams, device: torch.device) -> torch.Tensor:
+def sample_batch(mock_params: DictConfig, device: torch.device) -> torch.Tensor:
     """Get a sample batch from the dataset for testing."""
     dataset = UAAG2Dataset(LMDB_DATA_PATH, params=mock_params)
     batch = dataset[0]
@@ -123,7 +199,7 @@ class TestModelPerformance:
     def test_model_inference_speed(
         self,
         model_artifact_path: str,
-        mock_params: MockParams,
+        mock_params: DictConfig,
         dataset_info: Dataset_Info,
         sample_batch: torch.Tensor,
         device: torch.device,
@@ -142,9 +218,9 @@ class TestModelPerformance:
         """
         checkpoint_path = get_model_path_from_wandb(model_artifact_path)
 
-        # Convert dataclass to Namespace for pytorch-lightning compatibility
-        # Trainer expects hparams to be a Namespace (or dict, but Trainer uses dot access)
-        hparams = Namespace(**asdict(mock_params))
+        # Update params with loaded checkpoint?
+        # Trainer.load_from_checkpoint will merge but it's good to pass structure
+        hparams = mock_params
 
         model = Trainer.load_from_checkpoint(
             checkpoint_path,
@@ -155,17 +231,19 @@ class TestModelPerformance:
 
         batch_size = int(sample_batch.batch.max()) + 1
 
+        timesteps = hparams.diffusion.timesteps
+
         with torch.no_grad():
             _ = model(
                 batch=sample_batch,
-                t=torch.randint(1, mock_params.timesteps + 1, (batch_size,), device=device),
+                t=torch.randint(1, timesteps + 1, (batch_size,), device=device),
             )
 
         start_time = time.perf_counter()
 
         with torch.no_grad():
             for _ in range(NUM_PREDICTIONS):
-                t = torch.randint(1, mock_params.timesteps + 1, (batch_size,), device=device)
+                t = torch.randint(1, timesteps + 1, (batch_size,), device=device)
                 _ = model(batch=sample_batch, t=t)
 
         if device.type == "cuda":

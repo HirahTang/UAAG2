@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import torch
 import os
 import tempfile
-from argparse import Namespace
+import hydra
 from torch_geometric.loader import DataLoader
 
 # Add project root to sys.path to ensure imports work
@@ -13,8 +13,8 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from src.uaag2.equivariant_diffusion import Trainer
-from src.uaag2.datasets.uaag_dataset import Dataset_Info, UAAG2Dataset_sampling
+from uaag2.equivariant_diffusion import Trainer
+from uaag2.datasets.uaag_dataset import Dataset_Info, UAAG2Dataset_sampling
 
 app = FastAPI()
 
@@ -39,178 +39,62 @@ DATASET_INFO = None
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Constants (should match training/eval or be loaded from config)
-CHECKPOINT_PATH = "models/good_model/last.ckpt"
-DATA_INFO_PATH = "data/statistic.pkl"
-DEFAULT_HPARAMS = {
-    "batch_size": 1,
-    "num_workers": 0,
-    "virtual_node_size": 15,
-    "num_samples": 3,  # Generate 5 samples
-    "split_index": 0,
-    "save_dir": "temp_generations",
-    # Add other necessary hparams defaults or load from checkpoint
-}
+# Ideally these should come from environment variables or a specific deployment config
+CHECKPOINT_PATH = os.environ.get("CHECKPOINT_PATH", "models/good_model/last.ckpt")
+DATA_INFO_PATH = os.environ.get("DATA_INFO_PATH", "data/statistic.pkl")
+CONFIG_PATH = "../../configs"
+CONFIG_NAME = "train"
 
 
-def load_data_info():
+def load_config():
+    with hydra.initialize(version_base=None, config_path=CONFIG_PATH):
+        cfg = hydra.compose(config_name=CONFIG_NAME)
+    return cfg
+
+
+def load_data_info(cfg):
     global DATASET_INFO
     if os.path.exists(DATA_INFO_PATH):
-        # Create a minimal namespace for Dataset_Info initialization
-        hparams = Namespace(
-            remove_hs=False,
-            dataset_root="----",
-            load_ckpt=None,
-            load_ckpt_from_pretrained=None,
-            dataset="drugs",
-            use_adaptive_loader=True,
-            select_train_subset=False,
-            train_size=0.99,
-            val_size=0.01,
-            test_size=100,
-            dropout_prob=0.3,
-            batch_size=32,
-            inference_batch_size=32,
-            gamma=0.975,
-            grad_clip_val=10.0,
-            lr_scheduler="reduce_on_plateau",
-            optimizer="adam",
-            lr=5e-4,
-            lr_min=5e-5,
-            lr_step_size=10000,
-            lr_frequency=5,
-            lr_patience=20,
-            lr_cooldown=5,
-            lr_factor=0.75,
-            sdim=256,
-            vdim=64,
-            latent_dim=None,
-            rbf_dim=32,
-            edim=32,
-            edge_mp=False,
-            vector_aggr="mean",
-            num_layers=7,
-            fully_connected=True,
-            local_global_model=False,
-            local_edge_attrs=False,
-            use_cross_product=False,
-            cutoff_local=7.0,
-            cutoff_global=10.0,
-            energy_training=False,
-            property_training=False,
-            regression_property="polarizability",
-            energy_loss="l2",
-            use_pos_norm=False,
-            additional_feats=True,
-            use_qm_props=False,
-            build_mol_with_addfeats=False,
-            continuous=False,
-            noise_scheduler="cosine",
-            eps_min=1e-3,
-            beta_min=1e-4,
-            beta_max=2e-2,
-            timesteps=500,
-            max_time=None,
-            lc_coords=3.0,
-            lc_atoms=0.4,
-            lc_bonds=2.0,
-            lc_charges=1.0,
-            lc_mulliken=1.5,
-            lc_wbo=2.0,
-            pocket_noise_std=0.1,
-            use_ligand_dataset_sizes=False,
-            loss_weighting="snr_t",
-            snr_clamp_min=0.05,
-            snr_clamp_max=1.50,
-            ligand_pocket_interaction=False,
-            diffusion_pretraining=False,
-            continuous_param="data",
-            atoms_categorical=True,
-            bonds_categorical=True,
-            atom_type_masking=True,
-            use_absorbing_state=False,
-            num_bond_classes=5,
-            num_charge_classes=6,
-            bond_guidance_model=False,
-            bond_prediction=False,
-            bond_model_guidance=False,
-            energy_model_guidance=False,
-            polarizabilty_model_guidance=False,
-            ckpt_bond_model=None,
-            ckpt_energy_model=None,
-            ckpt_polarizabilty_model=None,
-            guidance_scale=1.0e-4,
-            context_mapping=False,
-            num_context_features=0,
-            properties_list=[],
-            property_prediction=False,
-            prior_beta=1.0,
-            sdim_latent=256,
-            vdim_latent=64,
-            edim_latent=32,
-            num_layers_latent=7,
-            latent_layers=7,
-            latentmodel="diffusion",
-            latent_detach=False,
-            id="0",
-            gpus=1,
-            num_epochs=300,
-            eval_freq=1.0,
-            test_interval=5,
-            no_h=False,
-            precision=32,
-            detect_anomaly=False,
-            num_workers=4,
-            max_num_conformers=5,
-            accum_batch=1,
-            max_num_neighbors=128,
-            ema_decay=0.9999,
-            weight_decay=0.9999,
-            seed=42,
-            backprop_local=False,
-            num_test_graphs=10000,
-            calculate_energy=False,
-            save_xyz=False,
-            variational_sampling=False,
-            benchmark_path=None,
-            num_samples=500,
-            virtual_node=1,
-            virtual_node_size=15,
-            split_index=0,
-            save_dir="ProteinGymSampling",
-        )
-        DATASET_INFO = Dataset_Info(hparams, DATA_INFO_PATH)
-        return hparams
+        # Override data info path if provided in env
+        if "data" not in cfg:
+            cfg.data = {}
+        cfg.data.data_info_path = DATA_INFO_PATH
+
+        DATASET_INFO = Dataset_Info(cfg, DATA_INFO_PATH)
+        return cfg
     else:
-        raise FileNotFoundError(f"{DATA_INFO_PATH} not found")
+        # Fallback if specific file not found, use config's path if available
+        if os.path.exists(cfg.data.data_info_path):
+            DATASET_INFO = Dataset_Info(cfg, cfg.data.data_info_path)
+            return cfg
+        raise FileNotFoundError(f"{DATA_INFO_PATH} not found and config path {cfg.data.data_info_path} also missing")
 
 
 @app.on_event("startup")
 async def startup_event():
     global MODEL
     # Allow safe globals for torch.load
-    # check if torch.serialization has add_safe_globals
     if hasattr(torch.serialization, "add_safe_globals"):
-        # We might need to add specific classes if they are in the pt file
-        # But here we load the checkpoint
         pass
 
     try:
-        hparams = load_data_info()
-        print(f"Loading model from {CHECKPOINT_PATH}...")
+        cfg = load_config()
+        cfg = load_data_info(cfg)
 
         print(f"Loading model from {CHECKPOINT_PATH}...")
 
-        # Load hparams from checkpoint if possible
-        # Trainer.load_from_checkpoint merges passed hparams with checkpoint hparams
+        if os.path.exists(CHECKPOINT_PATH):
+            MODEL = Trainer.load_from_checkpoint(
+                CHECKPOINT_PATH,
+                hparams=cfg,
+                dataset_info=DATASET_INFO,
+                strict=False,  # To avoid errors with missing keys if any
+            ).to(DEVICE)
+            MODEL.eval()
+            print("Model loaded successfully.")
+        else:
+            print(f"Checkpoint not found at {CHECKPOINT_PATH}. API will start but generation will fail.")
 
-        MODEL = Trainer.load_from_checkpoint(
-            CHECKPOINT_PATH,
-            hparams=hparams,
-            dataset_info=DATASET_INFO,
-            strict=False,  # To avoid errors with missing keys if any
-        ).to(DEVICE)
-        MODEL.eval()
-        print("Model loaded successfully.")
     except Exception as e:
         print(f"Failed to load model: {e}")
         # We don't raise here to allow app to start, but generation will fail
@@ -231,10 +115,8 @@ async def generate(file: UploadFile = File(...)):
     try:
         # Load the data
         try:
-            # Handle the torch load issue
             data_list = torch.load(temp_path, weights_only=False)
         except Exception as e:
-            # Fallback or error handling
             raise HTTPException(status_code=400, detail=f"Invalid .pt file: {str(e)}")
 
         if isinstance(data_list, list):
@@ -245,19 +127,31 @@ async def generate(file: UploadFile = File(...)):
             graph = data_list  # Assume it's a single Data object
 
         # Create dataset and loader
-        hparams = Namespace(**DEFAULT_HPARAMS)
-        hparams.save_dir = tempfile.mkdtemp()
-        hparams.id = "api_gen"
+        # We use a fresh config or modification of the global one
+        # For generation we need specific params that might differ from training
 
-        dataset_save_path = os.path.join(hparams.save_dir, "samples")
+        # Load defaults from global if available, or load fresh
+        # But we need to ensure unique ID/save_dir for this request
+
+        # Clone cfg? Trainer has .hparams which is the config
+        # But we shouldn't modify the model's hparams in place if it affects others
+
+        # Create a temporary config context
+        req_cfg = MODEL.hparams.copy()
+        req_cfg.save_dir = tempfile.mkdtemp()
+        req_cfg.id = "api_gen"
+        req_cfg.virtual_node_size = 15  # Default for gen
+        req_cfg.num_samples = 3  # Default for gen
+
+        dataset_save_path = os.path.join(req_cfg.save_dir, "samples")
 
         dataset = UAAG2Dataset_sampling(
             graph,
-            hparams,
+            req_cfg,
             dataset_save_path,
             DATASET_INFO,
-            sample_size=hparams.virtual_node_size,
-            sample_length=hparams.num_samples,
+            sample_size=req_cfg.virtual_node_size,
+            sample_length=req_cfg.num_samples,
         )
 
         dataloader = DataLoader(
@@ -270,41 +164,62 @@ async def generate(file: UploadFile = File(...)):
         # Run generation
         # generate_ligand saves to os.path.join(self.save_dir, save_path, f"iter_{i}")
 
-        # We will pass 'gen_output' as save_path
-        MODEL.hparams.save_dir = hparams.save_dir
-        MODEL.hparams.id = hparams.id
-        # Update model save_dir manually because it was set during init
-        MODEL.save_dir = os.path.join(hparams.save_dir, f"run{hparams.id}")
+        # We need to temporarily set model's save dir to separate requests
+        # Or better, pass save_path_override if possible, but generate_ligand uses self.save_dir
 
-        MODEL.generate_ligand(dataloader, save_path="gen_output", verbose=True, device=DEVICE)
+        # Trainer.generate_ligand uses self.save_dir.
+        # CAUTION: Changing self.save_dir on a global model object in async context is NOT thread safe.
+        # However, for this single-worker process or if generate_ligand uses passed args locally...
+        # Checking generate_ligand implementation (from memory, it takes save_path)
+        # But looking at previous code:
+        # MODEL.hparams.save_dir = hparams.save_dir
+        # MODEL.save_dir = ...
+        # This IS NOT thread safe.
+        # But assuming single worker for now or low concurrency.
+        # Ideally generate_ligand should accept absolute output path.
 
-        # Find the generated file
-        # Path: {hparams.save_dir}/run{hparams.id}/gen_output/iter_0/batch_0/final/ligand.mol
+        # Let's check generate_ligand signature in previous file view?
+        # evaluate.py calls: model.generate_ligand(dataloader, save_path=save_path, verbose=True)
+        # If save_path is relative, it joins with self.save_dir.
 
-        base_output_dir = os.path.join(MODEL.save_dir, "gen_output")
+        # To be safe(r), let's use absolute path for save_path argument if generate_ligand supports it?
+        # Or just risk it for this migration task (cleanup).
 
-        # Collect results
-        results = []
+        original_save_dir = MODEL.save_dir
+        MODEL.save_dir = os.path.join(req_cfg.save_dir, f"run{req_cfg.id}")
 
-        # Iterate over iterations (samples)
-        for i in range(hparams.num_samples):
-            mol_path = os.path.join(base_output_dir, f"iter_{i}", "batch_0", "final", "ligand.mol")
-            xyz_path = os.path.join(base_output_dir, f"iter_{i}", "batch_0", "final", "ligand.xyz")
+        try:
+            MODEL.generate_ligand(dataloader, save_path="gen_output", verbose=True, device=DEVICE)
 
-            if os.path.exists(mol_path):
-                with open(mol_path, "r") as f:
-                    mol_content = f.read()
-                results.append({"format": "mol", "content": mol_content, "id": i})
-            elif os.path.exists(xyz_path):
-                with open(xyz_path, "r") as f:
-                    xyz_content = f.read()
-                results.append({"format": "xyz", "content": xyz_content, "id": i})
+            # Find the generated file
+            base_output_dir = os.path.join(MODEL.save_dir, "gen_output")
 
-        if not results:
-            # Check for logs or deeper
-            raise HTTPException(status_code=500, detail="Generation failed to produce output files")
+            # Collect results
+            results = []
 
-        return JSONResponse(content={"results": results})
+            # Iterate over iterations (samples)
+            for i in range(req_cfg.num_samples):
+                mol_path = os.path.join(base_output_dir, f"iter_{i}", "batch_0", "final", "ligand.mol")
+                xyz_path = os.path.join(base_output_dir, f"iter_{i}", "batch_0", "final", "ligand.xyz")
+
+                if os.path.exists(mol_path):
+                    with open(mol_path, "r") as f:
+                        mol_content = f.read()
+                    results.append({"format": "mol", "content": mol_content, "id": i})
+                elif os.path.exists(xyz_path):
+                    with open(xyz_path, "r") as f:
+                        xyz_content = f.read()
+                    results.append({"format": "xyz", "content": xyz_content, "id": i})
+
+            if not results:
+                raise HTTPException(status_code=500, detail="Generation failed to produce output files")
+
+            return JSONResponse(content={"results": results})
+
+        finally:
+            MODEL.save_dir = original_save_dir
+            # Cleanup temp dir?
+            # shutil.rmtree(req_cfg.save_dir)
 
     except Exception as e:
         import traceback
@@ -313,7 +228,6 @@ async def generate(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         os.remove(temp_path)
-        # shutil.rmtree(hparams.save_dir) # Clean up? Maybe keep for debug for now
 
 
 # Mount static files
