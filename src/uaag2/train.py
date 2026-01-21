@@ -137,6 +137,10 @@ def main(cfg: DictConfig):
         dataset_info=dataset_info,
     )
 
+    if cfg.num_epochs > 1:
+        logger.info("Compiling model with torch.compile")
+        model.model = torch.compile(model.model)
+
     strategy = "ddp" if cfg.gpus > 1 else "auto"
     callbacks = [
         ema_callback,

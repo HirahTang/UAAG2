@@ -162,12 +162,20 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             graph_data.pos[reconstruct_mask == 1] += gaussian_pocket_noise
 
         # from IPython import embed; embed()
-        if self.params.virtual_node:
+        virtual_node = getattr(self.params, "virtual_node", None)
+        if virtual_node is None and hasattr(self.params, "model"):
+            virtual_node = getattr(self.params.model, "virtual_node", False)
+
+        if virtual_node:
             # adding random n of virtual nodes by the maximum max-virtual-node
             # if reconstruct_size < self.params.max_virtual_nodes:
             #     sample_n = int(self.params.max_virtual_nodes - reconstruct_size)
             # else:
-            sample_n = np.random.randint(1, self.params.max_virtual_nodes)
+            max_virtual_nodes = getattr(self.params, "max_virtual_nodes", None)
+            if max_virtual_nodes is None and hasattr(self.params, "model"):
+                max_virtual_nodes = getattr(self.params.model, "max_virtual_nodes", 5)
+
+            sample_n = np.random.randint(1, max_virtual_nodes)
             virtual_x = torch.ones(sample_n) * 8
             # virtual pos is a tensor of shape (sample_n, 3) with CoM * 8
 
@@ -759,7 +767,7 @@ class UAAG2DataModule(pl.LightningDataModule):
     def train_dataloader(self, shuffle=True):
         dataloader = DataLoader(
             dataset=self.train_data,
-            batch_size=self.cfg.batch_size,
+            batch_size=self.cfg.data.batch_size,
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
             shuffle=False,
@@ -772,7 +780,7 @@ class UAAG2DataModule(pl.LightningDataModule):
     def val_dataloader(self):
         dataloader = DataLoader(
             dataset=self.val_data,
-            batch_size=self.cfg.batch_size,
+            batch_size=self.cfg.data.batch_size,
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
             shuffle=False,
@@ -784,7 +792,7 @@ class UAAG2DataModule(pl.LightningDataModule):
     def test_dataloader(self):
         dataloader = DataLoader(
             dataset=self.test_data,
-            batch_size=self.cfg.batch_size,
+            batch_size=self.cfg.data.batch_size,
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
             shuffle=False,
@@ -809,7 +817,11 @@ class Dataset_Info:
         self.atom_types = []
 
         sum_x = []
-        if self.hparams.virtual_node:
+        virtual_node = getattr(self.hparams, "virtual_node", None)
+        if virtual_node is None and hasattr(self.hparams, "model"):
+            virtual_node = getattr(self.hparams.model, "virtual_node", False)
+
+        if virtual_node:
             # add another value of 0 to data_info['x']
             data_info["x"][8] = 0
             # data_info['charge'][2] = 0

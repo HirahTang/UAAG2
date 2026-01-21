@@ -75,26 +75,24 @@ def train(
     if not experiment_id:
         experiment_id = f"uaag2_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    sampler_flag = "--use-metadata-sampler" if use_metadata_sampler else "--no-metadata-sampler"
-
     ctx.run(
         f"uv run src/{PROJECT_NAME}/train.py "
-        f"--logger-type {logger_type} "
-        f"--batch-size {batch_size} "
-        f"--gpus {gpus} "
-        f"--num-epochs {num_epochs} "
-        f"--train-size {train_size} "
-        f"--test-size {test_size} "
-        f"--lr {lr} "
-        f"--mask-rate {mask_rate} "
-        f"--max-virtual-nodes {max_virtual_nodes} "
-        f"--num-layers {num_layers} "
-        f"--pdbbind-weight {pdbbind_weight} "
-        f"--training_data {data_path} "
-        f"--data_info_path {data_info_path} "
-        f"--save-dir {save_dir} "
-        f"--id {experiment_id} "
-        f"{sampler_flag}",
+        f"logger_type={logger_type} "
+        f"data.batch_size={batch_size} "
+        f"gpus={gpus} "
+        f"num_epochs={num_epochs} "
+        f"data.train_size={train_size} "
+        f"data.test_size={test_size} "
+        f"optimizer.lr={lr} "
+        f"data.mask_rate={mask_rate} "
+        f"model.max_virtual_nodes={max_virtual_nodes} "
+        f"model.num_layers={num_layers} "
+        f"data.pdbbind_weight={pdbbind_weight} "
+        f"data.training_data={data_path} "
+        f"data.data_info_path={data_info_path} "
+        f"save_dir={save_dir} "
+        f"id={experiment_id} "
+        f"data.use_metadata_sampler={use_metadata_sampler}",
         echo=True,
         pty=not WINDOWS,
     )

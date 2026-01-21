@@ -12,6 +12,9 @@ wandb/
 models/
 3DcoordsAtomsBonds*/
 
+# Hydra outputs
+outputs/
+
 /data/*
 !data/aa_graph.json
 !data/statistic.pkl

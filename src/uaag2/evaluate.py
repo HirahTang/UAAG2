@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import os
 import warnings
-from argparse import ArgumentParser, Namespace
 
+import hydra
 import torch
-import yaml
+from omegaconf import DictConfig, OmegaConf
 from torch_geometric.loader import DataLoader
 
 from uaag2.datasets.uaag_dataset import Dataset_Info, UAAG2Dataset_sampling
@@ -15,18 +15,27 @@ from uaag2.logging_config import configure_file_logging, logger
 warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
 
 
-def main(hparams: Namespace) -> None:
+def main(cfg: DictConfig) -> None:
     """Run evaluation on a benchmark dataset using a trained model.
 
     Args:
-        hparams: Configuration namespace containing model and evaluation parameters.
+        cfg: Configuration object containing model and evaluation parameters.
     """
-    log_dir: str = os.path.join(hparams.save_dir, f"run{hparams.id}", "logs")
-    configure_file_logging(log_dir)
-    logger.info("Starting evaluation run {}", hparams.id)
+    # Create save directory if it doesn't exist
+    os.makedirs(cfg.save_dir, exist_ok=True)
 
-    logger.info("Loading data from: {}", hparams.benchmark_path)
-    data_file = torch.load(hparams.benchmark_path, weights_only=False)
+    log_dir: str = os.path.join(cfg.save_dir, f"run{cfg.id}", "logs")
+    configure_file_logging(log_dir)
+    logger.info("Starting evaluation run {}", cfg.id)
+
+    # Some evaluation specific params might need to be checked if they exist in config or added
+    # Assuming they are passed via command line or exist in loaded config
+    benchmark_path = getattr(cfg, "benchmark_path", None)
+    if not benchmark_path:
+        raise ValueError("benchmark_path must be specified in config or command line")
+
+    logger.info("Loading data from: {}", benchmark_path)
+    data_file = torch.load(benchmark_path, weights_only=False)
 
     # Split data into partitions based on split_index
     NUM_PARTITIONS: int = 10
@@ -41,15 +50,20 @@ def main(hparams: Namespace) -> None:
     partitions.append(index[(NUM_PARTITIONS - 1) * part_size :])
 
     # Select partition based on split_index
-    if hparams.split_index < 0 or hparams.split_index >= NUM_PARTITIONS:
-        raise ValueError(f"split_index must be between 0 and {NUM_PARTITIONS - 1}, got {hparams.split_index}")
+    split_index = getattr(cfg, "split_index", 0)
+    if split_index < 0 or split_index >= NUM_PARTITIONS:
+        raise ValueError(f"split_index must be between 0 and {NUM_PARTITIONS - 1}, got {split_index}")
 
-    index = partitions[hparams.split_index]
-    logger.info("Processing partition {}/{} with {} residues", hparams.split_index, NUM_PARTITIONS - 1, len(index))
+    index = partitions[split_index]
+    logger.info("Processing partition {}/{} with {} residues", split_index, NUM_PARTITIONS - 1, len(index))
 
-    dataset_info = Dataset_Info(hparams, hparams.data_info_path)
+    dataset_info = Dataset_Info(cfg, cfg.data.data_info_path)
 
     logger.info("Number of Residues: {}", len(index))
+
+    # Evaluate params
+    virtual_node_size = getattr(cfg, "virtual_node_size", 15)
+    num_samples = getattr(cfg, "num_samples", 500)
 
     for graph_num in index:
         seq_position: int = int(data_file[graph_num].compound_id.split("_")[-3])
@@ -57,15 +71,16 @@ def main(hparams: Namespace) -> None:
         graph = data_file[graph_num]
         logger.info("Sampling for: {} {}", seq_res, seq_position)
 
-        save_path: str = os.path.join("Samples", f"{seq_res}_{seq_position}")
+        save_path: str = os.path.join(cfg.save_dir, "Samples", f"{seq_res}_{seq_position}")
 
+        # Note: UAAG2Dataset_sampling expects hparams (namespace or config)
         dataset = UAAG2Dataset_sampling(
             graph,
-            hparams,
+            cfg,
             save_path,
             dataset_info,
-            sample_size=hparams.virtual_node_size,
-            sample_length=hparams.num_samples,
+            sample_size=virtual_node_size,
+            sample_length=num_samples,
         )
 
         # Note: MPS is not used because torch_scatter doesn't support it
@@ -73,233 +88,37 @@ def main(hparams: Namespace) -> None:
 
         dataloader = DataLoader(
             dataset=dataset,
-            batch_size=hparams.batch_size,
-            num_workers=hparams.num_workers,
+            batch_size=cfg.data.batch_size,
+            num_workers=cfg.num_workers,
             pin_memory=not torch.backends.mps.is_available(),
             shuffle=False,
         )
 
         # Load the model and checkpoint
-        logger.info("Loading model from checkpoint: {}", hparams.load_ckpt)
-        model = Trainer.load_from_checkpoint(
-            hparams.load_ckpt,
-            hparams=hparams,
-            dataset_info=dataset_info,
-        ).to(device)
+        logger.info("Loading model from checkpoint: {}", cfg.load_ckpt)
+        if hasattr(cfg, "load_ckpt") and cfg.load_ckpt:
+            model = Trainer.load_from_checkpoint(
+                cfg.load_ckpt,
+                hparams=cfg,
+                dataset_info=dataset_info,
+            ).to(device)
+        else:
+            raise ValueError("load_ckpt must be provided for evaluation")
+
         model = model.eval()
         model.generate_ligand(dataloader, save_path=save_path, verbose=True)
 
     # Save the configuration
-    config_path: str = os.path.join(hparams.save_dir, f"run{hparams.id}", "config.yaml")
+    config_path: str = os.path.join(cfg.save_dir, f"run{cfg.id}", "config.yaml")
     os.makedirs(os.path.dirname(config_path), exist_ok=True)
-    args_dict: dict[str, object] = vars(hparams)
     with open(config_path, "w") as f:
-        yaml.dump(args_dict, f)
+        f.write(OmegaConf.to_yaml(cfg))
+
+
+@hydra.main(version_base=None, config_path="../../configs", config_name="train")
+def run(cfg: DictConfig) -> None:
+    main(cfg)
 
 
 if __name__ == "__main__":
-    DEFAULT_SAVE_DIR = os.path.join(os.getcwd(), "ProteinGymSampling")
-    parser = ArgumentParser()
-
-    parser.add_argument("--logger-type", default="wandb", type=str)
-
-    parser.add_argument("--dataset", type=str, default="drugs")
-
-    parser.add_argument("--data_info_path", type=str, default="data/statistic.pkl")
-
-    # Load from checkpoint
-    parser.add_argument("--load-ckpt", default=None, type=str)
-    parser.add_argument("--load-ckpt-from-pretrained", default=None, type=str)
-
-    # DATA and FILES
-    parser.add_argument("-s", "--save-dir", default=DEFAULT_SAVE_DIR, type=str)
-    parser.add_argument("--test-save-dir", default=DEFAULT_SAVE_DIR, type=str)
-
-    parser.add_argument("--dataset-root", default="----")
-    parser.add_argument("--use-adaptive-loader", default=True, action="store_true")
-    parser.add_argument("--remove-hs", default=False, action="store_true")
-    parser.add_argument("--select-train-subset", default=False, action="store_true")
-    parser.add_argument("--train-size", default=0.99, type=float)
-    parser.add_argument("--val-size", default=0.01, type=float)
-    parser.add_argument("--test-size", default=100, type=int)
-
-    parser.add_argument("--dropout-prob", default=0.3, type=float)
-
-    # LEARNING
-    parser.add_argument("-b", "--batch-size", default=32, type=int)
-    parser.add_argument("-ib", "--inference-batch-size", default=32, type=int)
-    parser.add_argument("--gamma", default=0.975, type=float)
-    parser.add_argument("--grad-clip-val", default=10.0, type=float)
-    parser.add_argument(
-        "--lr-scheduler",
-        default="reduce_on_plateau",
-        choices=["reduce_on_plateau", "cosine_annealing", "cyclic"],
-    )
-    parser.add_argument(
-        "--optimizer",
-        default="adam",
-        choices=["adam", "sgd"],
-    )
-    parser.add_argument("--lr", default=5e-4, type=float)
-    parser.add_argument("--lr-min", default=5e-5, type=float)
-    parser.add_argument("--lr-step-size", default=10000, type=int)
-    parser.add_argument("--lr-frequency", default=5, type=int)
-    parser.add_argument("--lr-patience", default=20, type=int)
-    parser.add_argument("--lr-cooldown", default=5, type=int)
-    parser.add_argument("--lr-factor", default=0.75, type=float)
-
-    # MODEL
-    parser.add_argument("--sdim", default=256, type=int)
-    parser.add_argument("--vdim", default=64, type=int)
-    parser.add_argument("--latent_dim", default=None, type=int)
-    parser.add_argument("--rbf-dim", default=32, type=int)
-    parser.add_argument("--edim", default=32, type=int)
-    parser.add_argument("--edge-mp", default=False, action="store_true")
-    parser.add_argument("--vector-aggr", default="mean", type=str)
-    parser.add_argument("--num-layers", default=7, type=int)
-    parser.add_argument("--fully-connected", default=True, action="store_true")
-    parser.add_argument("--local-global-model", default=False, action="store_true")
-    parser.add_argument("--local-edge-attrs", default=False, action="store_true")
-    parser.add_argument("--use-cross-product", default=False, action="store_true")
-    parser.add_argument("--cutoff-local", default=7.0, type=float)
-    parser.add_argument("--cutoff-global", default=10.0, type=float)
-    parser.add_argument("--energy-training", default=False, action="store_true")
-    parser.add_argument("--property-training", default=False, action="store_true")
-    parser.add_argument(
-        "--regression-property",
-        default="polarizability",
-        type=str,
-        choices=[
-            "dipole_norm",
-            "total_energy",
-            "HOMO-LUMO_gap",
-            "dispersion",
-            "atomisation_energy",
-            "polarizability",
-        ],
-    )
-    parser.add_argument("--energy-loss", default="l2", type=str, choices=["l2", "l1"])
-    parser.add_argument("--use-pos-norm", default=False, action="store_true")
-
-    # For Discrete: Include more features: (is_aromatic, is_in_ring, hybridization)
-    parser.add_argument("--additional-feats", default=True, action="store_true")
-    parser.add_argument("--use-qm-props", default=False, action="store_true")
-    parser.add_argument("--build-mol-with-addfeats", default=False, action="store_true")
-
-    # DIFFUSION
-    parser.add_argument(
-        "--continuous",
-        default=False,
-        action="store_true",
-        help="If the diffusion process is applied on continuous time variable. Defaults to False",
-    )
-    parser.add_argument(
-        "--noise-scheduler",
-        default="cosine",
-        choices=["linear", "cosine", "quad", "sigmoid", "adaptive", "linear-time"],
-    )
-    parser.add_argument("--eps-min", default=1e-3, type=float)
-    parser.add_argument("--beta-min", default=1e-4, type=float)
-    parser.add_argument("--beta-max", default=2e-2, type=float)
-    parser.add_argument("--timesteps", default=500, type=int)
-    parser.add_argument("--max-time", type=str, default=None)
-    parser.add_argument("--lc-coords", default=3.0, type=float)
-    parser.add_argument("--lc-atoms", default=0.4, type=float)
-    parser.add_argument("--lc-bonds", default=2.0, type=float)
-    parser.add_argument("--lc-charges", default=1.0, type=float)
-    parser.add_argument("--lc-mulliken", default=1.5, type=float)
-    parser.add_argument("--lc-wbo", default=2.0, type=float)
-
-    parser.add_argument("--pocket-noise-std", default=0.1, type=float)
-    parser.add_argument("--use-ligand-dataset-sizes", default=False, action="store_true")
-
-    parser.add_argument(
-        "--loss-weighting",
-        default="snr_t",
-        choices=["snr_s_t", "snr_t", "exp_t", "expt_t_half", "uniform"],
-    )
-    parser.add_argument("--snr-clamp-min", default=0.05, type=float)
-    parser.add_argument("--snr-clamp-max", default=1.50, type=float)
-
-    parser.add_argument("--ligand-pocket-interaction", default=False, action="store_true")
-    parser.add_argument("--diffusion-pretraining", default=False, action="store_true")
-    parser.add_argument("--continuous-param", default="data", type=str, choices=["data", "noise"])
-    parser.add_argument("--atoms-categorical", default=True, action="store_true")
-    parser.add_argument("--bonds-categorical", default=True, action="store_true")
-
-    parser.add_argument("--atom-type-masking", default=True, action="store_true")
-    parser.add_argument("--use-absorbing-state", default=False, action="store_true")
-
-    parser.add_argument("--num-bond-classes", default=5, type=int)
-    parser.add_argument("--num-charge-classes", default=6, type=int)
-
-    # BOND PREDICTION AND GUIDANCE:
-    parser.add_argument("--bond-guidance-model", default=False, action="store_true")
-    parser.add_argument("--bond-prediction", default=False, action="store_true")
-    parser.add_argument("--bond-model-guidance", default=False, action="store_true")
-    parser.add_argument("--energy-model-guidance", default=False, action="store_true")
-    parser.add_argument("--polarizabilty-model-guidance", default=False, action="store_true")
-    parser.add_argument("--ckpt-bond-model", default=None, type=str)
-    parser.add_argument("--ckpt-energy-model", default=None, type=str)
-    parser.add_argument("--ckpt-polarizabilty-model", default=None, type=str)
-    parser.add_argument("--guidance-scale", default=1.0e-4, type=float)
-
-    # CONTEXT
-    parser.add_argument("--context-mapping", default=False, action="store_true")
-    parser.add_argument("--num-context-features", default=0, type=int)
-    parser.add_argument("--properties-list", default=[], nargs="+", type=str)
-
-    # PROPERTY PREDICTION
-    parser.add_argument("--property-prediction", default=False, action="store_true")
-
-    # LATENT
-    parser.add_argument("--prior-beta", default=1.0, type=float)
-    parser.add_argument("--sdim-latent", default=256, type=int)
-    parser.add_argument("--vdim-latent", default=64, type=int)
-    parser.add_argument("--latent-dim", default=None, type=int)
-    parser.add_argument("--edim-latent", default=32, type=int)
-    parser.add_argument("--num-layers-latent", default=7, type=int)
-    parser.add_argument("--latent-layers", default=7, type=int)
-    parser.add_argument("--latentmodel", default="diffusion", type=str)
-    parser.add_argument("--latent-detach", default=False, action="store_true")
-
-    # GENERAL
-    parser.add_argument("-i", "--id", type=str, default="0")
-    parser.add_argument("-g", "--gpus", default=1, type=int)
-    parser.add_argument("-e", "--num-epochs", default=300, type=int)
-    parser.add_argument("--eval-freq", default=1.0, type=float)
-    parser.add_argument("--test-interval", default=5, type=int)
-    parser.add_argument("-nh", "--no_h", default=False, action="store_true")
-    parser.add_argument("--precision", default=32, type=int)
-    parser.add_argument("--detect-anomaly", default=False, action="store_true")
-    parser.add_argument("--num-workers", default=4, type=int)
-    parser.add_argument(
-        "--max-num-conformers",
-        default=5,
-        type=int,
-        help="Maximum number of conformers per molecule. \
-                            Defaults to 30. Set to -1 for all conformers available in database",
-    )
-    parser.add_argument("--accum-batch", default=1, type=int)
-    parser.add_argument("--max-num-neighbors", default=128, type=int)
-    parser.add_argument("--ema-decay", default=0.9999, type=float)
-    parser.add_argument("--weight-decay", default=0.9999, type=float)
-    parser.add_argument("--seed", default=42, type=int)
-    parser.add_argument("--backprop-local", default=False, action="store_true")
-
-    # SAMPLING
-    parser.add_argument("--num-test-graphs", default=10000, type=int)
-    parser.add_argument("--calculate-energy", default=False, action="store_true")
-    parser.add_argument("--save-xyz", default=False, action="store_true")
-    parser.add_argument("--variational-sampling", default=False)
-
-    parser.add_argument("--benchmark-path", type=str)
-
-    parser.add_argument("--num-samples", default=500, type=int)
-    parser.add_argument("--virtual_node", default=1, type=int)
-    parser.add_argument("--virtual_node_size", default=15, type=int)
-
-    parser.add_argument("--split_index", default=0, type=int)
-    args = parser.parse_args()
-
-    main(args)
+    run()
