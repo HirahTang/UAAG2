@@ -347,20 +347,20 @@ class Trainer(pl.LightningModule):
 
         t = torch.randint(
             low=1,
-            high=self.hparams.timesteps + 1,
+            high=self.hparams.diffusion.timesteps + 1,
             size=(batch_size,),
             dtype=torch.long,
             device=batch.x.device,
         )
-        if self.hparams.loss_weighting == "snr_s_t":
+        if self.hparams.diffusion.loss_weighting == "snr_s_t":
             weights = self.sde_bonds.snr_s_t_weighting(s=t - 1, t=t, clamp_min=None, clamp_max=None).to(batch.x.device)
-        elif self.hparams.loss_weighting == "snr_t":
+        elif self.hparams.diffusion.loss_weighting == "snr_t":
             weights = self.sde_bonds.snr_t_weighting(t=t, device=batch.x.device, clamp_min=0.05, clamp_max=5.0)
-        elif self.hparams.loss_weighting == "exp_t":
+        elif self.hparams.diffusion.loss_weighting == "exp_t":
             weights = self.sde_atom_charge.exp_t_weighting(t=t, device=self.device)
-        elif self.hparams.loss_weighting == "exp_t_half":
+        elif self.hparams.diffusion.loss_weighting == "exp_t_half":
             weights = self.sde_atom_charge.exp_t_half_weighting(t=t, device=self.device)
-        elif self.hparams.loss_weighting == "uniform":
+        elif self.hparams.diffusion.loss_weighting == "uniform":
             weights = None
 
         ligand_mask = (batch.is_ligand - batch.is_backbone).long()
@@ -381,7 +381,7 @@ class Trainer(pl.LightningModule):
 
         true_data = {
             "coords": out_dict["coords_true"]
-            if self.hparams.continuous_param == "data"
+            if self.hparams.diffusion.continuous_param == "data"
             else out_dict["coords_noise_true"],
             "atoms": out_dict["atoms_true"],
             "charges": out_dict["charges_true"],
@@ -431,10 +431,10 @@ class Trainer(pl.LightningModule):
         )
 
         final_loss = (
-            self.hparams.lc_coords * loss["coords"]
-            + self.hparams.lc_atoms * loss["atoms"]
-            + self.hparams.lc_bonds * loss["bonds"]
-            + self.hparams.lc_charges * loss["charges"]
+            self.hparams.diffusion.lc_coords * loss["coords"]
+            + self.hparams.diffusion.lc_atoms * loss["atoms"]
+            + self.hparams.diffusion.lc_bonds * loss["bonds"]
+            + self.hparams.diffusion.lc_charges * loss["charges"]
             + 0.5 * loss["ring"]
             + 0.7 * loss["aromatic"]
             + 1.0 * loss["hybridization"]
@@ -476,8 +476,8 @@ class Trainer(pl.LightningModule):
         degree_feat = batch.degree
 
         # TIME EMBEDDING
-        temb = t.float() / self.hparams.timesteps
-        temb = temb.clamp(min=self.hparams.eps_min)
+        temb = t.float() / self.hparams.diffusion.timesteps
+        temb = temb.clamp(min=self.hparams.diffusion.eps_min)
         temb = temb.unsqueeze(dim=1)
 
         pocket_mask = (1 - batch.is_ligand + batch.is_backbone).long()
@@ -612,7 +612,7 @@ class Trainer(pl.LightningModule):
                 edge_index_global=bond_edge_index,
                 edge_attr_global=edge_attr_global_perturbed,
                 batch=data_batch,
-                batch_edge_global=batch.edge_ligand.long(),
+                batch_edge_global=data_batch[bond_edge_index[0]],
                 context=None,
                 pocket_mask=pocket_mask.unsqueeze(1),
                 edge_mask=batch.edge_ligand.long(),
@@ -1163,54 +1163,54 @@ class Trainer(pl.LightningModule):
             # create the input to the network of the next timestep
 
     def configure_optimizers(self):
-        if self.hparams.optimizer == "adam":
+        if self.hparams.optimizer.name == "adam":
             optimizer = torch.optim.AdamW(
                 self.model.parameters(),
-                lr=self.hparams["lr"],
+                lr=self.hparams.optimizer.lr,
                 amsgrad=True,
-                weight_decay=1.0e-12,
+                weight_decay=self.hparams.optimizer.weight_decay,
             )
-        elif self.hparams.optimizer == "sgd":
+        elif self.hparams.optimizer.name == "sgd":
             optimizer = torch.optim.SGD(
                 self.model.parameters(),
-                lr=self.hparams["lr"],
+                lr=self.hparams.optimizer.lr,
                 momentum=0.9,
                 nesterov=True,
             )
-        if self.hparams["lr_scheduler"] == "reduce_on_plateau":
+        if self.hparams.optimizer.lr_scheduler == "reduce_on_plateau":
             lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer=optimizer,
-                patience=self.hparams["lr_patience"],
-                cooldown=self.hparams["lr_cooldown"],
-                factor=self.hparams["lr_factor"],
+                patience=self.hparams.optimizer.lr_patience,
+                cooldown=self.hparams.optimizer.lr_cooldown,
+                factor=self.hparams.optimizer.lr_factor,
             )
-        elif self.hparams["lr_scheduler"] == "cyclic":
+        elif self.hparams.optimizer.lr_scheduler == "cyclic":
             lr_scheduler = torch.optim.lr_scheduler.CyclicLR(
                 optimizer,
-                base_lr=self.hparams["lr_min"],
-                max_lr=self.hparams["lr"],
+                base_lr=self.hparams.optimizer.lr_min,
+                max_lr=self.hparams.optimizer.lr,
                 mode="exp_range",
-                step_size_up=self.hparams["lr_step_size"],
+                step_size_up=self.hparams.optimizer.lr_step_size,
                 cycle_momentum=False,
             )
-        elif self.hparams["lr_scheduler"] == "one_cyclic":
+        elif self.hparams.optimizer.lr_scheduler == "one_cyclic":
             lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
                 optimizer,
-                max_lr=self.hparams["lr"],
+                max_lr=self.hparams.optimizer.lr,
                 steps_per_epoch=len(self.trainer.datamodule.train_dataset),
-                epochs=self.hparams["num_epochs"],
+                epochs=self.hparams.num_epochs,
             )
-        elif self.hparams["lr_scheduler"] == "cosine_annealing":
+        elif self.hparams.optimizer.lr_scheduler == "cosine_annealing":
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer,
-                T_max=self.hparams["lr_patience"],
-                eta_min=self.hparams["lr_min"],
+                T_max=self.hparams.optimizer.lr_patience,
+                eta_min=self.hparams.optimizer.lr_min,
             )
         scheduler = {
             "scheduler": lr_scheduler,
             "interval": "epoch",
-            "frequency": self.hparams["lr_frequency"],
-            "monitor": self.qed,
+            "frequency": self.hparams.optimizer.lr_frequency,
+            "monitor": "val/loss",
             "strict": False,
         }
         return [optimizer], [scheduler]
