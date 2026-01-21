@@ -34,6 +34,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY README.md README.md
 COPY LICENSE LICENSE
 COPY tasks.py tasks.py
+COPY configs configs/
 COPY src src/
 
 # Install the project
