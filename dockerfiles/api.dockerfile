@@ -31,23 +31,24 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project
 
 # Copy project files
+# Copy project files
 COPY README.md README.md
 COPY LICENSE LICENSE
 COPY src src/
+COPY models/good_model/last.ckpt models/good_model/last.ckpt
+COPY data/statistic.pkl data/statistic.pkl
 
 # Install the project
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
 
-# Create necessary directories
-RUN mkdir -p models data
-
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PORT=8080
 
 # Expose the API port
-EXPOSE 8000
+EXPOSE 8080
 
 # Run the FastAPI server with uvicorn
-ENTRYPOINT ["uv", "run", "uvicorn", "uaag2.api:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["uv", "run", "uvicorn", "uaag2.api:app", "--host", "0.0.0.0", "--port", "8080"]

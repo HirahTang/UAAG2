@@ -37,29 +37,26 @@ dependencies = [
     "uvicorn==0.34.0",
     "wandb==0.23.0",
     "loguru>=0.7.0",
-
     "torch==2.7.0",
     "torch-ema>=0.3",
     "torch-geometric>=2.7.0",
-
     # Platform-specific wheels for PyG extensions to match PyTorch versions
     # Mac (ARM/Intel): Clean CPU versions
     "torch-cluster==1.6.3; sys_platform == 'darwin'",
     "torch-scatter==2.1.2; sys_platform == 'darwin'",
     "torch-sparse==0.6.18; sys_platform == 'darwin'",
     "torch-spline-conv==1.2.2; sys_platform == 'darwin'",
-
     # Linux ARM (Docker CPU): CPU versions with +pt27cpu suffix
     "torch-cluster==1.6.3+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
     "torch-scatter==2.1.2+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
     "torch-sparse==0.6.18+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
     "torch-spline-conv==1.2.2+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
-
     # Linux x86 (Docker GPU): CUDA 12.8 versions with +pt27cu128 suffix
     "torch-cluster==1.6.3+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "torch-scatter==2.1.2+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "torch-sparse==0.6.18+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "torch-spline-conv==1.2.2+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "python-multipart>=0.0.21",
 ]
 
 [dependency-groups]

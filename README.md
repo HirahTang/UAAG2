@@ -30,13 +30,10 @@ The directory structure of the project looks like this:
 ```txt
 ├── configs/                  # Configuration files
 ├── data/                     # Data directory
-│   └── mnist/
-│       ├── processed/
-│       └── raw/
+
 ├── dockerfiles/              # Dockerfiles
 │   ├── api.dockerfile
-│   ├── mnist_evaluate.dockerfile
-│   ├── mnist_train.dockerfile
+
 │   └── train.dockerfile
 ├── docs/                     # Documentation
 │   ├── README.md
@@ -55,10 +52,7 @@ The directory structure of the project looks like this:
 │       ├── api.py
 │       ├── data.py
 │       ├── evaluate.py
-│       ├── mnist_data.py
-│       ├── mnist_evaluate.py
-│       ├── mnist_model.py
-│       ├── mnist_train.py
+
 │       ├── model.py
 │       ├── train.py
 │       └── visualize.py
@@ -74,26 +68,66 @@ The directory structure of the project looks like this:
 └── uv.lock                   # Dependency lock file
 ```
 
-## Docker images
+## API Usage
 
-Build the MNIST image with
+The application provides a FastAPI backend for molecule generation.
+
+### Starting the Server
+```bash
+uv run python src/uaag2/api.py
+```
+The server will start at `http://localhost:8000`.
+
+### Using the Frontend
+Visit `http://localhost:8000` in your browser to inspect the UI.
+
+### Programmatic Access
+
+#### Using Curl
+You can generate molecules by sending a POST request to the `/generate` endpoint with a `.pt` file.
 
 ```bash
-$ docker build -t mnist_train:latest . -f dockerfiles/mnist_train.dockerfile --progress=plain
+curl -X POST -F "file=@data/benchmarks/single_ecoli.pt" http://localhost:8000/generate
 ```
 
-Then, run the image with
+#### Using Python
+```python
+import requests
 
+url = "http://localhost:8000/generate"
+files = {'file': open('data/benchmarks/single_ecoli.pt', 'rb')}
+
+response = requests.post(url, files=files)
+print(response.json())
+```
+
+## Docker Deployment
+
+To build and run the API using Docker (compatible with Google Cloud Run):
+
+### Build the Image
 ```bash
-$ docker run --name mnist-train --rm -v $(pwd)/models:/models/ mnist_train:latest
+docker build -f dockerfiles/api.dockerfile -t uaag2-api .
 ```
 
-Similarly, the mnist_evaluate image can be built and run with
+### Run Locally
 ```bash
-$ docker build -t mnist_evaluate:latest . -f dockerfiles/mnist_evaluate.dockerfile --progress=plain
-$ docker run --name mnist_eval --rm -v "$(pwd)/models/model.pth:/models/model.pth" mnist_evaluate:latest /models/model.pth
+docker run -p 8080:8080 uaag2-api
 ```
+The API will be available at `http://localhost:8080`.
 
-Project template created using [mlops_template](https://github.com/SkafteNicki/mlops_template),
-a [cookiecutter template](https://github.com/cookiecutter/cookiecutter) for getting
-started with Machine Learning Operations (MLOps).
+### Deploy to Google Cloud Run
+1.  **Tag and Push:**
+    ```bash
+    docker tag uaag2-api gcr.io/YOUR_PROJECT_ID/uaag2-api
+    docker push gcr.io/YOUR_PROJECT_ID/uaag2-api
+    ```
+2.  **Deploy:**
+    ```bash
+    gcloud run deploy uaag2-api --image gcr.io/YOUR_PROJECT_ID/uaag2-api --platform managed --region europe-north1 --allow-unauthenticated
+    ```
+
+
+
+
+*Project template created using [mlops_template](https://github.com/SkafteNicki/mlops_template), a [cookiecutter template](https://github.com/cookiecutter/cookiecutter) for getting started with Machine Learning Operations (MLOps).*
