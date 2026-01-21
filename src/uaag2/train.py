@@ -144,8 +144,7 @@ def main(cfg: DictConfig):
             "model": cfg.model,
             "data": cfg.data,
             "diffusion": cfg.diffusion,
-            # Don't overwrite optimizer string with dict
-            "optimizer": cfg.optimizer.name,
+            "optimizer": cfg.optimizer,
         }
     )
 
