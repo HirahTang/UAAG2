@@ -2,11 +2,15 @@
 
 import os
 
+from typing import Annotated
 import typer
 import wandb
 
 
-def link_model(artifact_path: str, aliases: list[str] = ["staging"]) -> None:
+def link_model(
+    artifact_path: str,
+    aliases: Annotated[list[str], typer.Option("--alias", "-a")] = ["staging"],
+) -> None:
     """Stage a specific model to the model registry.
 
     Args:
