@@ -27,6 +27,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
 # Global variables for model and config
 MODEL = None
 DATASET_INFO = None
@@ -39,7 +45,7 @@ DEFAULT_HPARAMS = {
     "batch_size": 1,
     "num_workers": 0,
     "virtual_node_size": 15,
-    "num_samples": 5,  # Generate 5 samples
+    "num_samples": 3,  # Generate 5 samples
     "split_index": 0,
     "save_dir": "temp_generations",
     # Add other necessary hparams defaults or load from checkpoint
@@ -49,10 +55,7 @@ DEFAULT_HPARAMS = {
 def load_data_info():
     global DATASET_INFO
     if os.path.exists(DATA_INFO_PATH):
-        # Mocking hparams for Dataset_Info, it mainly needs data_info_path?
-        # Actually Dataset_Info init signature is: __init__(self, hparams, datainfopath)
-        # It uses hparams.remove_hs, hparams.dataset_root...
-        # Let's create a minimal namespace
+        # Create a minimal namespace for Dataset_Info initialization
         hparams = Namespace(
             remove_hs=False,
             dataset_root="----",
@@ -195,7 +198,9 @@ async def startup_event():
         hparams = load_data_info()
         print(f"Loading model from {CHECKPOINT_PATH}...")
 
-        # Load hparams from checkpoint if possible, but we need some basic hparams to init Trainer if it's not fully automatic
+        print(f"Loading model from {CHECKPOINT_PATH}...")
+
+        # Load hparams from checkpoint if possible
         # Trainer.load_from_checkpoint merges passed hparams with checkpoint hparams
 
         MODEL = Trainer.load_from_checkpoint(
@@ -240,14 +245,9 @@ async def generate(file: UploadFile = File(...)):
             graph = data_list  # Assume it's a single Data object
 
         # Create dataset and loader
-        # We need a dummy hparams for the dataset
         hparams = Namespace(**DEFAULT_HPARAMS)
         hparams.save_dir = tempfile.mkdtemp()
         hparams.id = "api_gen"
-
-        # We need to construct a proper save path for the dataset
-        # UAAG2Dataset_sampling uses save_path for something?
-        # It seems it uses it to check if samples exist?
 
         dataset_save_path = os.path.join(hparams.save_dir, "samples")
 
@@ -262,15 +262,13 @@ async def generate(file: UploadFile = File(...)):
 
         dataloader = DataLoader(
             dataset=dataset,
-            batch_size=1,  # Generate one by one or batch?
+            batch_size=1,
             num_workers=0,
             shuffle=False,
         )
 
         # Run generation
         # generate_ligand saves to os.path.join(self.save_dir, save_path, f"iter_{i}")
-        # self.save_dir = os.path.join(hparams.save_dir, f"run{hparams.id}")
-        # save_path here is the arg passed to generate_ligand
 
         # We will pass 'gen_output' as save_path
         MODEL.hparams.save_dir = hparams.save_dir
@@ -282,11 +280,6 @@ async def generate(file: UploadFile = File(...)):
 
         # Find the generated file
         # Path: {hparams.save_dir}/run{hparams.id}/gen_output/iter_0/batch_0/final/ligand.mol
-        # iter_0 corresponds to the first batch in dataloader (which is our only batch or graph)
-        # But wait, dataloader iterates over dataset. Dataset returns 'sample_length' items.
-        # We instantiated dataset with sample_length=5 (DEFAULT_HPARAMS).
-        # So we will have 5 items.
-        # Let's take the first one: iter_0/batch_0/final/ligand.mol
 
         base_output_dir = os.path.join(MODEL.save_dir, "gen_output")
 
@@ -295,11 +288,6 @@ async def generate(file: UploadFile = File(...)):
 
         # Iterate over iterations (samples)
         for i in range(hparams.num_samples):
-            # For batch_size=1, inside generate_ligand loop, i is the index of batch
-            # If batch_size=1, we have num_samples batches.
-            # wait, UAAG2Dataset_sampling length is num_samples.
-            # So yes, we have num_samples batches of size 1 (if batch_size=1 defined above)
-
             mol_path = os.path.join(base_output_dir, f"iter_{i}", "batch_0", "final", "ligand.mol")
             xyz_path = os.path.join(base_output_dir, f"iter_{i}", "batch_0", "final", "ligand.xyz")
 

@@ -612,7 +612,7 @@ class Trainer(pl.LightningModule):
                 edge_index_global=bond_edge_index,
                 edge_attr_global=edge_attr_global_perturbed,
                 batch=data_batch,
-                batch_edge_global=batch.edge_ligand.long(),
+                batch_edge_global=data_batch[bond_edge_index[0]],
                 context=None,
                 pocket_mask=pocket_mask.unsqueeze(1),
                 edge_mask=batch.edge_ligand.long(),
