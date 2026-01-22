@@ -84,4 +84,5 @@ jobs:
             --allow-unauthenticated \
             --port 8080 \
             --memory 4Gi \
-            --cpu 4
+            --cpu 4 \
+            --timeout 1800
