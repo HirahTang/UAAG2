@@ -65,11 +65,11 @@ jobs:
       - name: Fetch Model from W&B
         env:
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
-          WANDB_ENTITY: ${{ secrets.WANDB_ENTITY }}
-          WANDB_PROJECT: ${{ secrets.WANDB_PROJECT }}
+          #WANDB_ENTITY: ${{ secrets.WANDB_ENTITY }}
+          #WANDB_PROJECT: ${{ secrets.WANDB_PROJECT }}
           MODEL_ARTIFACT: "yhsure-university-of-copenhagen-org/wandb-registry-uaag2/uaag_models:latest"
         run: |
-          uv run invoke fetch-model --artifact "$WANDB_ENTITY/$WANDB_PROJECT/$MODEL_ARTIFACT" --output "models/good_model/last.ckpt"
+          uv run invoke fetch-model --artifact "$MODEL_ARTIFACT" --output "models/good_model/last.ckpt"
 
       - name: Submit build to Cloud Build
         run: gcloud builds submit . --config configs/cloudbuild_api.yaml
