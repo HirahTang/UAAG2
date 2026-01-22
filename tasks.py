@@ -50,7 +50,7 @@ print("Data fetch complete!")
 
 
 @task
-def fetch_model(ctx: Context, artifact: str, output: str = "models/good_model/last.ckpt") -> None:
+def fetch_model(ctx: Context, artifact: str, output: str = "models/good_model") -> None:
     """Fetch model artifact from W&B."""
     fetch_script = f"""
 import os
@@ -76,6 +76,8 @@ try:
         print(f"Found checkpoint: {{file}}")
         shutil.move(file, target)
         print(f"Moved to folder: {{target}}")
+        print(os.listdir("."))
+        print(os.listdir(output))
         found = True
         break
 
