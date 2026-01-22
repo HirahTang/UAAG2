@@ -75,6 +75,7 @@ try:
     for file in Path(artifact_dir).rglob("*.ckpt"):
         print(f"Found checkpoint: {{file}}")
         shutil.move(file, target)
+        print(f"Moved to folder: {{target}}")
         found = True
         break
 
