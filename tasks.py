@@ -72,10 +72,11 @@ try:
     target_dir.mkdir(parents=True, exist_ok=True)
 
     found = False
-    for file in Path(artifact_dir).rglob("*.ckpt"):
-        print(f"Found checkpoint: {{file}}")
-        target_file = target_dir / file.name
-        shutil.move(file, target_file)
+    # Only the first checkpoint file found is used
+    for checkpoint_file in Path(artifact_dir).rglob("*.ckpt"):
+        print(f"Found checkpoint: {{checkpoint_file}}")
+        target_file = target_dir / checkpoint_file.name
+        shutil.move(checkpoint_file, target_file)
         print(f"Moved to: {{target_file}}")
         found = True
         break
