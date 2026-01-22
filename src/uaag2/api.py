@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import torch
 import os
+import shutil
 import tempfile
 import hydra
 from omegaconf import OmegaConf
@@ -117,6 +118,7 @@ async def generate(file: UploadFile = File(...)):
         temp_file.write(content)
         temp_path = temp_file.name
 
+    req_cfg_save_dir = None
     try:
         # Load the data
         try:
@@ -144,6 +146,7 @@ async def generate(file: UploadFile = File(...)):
         # Create a temporary config context
         req_cfg = MODEL.hparams.copy()
         req_cfg.save_dir = tempfile.mkdtemp()
+        req_cfg_save_dir = req_cfg.save_dir
         req_cfg.id = "api_gen"
         req_cfg.virtual_node_size = 15  # Default for gen
         req_cfg.num_samples = 3  # Default for gen
@@ -166,65 +169,47 @@ async def generate(file: UploadFile = File(...)):
             shuffle=False,
         )
 
-        # Run generation
-        # generate_ligand saves to os.path.join(self.save_dir, save_path, f"iter_{i}")
-
-        # We need to temporarily set model's save dir to separate requests
-        # Or better, pass save_path_override if possible, but generate_ligand uses self.save_dir
-
-        # Trainer.generate_ligand uses self.save_dir.
-        # CAUTION: Changing self.save_dir on a global model object in async context is NOT thread safe.
-        # However, for this single-worker process or if generate_ligand uses passed args locally...
-        # Checking generate_ligand implementation (from memory, it takes save_path)
-        # But looking at previous code:
-        # MODEL.hparams.save_dir = hparams.save_dir
-        # MODEL.save_dir = ...
-        # This IS NOT thread safe.
-        # But assuming single worker for now or low concurrency.
-        # Ideally generate_ligand should accept absolute output path.
-
-        # Let's check generate_ligand signature in previous file view?
-        # evaluate.py calls: model.generate_ligand(dataloader, save_path=save_path, verbose=True)
-        # If save_path is relative, it joins with self.save_dir.
-
         # To be safe(r), let's use absolute path for save_path argument if generate_ligand supports it?
         # Or just risk it for this migration task (cleanup).
 
-        original_save_dir = MODEL.save_dir
-        MODEL.save_dir = os.path.join(req_cfg.save_dir, f"run{req_cfg.id}")
+        # Trainer.generate_ligand uses self.save_dir.
+        # But os.path.join(prefix, /absolute/path) returns /absolute/path.
+        # So passing an absolute path to generate_ligand bypasses self.save_dir.
 
-        try:
-            MODEL.generate_ligand(dataloader, save_path="gen_output", verbose=True, device=DEVICE)
+        # Create a unique output directory for this request
+        req_save_dir = os.path.join(req_cfg.save_dir, f"run{req_cfg.id}")
+        os.makedirs(req_save_dir, exist_ok=True)
 
-            # Find the generated file
-            base_output_dir = os.path.join(MODEL.save_dir, "gen_output")
+        # We pass the absolute path req_save_dir as save_path.
+        # This causes generate_ligand to write to req_save_dir/iter_i
+        # ignoring MODEL.save_dir
+        MODEL.generate_ligand(dataloader, save_path=req_save_dir, verbose=True, device=DEVICE)
 
-            # Collect results
-            results = []
+        # Find the generated file
+        # generate_ligand joins save_path with iter_i, so we look in req_save_dir
+        base_output_dir = req_save_dir
 
-            # Iterate over iterations (samples)
-            for i in range(req_cfg.num_samples):
-                mol_path = os.path.join(base_output_dir, f"iter_{i}", "batch_0", "final", "ligand.mol")
-                xyz_path = os.path.join(base_output_dir, f"iter_{i}", "batch_0", "final", "ligand.xyz")
+        # Collect results
+        results = []
 
-                if os.path.exists(mol_path):
-                    with open(mol_path, "r") as f:
-                        mol_content = f.read()
-                    results.append({"format": "mol", "content": mol_content, "id": i})
-                elif os.path.exists(xyz_path):
-                    with open(xyz_path, "r") as f:
-                        xyz_content = f.read()
-                    results.append({"format": "xyz", "content": xyz_content, "id": i})
+        # Iterate over iterations (samples)
+        for i in range(req_cfg.num_samples):
+            mol_path = os.path.join(base_output_dir, f"iter_{i}", "batch_0", "final", "ligand.mol")
+            xyz_path = os.path.join(base_output_dir, f"iter_{i}", "batch_0", "final", "ligand.xyz")
 
-            if not results:
-                raise HTTPException(status_code=500, detail="Generation failed to produce output files")
+            if os.path.exists(mol_path):
+                with open(mol_path, "r") as f:
+                    mol_content = f.read()
+                results.append({"format": "mol", "content": mol_content, "id": i})
+            elif os.path.exists(xyz_path):
+                with open(xyz_path, "r") as f:
+                    xyz_content = f.read()
+                results.append({"format": "xyz", "content": xyz_content, "id": i})
 
-            return JSONResponse(content={"results": results})
+        if not results:
+            raise HTTPException(status_code=500, detail="Generation failed to produce output files")
 
-        finally:
-            MODEL.save_dir = original_save_dir
-            # Cleanup temp dir?
-            # shutil.rmtree(req_cfg.save_dir)
+        return JSONResponse(content={"results": results})
 
     except Exception as e:
         import traceback
@@ -233,6 +218,8 @@ async def generate(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         os.remove(temp_path)
+        if req_cfg_save_dir and os.path.exists(req_cfg_save_dir):
+            shutil.rmtree(req_cfg_save_dir)
 
 
 # Mount static files
