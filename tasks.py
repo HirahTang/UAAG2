@@ -77,7 +77,7 @@ try:
         shutil.move(file, target)
         print(f"Moved to folder: {{target}}")
         print(os.listdir("."))
-        print(os.listdir({{output}}))
+        print(os.listdir(output_path))
         found = True
         break
 
