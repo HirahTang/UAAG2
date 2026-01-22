@@ -69,7 +69,7 @@ jobs:
           #WANDB_PROJECT: ${{ secrets.WANDB_PROJECT }}
           MODEL_ARTIFACT: "yhsure-university-of-copenhagen-org/wandb-registry-uaag2/uaag_models:latest"
         run: |
-          uv run invoke fetch-model --artifact "$MODEL_ARTIFACT" --output "models/good_model/last.ckpt"
+          uv run invoke fetch-model --artifact "$MODEL_ARTIFACT" --output "models/good_model"
 
       - name: Submit build to Cloud Build
         run: gcloud builds submit . --config configs/cloudbuild_api.yaml
