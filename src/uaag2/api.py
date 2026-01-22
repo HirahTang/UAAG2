@@ -112,13 +112,13 @@ async def startup_event():
 
 
 @app.post("/generate")
-async def generate(file: UploadFile = File(...)):
+def generate(file: UploadFile = File(...)):
     if MODEL is None:
         raise HTTPException(status_code=500, detail="Model not loaded")
 
     # Save uploaded file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pt") as temp_file:
-        content = await file.read()
+        content = file.file.read()
         temp_file.write(content)
         temp_path = temp_file.name
 
@@ -153,7 +153,7 @@ async def generate(file: UploadFile = File(...)):
         req_cfg_save_dir = req_cfg.save_dir
         req_cfg.id = "api_gen"
         req_cfg.virtual_node_size = 15  # Default for gen
-        req_cfg.num_samples = 3  # Default for gen
+        req_cfg.num_samples = 1  # Default for gen
 
         dataset_save_path = os.path.join(req_cfg.save_dir, "samples")
 
