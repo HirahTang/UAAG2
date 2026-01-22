@@ -42,14 +42,18 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Constants (should match training/eval or be loaded from config)
 # Ideally these should come from environment variables or a specific deployment config
-CHECKPOINT_PATH = os.environ.get("CHECKPOINT_PATH", "models/good_model/last.ckpt")
-DATA_INFO_PATH = os.environ.get("DATA_INFO_PATH", "data/statistic.pkl")
-CONFIG_PATH = "../../configs"
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_DATA_INFO_PATH = os.path.join(_BASE_DIR, "..", "..", "data", "statistic.pkl")
+_DEFAULT_CHECKPOINT_PATH = os.path.join(_BASE_DIR, "..", "..", "models", "good_model", "last.ckpt")
+
+CHECKPOINT_PATH = os.environ.get("CHECKPOINT_PATH", _DEFAULT_CHECKPOINT_PATH)
+DATA_INFO_PATH = os.environ.get("DATA_INFO_PATH", _DEFAULT_DATA_INFO_PATH)
+CONFIG_PATH = os.path.join(_BASE_DIR, "..", "..", "configs")
 CONFIG_NAME = "train"
 
 
 def load_config():
-    with hydra.initialize(version_base=None, config_path=CONFIG_PATH):
+    with hydra.initialize_config_dir(version_base=None, config_dir=CONFIG_PATH):
         # Override save_dir specifically for the API to avoid hydra interpolation error
         # We also override test_save_dir as it often refers to save_dir
         cfg = hydra.compose(config_name=CONFIG_NAME, overrides=["save_dir=.", "test_save_dir=."])

@@ -19,7 +19,10 @@ from uaag2 import bond_analyze
 obConversion = ob.OBConversion()
 obConversion.SetInAndOutFormats("xyz", "mol")
 
-with open("data/aa_graph.json", "rb") as json_file:
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+AA_GRAPH_PATH = os.path.join(_BASE_DIR, "..", "..", "data", "aa_graph.json")
+
+with open(AA_GRAPH_PATH, "rb") as json_file:
     AA_GRAPH_DICT = json.load(json_file)
     json_file.close()
 
