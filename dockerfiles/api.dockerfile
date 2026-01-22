@@ -37,6 +37,7 @@ COPY LICENSE LICENSE
 COPY src src/
 COPY models/good_model/last.ckpt models/good_model/last.ckpt
 COPY data/statistic.pkl data/statistic.pkl
+COPY data/aa_graph.json data/aa_graph.json
 
 # Install the project
 RUN --mount=type=cache,target=/root/.cache/uv \
