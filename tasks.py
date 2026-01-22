@@ -68,16 +68,16 @@ try:
     artifact_dir = artifact.download()
     print(f"Artifact downloaded to {{artifact_dir}}")
 
-    target = Path(output_path)
-    target.parent.mkdir(parents=True, exist_ok=True)
+    target_dir = Path(output_path)
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     found = False
-    for file in Path(artifact_dir).rglob("*.ckpt"):
-        print(f"Found checkpoint: {{file}}")
-        shutil.move(file, target)
-        print(f"Moved to folder: {{target}}")
-        print(os.listdir("."))
-        print(os.listdir(output_path))
+    # Only the first checkpoint file found is used
+    for checkpoint_file in Path(artifact_dir).rglob("*.ckpt"):
+        print(f"Found checkpoint: {{checkpoint_file}}")
+        target_file = target_dir / checkpoint_file.name
+        shutil.move(checkpoint_file, target_file)
+        print(f"Moved to: {{target_file}}")
         found = True
         break
 
