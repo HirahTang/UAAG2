@@ -6,6 +6,7 @@ import torch
 import os
 import tempfile
 import hydra
+from omegaconf import OmegaConf
 from torch_geometric.loader import DataLoader
 
 # Add project root to sys.path to ensure imports work
@@ -48,7 +49,10 @@ CONFIG_NAME = "train"
 
 def load_config():
     with hydra.initialize(version_base=None, config_path=CONFIG_PATH):
-        cfg = hydra.compose(config_name=CONFIG_NAME)
+        # Override save_dir specifically for the API to avoid hydra interpolation error
+        # We also override test_save_dir as it often refers to save_dir
+        cfg = hydra.compose(config_name=CONFIG_NAME, overrides=["save_dir=.", "test_save_dir=."])
+        OmegaConf.set_struct(cfg, False)  # Globally disable struct mode for the API
     return cfg
 
 
@@ -90,6 +94,7 @@ async def startup_event():
                 dataset_info=DATASET_INFO,
                 strict=False,  # To avoid errors with missing keys if any
             ).to(DEVICE)
+            OmegaConf.set_struct(MODEL.hparams, False)
             MODEL.eval()
             print("Model loaded successfully.")
         else:
@@ -236,4 +241,5 @@ app.mount("/", StaticFiles(directory="src/uaag2/static", html=True), name="stati
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

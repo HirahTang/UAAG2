@@ -66,27 +66,30 @@ def load_data(hparams, data_path: list, pdb_list: list) -> Data:
 def create_model(hparams, num_atom_features, num_bond_classes):
     from e3moldiffusion.coordsatomsbonds import DenoisingEdgeNetwork
 
+    m_cfg = hparams.get("model", hparams)
+    d_cfg = hparams.get("diffusion", hparams)
+
     model = DenoisingEdgeNetwork(
-        hn_dim=(hparams["sdim"], hparams["vdim"]),
-        num_layers=hparams["num_layers"],
+        hn_dim=(m_cfg.get("sdim"), m_cfg.get("vdim")),
+        num_layers=m_cfg.get("num_layers"),
         latent_dim=None,
-        use_cross_product=hparams["use_cross_product"],
+        use_cross_product=m_cfg.get("use_cross_product"),
         num_atom_features=num_atom_features,
         num_bond_types=num_bond_classes,
-        edge_dim=hparams["edim"],
-        cutoff_local=hparams["cutoff_local"],
-        vector_aggr=hparams["vector_aggr"],
-        fully_connected=hparams["fully_connected"],
-        local_global_model=hparams["local_global_model"],
+        edge_dim=m_cfg.get("edim"),
+        cutoff_local=m_cfg.get("cutoff_local"),
+        vector_aggr=m_cfg.get("vector_aggr"),
+        fully_connected=m_cfg.get("fully_connected"),
+        local_global_model=m_cfg.get("local_global_model"),
         recompute_edge_attributes=True,
         recompute_radius_graph=False,
-        edge_mp=hparams["edge_mp"],
-        context_mapping=hparams["context_mapping"],
-        num_context_features=hparams["num_context_features"],
-        bond_prediction=hparams["bond_prediction"],
-        property_prediction=hparams["property_prediction"],
-        coords_param=hparams["continuous_param"],
-        use_pos_norm=hparams["use_pos_norm"],
+        edge_mp=m_cfg.get("edge_mp"),
+        context_mapping=m_cfg.get("context_mapping"),
+        num_context_features=m_cfg.get("num_context_features"),
+        bond_prediction=m_cfg.get("bond_prediction"),
+        property_prediction=m_cfg.get("property_prediction"),
+        coords_param=d_cfg.get("continuous_param"),
+        use_pos_norm=m_cfg.get("use_pos_norm", False),
     )
     return model
 
@@ -94,10 +97,15 @@ def create_model(hparams, num_atom_features, num_bond_classes):
 def load_model(filepath, num_atom_features, num_bond_classes, device="cpu", **kwargs):
     import re
 
+    from omegaconf import OmegaConf
+
     ckpt = torch.load(filepath, map_location="cpu")
     args = ckpt["hyper_parameters"]
 
-    args["use_pos_norm"] = True
+    if isinstance(args, dict) or OmegaConf.is_config(args):
+        if OmegaConf.is_config(args):
+            OmegaConf.set_struct(args, False)
+        args["use_pos_norm"] = True
 
     model = create_model(args, num_atom_features, num_bond_classes)
 

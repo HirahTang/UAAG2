@@ -949,10 +949,10 @@ class Trainer(pl.LightningModule):
 
         pocket_mask = (1 - batch.is_ligand + batch.is_backbone).long()
 
-        if self.hparams.continuous_param == "data":
-            chain = range(0, self.hparams.timesteps)
-        elif self.hparams.continuous_param == "noise":
-            chain = range(0, self.hparams.timesteps - 1)
+        if self.hparams.diffusion.continuous_param == "data":
+            chain = range(0, self.hparams.diffusion.timesteps)
+        elif self.hparams.diffusion.continuous_param == "noise":
+            chain = range(0, self.hparams.diffusion.timesteps - 1)
 
         chain = chain[::every_k_step]
 
@@ -962,7 +962,7 @@ class Trainer(pl.LightningModule):
             s = torch.full(size=(n,), fill_value=timestep, dtype=torch.long, device=compound_pos.device)
             t = s + 1
 
-            temb = t / self.hparams.timesteps
+            temb = t / self.hparams.diffusion.timesteps
             temb = temb.unsqueeze(dim=1)
 
             out = self.model(
@@ -1008,7 +1008,7 @@ class Trainer(pl.LightningModule):
             degree_pred = degree_pred.softmax(dim=-1)
 
             if ddpm:
-                if self.hparams.noise_scheduler == "adaptive":
+                if self.hparams.diffusion.noise_scheduler == "adaptive":
                     # positions
                     pos = self.sde_pos.sample_reverse_adaptive(
                         s, t, pos, coords_pred, batch_lig, cog_proj=False, eta_ddim=eta_ddim

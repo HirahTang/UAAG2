@@ -1,0 +1,38 @@
+# .gcloudignore
+# This file specifies which files should NOT be uploaded to Cloud Build.
+# It overrides .gitignore.
+
+# Ignore version control and environments
+.git
+.venv
+.env
+
+# Ignore build artifacts and caches
+__pycache__
+*.pyc
+.coverage
+.pytest_cache
+.mypy_cache
+.ruff_cache
+build/
+dist/
+*.egg-info
+
+# Ignore heavy directories that are NOT needed for the API build context
+wandb/
+outputs/
+3DcoordsAtomsBonds*/
+notebooks/
+docs/
+tests/
+reports/
+
+# Data: Ignore all except statistic.pkl
+data/*
+!data/statistic.pkl
+!data/aa_graph.json
+
+# Models: DO NOT ignore the model file we need
+models/*
+!models/good_model/
+!models/good_model/last.ckpt

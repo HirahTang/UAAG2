@@ -1,0 +1,37 @@
+# Docker ignore file
+# This file overrides .gitignore for Docker builds (and Cloud Build)
+
+# Ignore version control and environments
+.git
+.venv
+.env
+
+# Ignore build artifacts and caches
+__pycache__
+*.pyc
+.coverage
+.pytest_cache
+.mypy_cache
+.ruff_cache
+build/
+dist/
+*.egg-info
+
+# Ignore heavy directories that are NOT needed for the API
+wandb/
+outputs/
+3DcoordsAtomsBonds*/
+notebooks/
+docs/
+tests/
+reports/
+
+# Data: Ignore all except statistic.pkl
+data/*
+!data/statistic.pkl
+!data/aa_graph.json
+
+# Models: Ignore all except the required model
+models/*
+!models/good_model/
+!models/good_model/last.ckpt

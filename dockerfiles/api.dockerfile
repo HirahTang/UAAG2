@@ -35,8 +35,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY README.md README.md
 COPY LICENSE LICENSE
 COPY src src/
+COPY configs configs/
 COPY models/good_model/last.ckpt models/good_model/last.ckpt
 COPY data/statistic.pkl data/statistic.pkl
+COPY data/aa_graph.json data/aa_graph.json
 
 # Install the project
 RUN --mount=type=cache,target=/root/.cache/uv \

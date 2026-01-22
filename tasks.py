@@ -50,6 +50,49 @@ print("Data fetch complete!")
 
 
 @task
+def fetch_model(ctx: Context, artifact: str, output: str = "models/good_model") -> None:
+    """Fetch model artifact from W&B."""
+    fetch_script = f"""
+import os
+import shutil
+import wandb
+from pathlib import Path
+
+artifact_path = "{artifact}"
+output_path = "{output}"
+
+api = wandb.Api()
+try:
+    print(f"Downloading artifact {{artifact_path}}...")
+    artifact = api.artifact(artifact_path)
+    artifact_dir = artifact.download()
+    print(f"Artifact downloaded to {{artifact_dir}}")
+
+    target_dir = Path(output_path)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    found = False
+    # Only the first checkpoint file found is used
+    for checkpoint_file in Path(artifact_dir).rglob("*.ckpt"):
+        print(f"Found checkpoint: {{checkpoint_file}}")
+        target_file = target_dir / checkpoint_file.name
+        shutil.move(checkpoint_file, target_file)
+        print(f"Moved to: {{target_file}}")
+        found = True
+        break
+
+    if not found:
+        print(f"No .ckpt file found in {{artifact_dir}}")
+        exit(1)
+
+except Exception as e:
+    print(f"Failed to fetch model: {{e}}")
+    exit(1)
+"""
+    ctx.run(f"uv run python -c '{fetch_script}'", echo=True, pty=not WINDOWS)
+
+
+@task
 def train(
     ctx: Context,
     batch_size: int = 8,
