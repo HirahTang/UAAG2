@@ -65,9 +65,9 @@ jobs:
       - name: Fetch Model from W&B
         env:
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
-          WANDB_ENTITY: ${{ vars.WANDB_ENTITY }}
-          WANDB_PROJECT: ${{ vars.WANDB_PROJECT }}
-          MODEL_ARTIFACT: "model-registry/uaag2:latest"
+          WANDB_ENTITY: ${{ secrets.WANDB_ENTITY }}
+          WANDB_PROJECT: ${{ secrets.WANDB_PROJECT }}
+          MODEL_ARTIFACT: "yhsure-university-of-copenhagen-org/wandb-registry-uaag2/uaag_models:latest"
         run: |
           uv run invoke fetch-model --artifact "$WANDB_ENTITY/$WANDB_PROJECT/$MODEL_ARTIFACT" --output "models/good_model/last.ckpt"
 
