@@ -29,6 +29,7 @@ reports/
 # Data: Ignore all except statistic.pkl
 data/*
 !data/statistic.pkl
+!data/aa_graph.json
 
 # Models: Ignore all except the required model
 models/*
