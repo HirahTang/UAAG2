@@ -667,39 +667,39 @@ We used HuggingFace for version controlling and storing our dataset because it i
 
 Answer:
 ```
-                                      +--------------------------------------------------+
-                                      |              GOOGLE CLOUD PLATFORM               |
-                                      |                                                  |
- +-------------+   git push           |  +-------------+       +------------------+      |
- |  Developer  +------------------------>| Cloud Build +------>+ Artifact Registry|      |
- | (Local/uv)  |   (Trigger)          |  | (Build Img) | push  | (Docker Images)  |      |
- +-----+-------+                      |  +-------------+       +--------+---------+      |
-       |                              |                                 |                |
-       | pre-commit                   |                                 | pull           |
-       v                              |                         +-------v-------+        |
- +-------------+   +--------------+   |           stream data   | Compute Engine|        |
- | git commit  +-->+ GitHub       |   |         +-------------->| (Training VM) |        |
- | (Quality)   |   | Actions (CI) |   |         |               +-------+-------+        |
- +-------------+   +--------------+   |         |                       |                |
-                                      |         |                       | logs           |
- +-------------+                      |         |                       v                |
- | HuggingFace +--------------------------------+                       |                |
- | (Datasets)  |                      |                                 |                |
- +-------------+                      |                                 |                |
-                                      |                                 |                |
- +-------------+                      |                                 |                |
- |    WandB    |<-------------------------------------------------------+                |
- |(Experiments)|                      |                                                  |
- +-----+-------+                      |                                                  |
-       |                              |                                                  |
-       | register                     |                                                  |
-       v                              |                                                  |
- +-----+-------+                      |  +-----------------+     +--------------+        |
- | Model Reg   |    dev trigger       |  |  API Deploy WF  +---->+  Cloud Run   |        |
- |(Versioning) +------------------------>|  (Retag/Push)   |     | (Serverless) |        |
- +-------------+   (Tag: staging)     |  +-----------------+     +------+-------+        |
-                                      |                                 ^                |
-                                      +---------------------------------|----------------+
+                                      +----------------------------------------------+
+                                      |              GOOGLE CLOUD PLATFORM           |
+                                      |                                              |
+ +-----------------+                  |  +-------------+       +------------------+  |
+ | git commit      |                  |  | Cloud Build +------>+ Artifact Registry|  |
+ | w/ linting hook |                  |  | (Build Img) | push  | (Docker Images)  |  |
+ +-----+-----------+                  |  +-------------+       +--------+---------+  |
+       |                              |    ^                            |            |
+       |                              |    |                            | pull       |
+       v                              |    |                    +-------v-------+    |
+ +-------------+   +--------------+   |    |      stream data   | Vertex AI     |    |
+ | git push    +-->+ GitHub       |---------    +-------------->| (Training)    |    |
+ | (Trigger)   |   | Actions (CI) |   |         |               +-------+-------+    |
+ +-------------+   +--------------+   |         |                       |            |
+                                      |         |                       | logs       |
+ +-------------+                      |         |                       v            |
+ | HuggingFace +--------------------------------+                       |            |
+ | (Datasets)  |                      |                                 |            |
+ +-------------+                      |                                 |            |
+                                      |                                 |            |
+ +-------------+                      |                                 |            |
+ |    WandB    |<-------------------------------------------------------+            |
+ |(Experiments)|                      |                                              |
+ +-----+-------+                      |                                              |
+       |                              |                                              |
+       | register                     |                                              |
+       v                              |                                              |
+ +-----+-------+                      |  +-----------------+     +--------------+    |
+ | Model Reg   |    dev trigger       |  |  API Deploy WF  +---->+  Cloud Run   |    |
+ |(Versioning) +------------------------>|                 |     | (Serverless) |    |
+ +-------------+   (Tag: staging)     |  +-----------------+     +------+-------+    |
+                                      |                                 ^            |
+                                      +---------------------------------|------------+
                                                                         |
                                                                  +------+-------+
                                                                  |   End User   |
@@ -710,7 +710,7 @@ Our system architecture illustrates a robust MLOps pipeline.
 1.  **Development**: Developers work locally using `uv` for reproducible environments. `pre-commit` hooks ensure code quality before commits are even made.
 2.  **CI**: Pushing to GitHub triggers **GitHub Actions** which run our test suite and linters.
 3.  **Build**: Validated code triggers **Cloud Build** to construct Docker images for Training and API, which are stored in **Artifact Registry**.
-4.  **Training**: We train on **Compute Engine** using GPUs. The training job streams data directly from **Hugging Face** and logs all metrics and artifacts to **Weights & Biases (WandB)**.
+4.  **Training**: We train on **Vertex AI** using GPUs. The training job streams data directly from **Hugging Face** and logs all metrics and artifacts to **Weights & Biases (WandB)**.
 5.  **Staging & Deployment**: When a model is tagged as `staging` in the **WandB Model Registry**, it triggers a deployment workflow. This safeguards production from untested models.
 6.  **Serving**: The valid API image is automatically deployed to **Cloud Run**, creating a scalable, serverless endpoint.
 7.  **Interaction**: End-users interact with the system via our **Frontend** (or via requests), which calls the Cloud Run API.
@@ -754,4 +754,4 @@ Members contributed to all parts through frequent pair-programming sessions. In 
 *   **s260029** focused on infrastructure, testing and cloud deployment.
 *   **s257707** focused on model development, configuration and solving the problem setting.
 
-We leveraged Generative AI (frontier models in Cursor and Antigravity) during development to minimize time spent writing boilerplate code -- which also assisted in writing a report draft. We further used the GitHub Copilot agent to help solve simple GitHub issues.
+We leveraged Generative AI (frontier models in Cursor and Antigravity) during development to minimize time spent writing boilerplate code -- which also assisted in writing a report draft. (We have **extensively** edited every answer in this draft.) We further used the GitHub Copilot agent to help solve simple GitHub issues.
