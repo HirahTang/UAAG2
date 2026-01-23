@@ -1,4 +1,4 @@
-name: Check staged model
+name: Test wandb model and deploy
 
 on:
   repository_dispatch:
@@ -117,9 +117,9 @@ jobs:
           #WANDB_ENTITY: ${{ secrets.WANDB_ENTITY }}
           #WANDB_PROJECT: ${{ secrets.WANDB_PROJECT }}
           # Use the specific model version that was just staged
-          MODEL_ARTIFACT: "yhsure-university-of-copenhagen-org/wandb-registry-uaag2/uaag_models:${{ needs.identify_event.outputs.model_name }}"
+          MODEL_ARTIFACT: "${{ needs.identify_event.outputs.model_name }}"
         run: |
-           uv run invoke fetch-model --artifact "yhsure-university-of-copenhagen-org/wandb-registry-uaag2/uaag_models:${{ needs.identify_event.outputs.model_name }}" --output "models/good_model"
+           uv run invoke fetch-model --artifact "${{ needs.identify_event.outputs.model_name }}" --output "models/good_model"
 
       - name: Submit build to Cloud Build
         run: gcloud builds submit . --config configs/cloudbuild_api.yaml
