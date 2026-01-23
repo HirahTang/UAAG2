@@ -265,9 +265,9 @@ Even if we had 100% code coverage, we would not blindly trust the code to be err
 > Answer:
 
 Answer:
-Yes, we strictly adopted a feature-branch workflow throughout the project. The `main` branch was treated as the rigorous source of truth, protected from direct pushes. Each team member worked on separate, short-lived branches (e.g., `feature/api-endpoints`, `fix/dataloader-performance`) for their tasks.
+We mainly adopted a feature-branch workflow throughout the project. For minor cases, we disobeyed this rule, and decided to not include the rule in the repository for convenience. For most changes, each members worked on separate, short-lived branches.
 
-To merge changes, we opened Pull Requests (PRs). This process was integral to our quality control. Each PR automatically triggered our CI pipeline, running unit tests and linters. We established a policy that a PR could not be merged unless all checks passed. This workflow allowed us to review each other's code, discuss implementation details, and catch bugs before they impacted the rest of the team. It decoupled our development environments and enabled parallel work without stepping on each other's toes, which is providing to be essential for cohesive team development.
+To merge changes, we opened Pull Requests (PRs). This process was integral to our quality control. Each PR automatically triggered our CI pipeline, running unit tests and linters. We established a policy that a PR could not be merged unless checks pass. This workflow allowed us to review each other's code, discuss implementation details, and catch bugs before they impacted the rest of the team. Our workflow enabled parallel work without stepping on each other's toes.
 
 ### Question 10
 
@@ -283,9 +283,9 @@ To merge changes, we opened Pull Requests (PRs). This process was integral to ou
 > Answer:
 
 Answer:
-We made a conscious decision to use Hugging Face Datasets and the Hub for our data management instead of the traditional DVC setup. For our specific use case—training a diffusion model on protein-ligand graphs—Hugging Face offered a more integrated experience. It provides built-in versioning (via git lfs under the hood), easy visualization of data on the web platform, and notably, efficient streaming of large datasets which helped fast prototyping.
+We made a conscious decision to use HuggingFace (HF) Datasets for our data management instead of the traditional DVC setup. This setup is far more widespread in the project's domain. HF offers a very integrated experience and provides built-in versioning (via git lfs under the hood), easy visualization of data on the web platform, and notably, efficient and easy streaming of datasets which helped fast prototyping.
 
-While DVC is excellent for generic file versioning and decoupling storage from code, setting it up with a GCP bucket added complexity that we felt wasn't necessary given the available tools in the open-source ecosystem. Hugging Face essentially acts as both our remote storage and our version control system for data. However, we recognize that DVC would be the superior choice if we were handling highly sensitive, proprietary data that needed to be stored in a private, encrypted bucket (like AWS S3 or GCS) with strict IAM controls that Hugging Face might not provide out of the box.
+While DVC is excellent for generic file versioning and decoupling storage from code, setting it up with a GCP bucket added complexity that we felt wasn't necessary given the available tools in the open-source ecosystem. Hugging Face essentially acts as both our remote storage and our version control system for data. However, we recognize that DVC is powerful for version controlling on GitHub.
 
 ### Question 11
 
@@ -596,9 +596,7 @@ While we did not implement a custom model drift detection system, we understand 
 
 Answer:
 ![Billing](figures/q27.png)
-We tracked our spending carefully and used approximately 50 credits in total. As shown in the figure, the most expensive service was by far the **Compute Engine** usage, specifically the cost of running GPU-backed VMs for training. **Artifact Registry** storage costs were a distant second.
-
-Working in the cloud was an enlightening experience. It liberated us from the hardware constraints of our local machines and taught us valuable lessons in DevOps and infrastructure management. However, it also required discipline—we learned the hard way that leaving a VM running overnight burns through credits rapidly. The ability to spin up resources on demand is powerful, but cost-awareness is key.
+5.20 USD. 3.72 USD of which was spent on the Artifact registry probably reflecting that we had trouble getting images to compile (until figuring out that gcloud respects .gitignore, so necessary files weren't being uploaded). It's a nice feeling once everything is set up, however it's extremely tedious to do.
 
 ### Question 28
 
@@ -615,7 +613,7 @@ Working in the cloud was an enlightening experience. It liberated us from the ha
 > Answer:
 
 Answer:
-We went beyond the basics by implementing a visual frontend for our API. Using `3dmol.js`, we created an interactive web interface where users can upload a file and immediately see the generated 3D molecule structure. This makes our project accessible to non-technical users who might not be comfortable using `curl` or writing API scripts.
+We used HuggingFace for version controlling and storing our dataset because it is standard for data repositories in the project's application field. We used nix (nixos.org) for managing macOS docker setup because this is outside the domain of uv. Lastly, we created an interactive web interface with `3dmol.js` where users can upload a file and immediately see the generated 3D molecule structure of the generated ligand. This makes our project accessible to non-technical users who might not be comfortable using `curl` or writing API scripts.
 
 ### Question 29
 
@@ -697,14 +695,7 @@ This architecture was chosen for its distinct separation of concerns. Local deve
 > Answer:
 
 Answer:
-The most significant struggle we faced was "dependency hell," specifically the incompatibility between Python environment managers and system-level libraries on different hardware. We had team members on Apple Silicon (M1/M2) and others on Linux/Windows. We frequently encountered issues where `torch-geometric` wheels for macOS were not compatible with the Linux-based Docker containers we were building for the cloud.
-
-We spent days debugging cryptic errors where the Docker build would look successful, but the application would crash at runtime with "symbol not found" or "segmentation fault". We overcame this by:
-1.  Switching to `uv`, which gave us much better visibility into the dependency tree.
-2.  Creating separate `requirements` groups or using environment markers in `pyproject.toml` to specify different wheel URLs for Linux (CUDA) vs macOS (CPU).
-3.  Methodically debugging our `Dockerfile`s, stripping them down to the basics and adding layers back one by one until we identified the conflicting libraries.
-
-Another major struggle was dealing with legacy code and linting. We inherited some code that wasn't included with `ruff`. When we introduced `ruff` with a strict ruleset, it flagged hundreds of errors. We had to use `ruff --fix` aggressively and manually refactor complex logic to satisfy the linter. Additionally, we faced challenges with the OOM errors on the T4 GPUs. Since we couldn't afford A100s, we had to optimize our model's memory footprint by carefully tuning the batch size and `DataLoader` workers.
+Getting the model to train in Google Cloud, because building the GPU image is slow and required a lot of iteration on minor errors. Using AI is great for overcoming challenges (perhaps because a lot of this setup stuff is well-documented online). But in general, making sure everything works locally, then deploying something minimal to the cloud and then expanding for full funcitonality from there is a good strategy.
 
 ### Question 31
 
