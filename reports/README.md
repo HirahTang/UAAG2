@@ -383,7 +383,7 @@ We also use `invoke fetch-data` to download our dataset from the Hugging Face Hu
 Answer:
 We use managed dependencies (uv and nix), `Hydra`, `WandB`, and Docker. `WandB` automatically captures this config, alongside the exact git commit hash representing the code version, and the random seed used for initialization.
 
-This means that to reproduce an experiment, we don't need to guess parameters. We can look up the run in WandB, checkout the specific git commit, build the Docker container (which ensures the OS and library versions are identical), and run the training command with the seed and config retrieved from the logs. This explicitly addresses the "it works on my machine" problem by controlling code, config, and environment simultaneously.
+This means that to reproduce an experiment, we don't need to guess parameters. We can look up the run in WandB, checkout the specific git commit, build the Docker container (which ensures the OS and library versions are identical), and run the training command with the seed and config retrieved from the logs.
 
 ### Question 14
 
