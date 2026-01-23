@@ -148,12 +148,19 @@
                     body: formData
                 });
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Generation failed');
+                const responseText = await response.text();
+                let data;
+
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    // Response was not JSON (e.g., HTML error page from Cloud Run timeout)
+                    throw new Error(`Server Error (${response.status}): ${responseText.substring(0, 100)}...`);
                 }
 
-                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Generation failed');
+                }
 
                 if (data.results && data.results.length > 0) {
                     data.results.forEach((result, index) => {

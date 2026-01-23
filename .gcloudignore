@@ -28,9 +28,9 @@ tests/
 reports/
 
 # Data: Ignore all except statistic.pkl
-data/*
-!data/statistic.pkl
-!data/aa_graph.json
+/data/*
+!/data/statistic.pkl
+!/data/aa_graph.json
 
 # Models: DO NOT ignore the model file we need
 models/*

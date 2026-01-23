@@ -1,55 +1,88 @@
-name: Deploy
+name: Test and deploy
 
 on:
-  workflow_run:
-    workflows: ["Tests"]
-    types:
-      - completed
-    branches:
-      - mlops
+  push:
+    branches: [main, mlops]
+  pull_request:
+    branches: [main, mlops]
 
 jobs:
-  build:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  test:
+    name: Run tests
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      matrix:
+        operating-system: ["ubuntu-latest", "macos-latest"]
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --locked --dev
+          uv tree
+
+      - name: Fetch data
+        run: |
+          uv run invoke fetch-data
+
+      - name: Run tests & coverage
+        run: |
+          uv run coverage run -m pytest tests/
+          uv run coverage report -m
+
+  deploy-api:
+    name: Deploy API
+    needs: test
+    if: github.ref == 'refs/heads/mlops'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Auth with GCP
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v3
+        uses: google-github-actions/setup-gcloud@v2
 
-      - name: Submit build
-        run: gcloud builds submit . --config configs/cloudbuild.yaml
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Train model on Vertex AI
+      - name: Fetch Model from W&B
         env:
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+          #WANDB_ENTITY: ${{ secrets.WANDB_ENTITY }}
+          #WANDB_PROJECT: ${{ secrets.WANDB_PROJECT }}
+          MODEL_ARTIFACT: "yhsure-university-of-copenhagen-org/wandb-registry-uaag2/uaag_models:latest"
         run: |
-          # 1. Define IMAGE_URI
-          # We assume the project ID is available via gcloud (set in previous step)
+          uv run invoke fetch-model --artifact "$MODEL_ARTIFACT" --output "models/good_model"
+
+      - name: Submit build to Cloud Build
+        run: gcloud builds submit . --config configs/cloudbuild_api.yaml
+
+      - name: Deploy to Cloud Run
+        run: |
           PROJECT_ID=$(gcloud config get-value project)
-          export IMAGE_URI="europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/train-gpu:latest"
+          IMAGE_URI="europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/api:latest"
 
-          echo "Using Image URI: $IMAGE_URI"
-
-          # 2. Substitute variables in configs/vertex.yaml
-          # We use envsubst which is usually available in ubuntu-latest (part of gettext)
-          envsubst < configs/vertex.yaml > vertex_config.yaml
-
-          echo "Generated Vertex AI Config:"
-          cat vertex_config.yaml
-
-          # 3. Submit Custom Job
-          SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
-          gcloud ai custom-jobs create \
-            --region=europe-west1 \
-            --display-name="uaag2-train-$SHORT_SHA" \
-            --config=vertex_config.yaml
+          gcloud run deploy uaag2-api \
+            --image $IMAGE_URI \
+            --region europe-west1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --memory 4Gi \
+            --cpu 4 \
+            --timeout 1800
