@@ -3,6 +3,8 @@ name: Check staged model
 on:
   repository_dispatch:
     types: staged_model
+  workflow_dispatch:
+
 
 jobs:
   identify_event:
@@ -89,3 +91,50 @@ jobs:
       - name: Add production alias
         run: |
           uv run python link_model.py $MODEL_NAME -a production
+
+  deploy-api:
+    name: Deploy API
+    needs: [add_production_alias, identify_event]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Auth with GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Fetch Model from W&B
+        env:
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+          #WANDB_ENTITY: ${{ secrets.WANDB_ENTITY }}
+          #WANDB_PROJECT: ${{ secrets.WANDB_PROJECT }}
+          # Use the specific model version that was just staged
+          MODEL_ARTIFACT: "yhsure-university-of-copenhagen-org/wandb-registry-uaag2/uaag_models:${{ needs.identify_event.outputs.model_name }}"
+        run: |
+           uv run invoke fetch-model --artifact "yhsure-university-of-copenhagen-org/wandb-registry-uaag2/uaag_models:${{ needs.identify_event.outputs.model_name }}" --output "models/good_model"
+
+      - name: Submit build to Cloud Build
+        run: gcloud builds submit . --config configs/cloudbuild_api.yaml
+
+      - name: Deploy to Cloud Run
+        run: |
+          PROJECT_ID=$(gcloud config get-value project)
+          IMAGE_URI="europe-west1-docker.pkg.dev/$PROJECT_ID/mlops-docker/api:latest"
+
+          gcloud run deploy uaag2-api \
+            --image $IMAGE_URI \
+            --region europe-west1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --memory 4Gi \
+            --cpu 4 \
+            --timeout 1800
