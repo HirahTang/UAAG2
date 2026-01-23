@@ -755,3 +755,7 @@ Members contributed to all parts through frequent pair-programming sessions. In 
 *   **s257707** focused on model development, configuration and solving the problem setting.
 
 We leveraged Generative AI (frontier models in Cursor and Antigravity) during development to minimize time spent writing boilerplate code -- which also assisted in writing a report draft. (We have **extensively** edited every answer in this draft.) We further used the GitHub Copilot agent to help solve simple GitHub issues.
+
+The model itself has largely been developed as a research project prior to this course; it has been completely refactored for the course however.
+You can see the prior work on the `main` branch. Our branch is `mlops`. During the course we have revamped the code structure,
+dependency management and fixed bugs in the model code. The frontend also did not exist. In other words, all the deliverables in this report have been developed during the course.
