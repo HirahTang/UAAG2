@@ -5,7 +5,7 @@ on:
     workflows: ["Test and deploy"]
     types:
       - completed
-    branches: [mlops]
+    branches: [mlops, copilot/load-test-health-endpoint]
   workflow_dispatch:
     inputs:
       api_url:
