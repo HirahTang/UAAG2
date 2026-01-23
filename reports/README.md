@@ -462,7 +462,7 @@ We briefly played around with the PyTorch profiler to spot obvious mistaskes, bu
 > Answer:
 
 Answer:
-We utilized several GCP services: **Artifact Registry** for storing and versioning our Docker images; **Cloud Build** for automatically building these images from our GitHub repository; **Cloud Run** for hosting our scalable inference API; and **Compute Engine** for running heavy training jobs on GPU-accelerated VMs. Each service played a specific role in creating a full MLOps pipeline from code to production.
+We utilized several GCP services: **Artifact Registry** for storing and versioning our Docker images; **Cloud Build** for automatically building these images from our GitHub repository; **Cloud Run** for hosting our inference API; and **Vertex AI** for running GPU-accelerated training jobs.
 
 ### Question 18
 
@@ -478,9 +478,7 @@ We utilized several GCP services: **Artifact Registry** for storing and versioni
 > Answer:
 
 Answer:
-The backbone of our cloud training was the Google Compute Engine. We chose to provision Infrastructure-as-a-Service (IaaS) primarily because it gave us full control over the environment. We utilized **n1-standard-4** instances, which provide a good balance of CPU and memory, and attached **monitor-T4** GPUs.
-
-The NVIDIA T4 was chosen because it helps a cost-effective entry point for deep learning compared to the much more expensive A100 or V100s, while still offering sufficient memory (16GB) for our diffusion model. We deployed our custom Docker container directly onto these VMs. This approach simplified debugging compared to managed services like Vertex AI Training, as we could SSH into the machine and inspect the running container if something went wrong.
+We only used GCE VMs directly for the exercises. For building docker images we used Cloud build without specifying what hardware/VM to build on. For Vertex AI, we trained on the n1-standard-8 machine type with a single NVIDIA T4 GPU.
 
 ### Question 19
 
@@ -490,7 +488,7 @@ The NVIDIA T4 was chosen because it helps a cost-effective entry point for deep 
 > Answer:
 
 Answer:
-As mentioned previously, we primarily leveraged HuggingFace Datasets for our storage and versioning needs rather than GCP buckets. This provided a more convenient interface in our setting.
+As mentioned previously, we used HuggingFace Datasets for our storage and versioning needs rather than GCP buckets. This provided a more convenient interface in our setting.
 
 ### Question 20
 
@@ -528,12 +526,11 @@ Here is our Cloud Build history, showing a log of automated builds triggered by 
 > Answer:
 
 Answer:
-Yes, we successfully trained our model in the cloud using Vertex AI. The process involved:
+Yes, we successfully trained our model in the cloud using Vertex AI. The process involves:
 1.  Building our training Docker image via Cloud Build.
 2.  Pushing the image to the Artifact Registry.
-3.  Provisioning a VM with GPUs and the Container-Optimized OS.
-4.  Pulling the image and running the training command as a detached docker container.
-This setup allowed us to leverage cloud-scale hardware (GPUs) that we didn't possess locally.
+3.  Creating the Vertex AI job (configured in `configs/vertex.yaml`).
+This is all done in our CI. The training action is run only on the mlops branch and only if tests pass to reduce erroneuous runs.
 
 ## Deployment
 
@@ -553,7 +550,8 @@ This setup allowed us to leverage cloud-scale hardware (GPUs) that we didn't pos
 Answer:
 ![Frontend](figures/q23.png)
 
-We successfully built a robust API for our model using `FastAPI`. The core of the API is the `/generate` POST endpoint, which accepts a `.pt` (PyTorch) file containing the protein structure and returns the generated ligand layout. We further spent time to develop a frontend; see our `src/uaag2/static/index.html` file. With interactive 3D visualizations of the generated ligands, we believe we have created a user-friendly interface.
+We successfully built an API for our model using `FastAPI`. The core of the API is the `/generate` endpoint, which accepts a `.pt` (PyTorch) file containing the protein structure and returns the generated ligand layout. We further spent time to develop a frontend; see our `src/uaag2/static/index.html` file. With interactive 3D visualizations of the generated ligands, we believe we have created a user-friendly interface.
+You can test it out by running `uv run invoke fetch-data` and then using the `data/benchmarks/ENVZ_ECOLI.pt` file to generate samples on our website.
 
 
 
@@ -574,7 +572,7 @@ We successfully built a robust API for our model using `FastAPI`. The core of th
 Answer:
 We deployed our API to the cloud using GCP Cloud Run. This was a convenient choice for our use case because it is serverless -- it scales down to zero when not in use, saving us credits, and scales up automatically when traffic increases.
 
-Deployment was automated via our CI/CD pipeline. When we add the `staging` alias in WandB, and if the model passes into production, the pipeline will automatically deploy the new version of the model/API to the cloud. It is accessible on: https://uaag2-api-233301800073.europe-west1.run.app/ or via `curl -X POST -F "file=@data/benchmarks/ENVZ_ECOLI.pt" https://uaag2-api-233301800073.europe-west1.run.app/generate`.
+Deployment was automated via our CI/CD pipeline. When we add the `staging` alias in WandB, and if the model passes into production, the pipeline will automatically deploy the new version of the model/API to the cloud. It is accessible on: https://uaag2-api-233301800073.europe-west1.run.app/ or via `curl -X POST -F "file=@data/benchmarks/ENVZ_ECOLI.pt" https://uaag2-api-233301800073.europe-west1.run.app/generate` (run `uv run invoke fetch-data` first to get the `ENVZ_ECOLI.pt` file).
 
 ### Question 25
 
@@ -590,9 +588,11 @@ Deployment was automated via our CI/CD pipeline. When we add the `staging` alias
 > Answer:
 
 Answer:
-For verification, we employed both unit testing and load testing. Unit tests were written using `d`FastAPI.testclient` to mock requests and ensure the internal logic (input validation, model inference call) works correctly.
+For verification, we employed both unit testing and load testing. Unit tests were written using `FastAPI.testclient` to mock requests and ensure the internal logic (input validation, model inference call) works correctly.
 
-For load testing, we utilized `Locust`. We created a `locustfile` that defines a `HttpUser` and simulates typical user behavior (uploading a file, waiting for generation). We ran tests simulating up to 50 concurrent users. The results were illuminating: while the service handled low load (~1-5 RPS) with low latency (<500ms), we observed a spike in latency and some timeouts as concurrency increased, indicating that we might need to increase the `min_instances` or memory allocation in Cloud Run to handle high-traffic production scenarios.
+For load testing, we utilized `Locust`. We created a `locustfile` that simply gets the `health` endpoint of our API. We ran tests simulating up to 10 concurrent users and found that the server handled this just fine.
+We also performed manual tests, generating samples as two different users at the same time. Also while running the locust API test simultaneously.
+The manual test at first found that the `generate` endpoint was blocking the server, so that other users would not get responese. We fixed this.
 
 ### Question 26
 
