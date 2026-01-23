@@ -342,7 +342,7 @@ Our Continuous Integration (CI) setup uses github actions. We have organized the
 2.  `lint.yaml`: This workflow runs `ruff check` and `ruff format` to enforce code checks. It fails the CI if code standards aren't met.
 3.  `hf_data_report.yaml`: A valid scheduled workflow that runs periodically to inspect our Hugging Face dataset and generate a report, ensuring data quality over time.
 
-We extensively use the `actions/cache` action to cache our `uv` virtual environment (`.venv`), which reduced our CI runtime from minutes to seconds for subsequent runs. [Link to Test Workflow](https://github.com/HirahTang/UAAG2/blob/main/.github/workflows/test.yaml)
+We extensively use the `actions/cache` action to cache our `uv` virtual environment (`.venv`), which reduced our CI runtime from minutes to seconds for subsequent runs. [Link to Test Workflow](https://github.com/HirahTang/UAAG2/blob/mlops/.github/workflows/test.yaml)
 
 ## Running code and tracking experiments
 
@@ -403,9 +403,9 @@ This means that to reproduce an experiment, we don't need to guess parameters. W
 Answer:
 ![WandB Model Registry](figures/q14_model_registry.png)
 ![WandB Train History](figures/q14_train_histories.png)
-We heavily utilized Weights & Biases (WandB) as our central experiment tracking platform. The first screenshot demonstrates our use of the **Model Registry**. Instead of just saving model weights to a disk, we push them to the registry, versioning them semantically (v1, v2, etc.). This links the specific artifact directly to the training metrics that produced it, creating an unbreakable chain of custody. We tagged our best performing model as `staging`, which our API deployment workflow then automatically retrieves, tests, re-tags as `production` and deploys to the API. Note that this is a smaller subset of the data, resulting in noisy training -- we will run a full-scale experiment at a later date.
+We utilized Weights & Biases (WandB) as our central experiment tracking platform. The first screenshot demonstrates our use of the **Model Registry**. Instead of just saving model weights to a disk, we push them to the registry, versioning them semantically (v1, v2, etc.). This links the specific artifact directly to the training metrics that produced it. We tagged our best performing model as `staging`, which our API deployment workflow then automatically retrieves, tests, re-tags as `production` and deploys to the API. Note that this is a smaller subset of the data, resulting in noisy training -- we will run a full-scale experiment at a later date.
 
-The second screenshot showcases our **Training and Validation Histories**. We meticulously tracked the Cross-Entropy Loss to monitor convergence. Crucially, we also logged complex, domain-specific metrics such as **Molecule Validity** (via PoseBusters) and **Graph Connectivity**. In generative chemistry, a model can easily "cheat" the loss function while producing physically impossible molecules (e.g., carbon with 5 bonds), so these auxiliary metrics were vital for true performance assessment. We also utilized the **System Metrics** tab (not shown but actively used) to monitor GPU memory usage and temperature, which helped us debug the OOM issues mentioned earlier. The ability to overlay runs allowed us to compare the effect of different `virtual_node` sizes on the final validity score, leading to our final architecture choice.
+The second screenshot showcases our **Training and Validation Histories**. We tracked the Cross-Entropy Loss to monitor convergence. Crucially, we also logged complex, domain-specific metrics such as **Molecule Validity** (via PoseBusters) and **Graph Connectivity**. In generative chemistry, a model can easily "cheat" the loss function while producing physically impossible molecules (e.g., carbon with 5 bonds), so these auxiliary metrics were vital for true performance assessment. We also utilized the **System Metrics** tab (not shown but actively used) to monitor GPU memory usage and temperature, which helped us debug the OOM issues mentioned earlier. The ability to overlay runs allowed us to compare the effect of different `virtual_node` sizes on the final validity score, leading to our final architecture choice.
 
 ### Question 15
 
@@ -421,11 +421,11 @@ The second screenshot showcases our **Training and Validation Histories**. We me
 > Answer:
 
 Answer:
-Docker was essential for creating isolated and reproducible environments for our project. We implemented a multi-image strategy to optimize for different use cases. We have a `train.Dockerfile` which is built on top of a CUDA-enabled base image (like `pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime`) to support GPU acceleration for training jobs. We also have a lighter `api.Dockerfile` optimized for inference, stripping away clear training dependencies to minimize the image size.
+We used different images for different use cases. We have a `train_gpu.dockerfile` which is built on top of a CUDA-enabled base image (like `pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime`) to support GPU acceleration for training jobs. We also have a cpu/mps version `train.dockerfiler` for local debugging. And an `api.Dockerfile` for deploying our API.
 
-We use multi-stage builds in our Dockerfiles. This involves a "builder" stage that compiles dependencies and a "runner" stage that only copies the necessary artifacts. This significantly reduces the final image size. To run our training container, one would use:
-`docker run --gpus all -v $(pwd)/data:/data uaag2-train:latest experiment=baseline`
-[Link to API Dockerfile](https://github.com/HirahTang/UAAG2/blob/main/docker/api.Dockerfile)
+We use multi-stage builds in our Dockerfiles. This involves a "builder" stage that compiles dependencies and a "runner" stage that only copies the necessary artifacts. To run our CPU/MPS training container, one would use:
+`docker run uaag2-train:latest`.
+[Link to train dockerfile](https://github.com/HirahTang/UAAG2/blob/mlops/dockerfiles/train_gpu.dockerfile)
 
 ### Question 16
 
