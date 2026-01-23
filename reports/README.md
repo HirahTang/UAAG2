@@ -489,7 +489,7 @@ The NVIDIA T4 was chosen because it helps a cost-effective entry point for deep 
 > Answer:
 
 Answer:
-As mentioned previously, we primarily leveraged Hugging Face Datasets for our data storage and versioning needs, rather than a raw GCP bucket. This provided a richer interface for our specific data type. Therefore, we do not have a bucket screenshot, as our "bucket" was effectively the Hugging Face hub.
+As mentioned previously, we primarily leveraged HuggingFace Datasets for our storage and versioning needs rather than GCP buckets. This provided a more convenient interface in our setting.
 
 ### Question 20
 
@@ -500,7 +500,7 @@ As mentioned previously, we primarily leveraged Hugging Face Datasets for our da
 
 Answer:
 ![Artifact Registry](figures/q20.png)
-This image displays our GCP Artifact Registry, where we store the Docker images for our API and training jobs. It serves as the bridge between our CI/CD build process and our deployment targets.
+This image displays our GCP Artifact Registry where we store the Docker images for our API and training jobs. It serves as the bridge between our CI/CD build process and our deployment targets.
 
 ### Question 21
 
@@ -511,7 +511,7 @@ This image displays our GCP Artifact Registry, where we store the Docker images 
 
 Answer:
 ![Cloud Build History](figures/q21.png)
-Here is our Cloud Build history, showing a log of automated builds triggered by pushes to our repository. This ensures that every deployment is based on a clean, verified build of the latest code.
+Here is our Cloud Build history, showing a log of automated builds triggered by pushes to our repository. This ensures that every deployment is based on a clean, verified build of latest code.
 
 ### Question 22
 
@@ -527,12 +527,12 @@ Here is our Cloud Build history, showing a log of automated builds triggered by 
 > Answer:
 
 Answer:
-Yes, we successfully trained our model in the cloud using the Compute Engine. We opted for this route instead of the managed Vertex AI Training service to maintain rigorous control over our execution environment and simplify the initial setup. The process involved:
+Yes, we successfully trained our model in the cloud using Vertex AI. The process involved:
 1.  Building our training Docker image via Cloud Build.
 2.  Pushing the image to the Artifact Registry.
 3.  Provisioning a VM with GPUs and the Container-Optimized OS.
 4.  Pulling the image and running the training command as a detached docker container.
-This setup allowed us to leverage cloud-scale hardware (GPUs) that we didn't possess locally, enabling us to run experiments that lasted for days without tying up our personal machines.
+This setup allowed us to leverage cloud-scale hardware (GPUs) that we didn't possess locally.
 
 ## Deployment
 
@@ -550,9 +550,11 @@ This setup allowed us to leverage cloud-scale hardware (GPUs) that we didn't pos
 > Answer:
 
 Answer:
-We successfully built a robust API for our model using `FastAPI`. The core of the API is the `/generate` POST endpoint, which accepts a `.pt` (PyTorch) file containing the protein structure and returns the generated ligand layout.
+![Frontend](figures/q23.png)
 
-A key challenge was ensuring the API used the same configuration as the trained model. We solved this by using `Hydra` within the API's `lifespan` (startup) event to load the exact config and model checkpoint used during training. We also implemented `Pydantic` models to strictly validate input payloads, ensuring that malformed requests are rejected with clear error messages before they reach the model. We also added CORS middleware to allow our frontend to communicate with the API securely.
+We successfully built a robust API for our model using `FastAPI`. The core of the API is the `/generate` POST endpoint, which accepts a `.pt` (PyTorch) file containing the protein structure and returns the generated ligand layout. We further spent time to develop a frontend; see our `src/uaag2/static/index.html` file. With interactive 3D visualizations of the generated ligands, we believe we have created a user-friendly interface.
+
+
 
 ### Question 24
 
@@ -569,11 +571,9 @@ A key challenge was ensuring the API used the same configuration as the trained 
 > Answer:
 
 Answer:
-We deployed our API to the cloud using GCP Cloud Run. This was a fantastic choice for our use case because it is serverless—it scales down to zero when not in use, saving us credits, and scales up automatically when traffic increases.
+We deployed our API to the cloud using GCP Cloud Run. This was a convenient choice for our use case because it is serverless -- it scales down to zero when not in use, saving us credits, and scales up automatically when traffic increases.
 
-Deployment was automated via our CI/CD pipeline. When a change is merged to `main`, Cloud Build creates a new container and deploys it to the `europe-west1` region. We invoke the invoked service via a simple HTTP request. For testing, we can use `curl`:
-`curl -X POST -F "file=@protein.pt" https://uaag2-api-233301800073.europe-west1.run.app/generate`
-Or users can use the automatically generated Swagger UI available at the `/docs` endpoint to interact with the API visually.
+Deployment was automated via our CI/CD pipeline. When we add the `staging` alias in WandB, and if the model passes into production, the pipeline will automatically deploy the new version of the model/API to the cloud. It is accessible on: https://uaag2-api-233301800073.europe-west1.run.app/ or via `curl -X POST -F "file=@data/benchmarks/ENVZ_ECOLI.pt" https://uaag2-api-233301800073.europe-west1.run.app/generate`.
 
 ### Question 25
 
