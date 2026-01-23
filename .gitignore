@@ -41,7 +41,6 @@ outputs/
 *.sdf
 *.mol2
 *.xyz
-*.png
 *.csv
 
 *.swp

@@ -21,65 +21,70 @@ $ uv run python src/uaag2/hf_data_report.py
 ### Model
 The architecture is an **$E(3)$-equivariant Graph Neural Network** based on the EQGAT-diff framework, utilizing 7 message-passing layers and 3.6M parameters. It employs a multi-modal diffusion process that perturbs continuous atomic coordinates and discrete categorical features like atom types and formal charges. To accommodate variable atom counts, the model implements a **virtual node strategy**, allowing it to sample side chains of varying sizes within a unified generative paradigm. Denoising ensures Euclidean symmetry, and mutational effects are calculated by comparing sampled likelihoods of mutant versus wild-type residues.
 
+### Ops architecture
+
+```
+                                      +----------------------------------------------+
+                                      |              GOOGLE CLOUD PLATFORM           |
+                                      |                                              |
+ +-----------------+                  |  +-------------+       +------------------+  |
+ | git commit      |                  |  | Cloud Build +------>+ Artifact Registry|  |
+ | w/ linting hook |                  |  | (Build Img) | push  | (Docker Images)  |  |
+ +-----+-----------+                  |  +-------------+       +--------+---------+  |
+       |                              |    ^                            |            |
+       |                              |    |                            | pull       |
+       v                              |    |                    +-------v-------+    |
+ +-------------+   +--------------+   |    |      stream data   | Vertex AI     |    |
+ | git push    +-->+ GitHub       |---------    +-------------->| (Training)    |    |
+ | (Trigger)   |   | Actions (CI) |   |         |               +-------+-------+    |
+ +-------------+   +--------------+   |         |                       |            |
+                                      |         |                       | logs       |
+ +-------------+                      |         |                       v            |
+ | HuggingFace +--------------------------------+                       |            |
+ | (Datasets)  |                      |                                 |            |
+ +-------------+                      |                                 |            |
+                                      |                                 |            |
+ +-------------+                      |                                 |            |
+ |    WandB    |<-------------------------------------------------------+            |
+ |(Experiments)|                      |                                              |
+ +-----+-------+                      |                                              |
+       |                              |                                              |
+       | register                     |                                              |
+       v                              |                                              |
+ +-----+-------+                      |  +-----------------+     +--------------+    |
+ | Model Reg   |    dev trigger       |  |  API Deploy WF  +---->+  Cloud Run   |    |
+ |(Versioning) +------------------------>|                 |     | (Serverless) |    |
+ +-------------+   (Tag: staging)     |  +-----------------+     +------+-------+    |
+                                      |                                 ^            |
+                                      +---------------------------------|------------+
+                                                                        |
+                                                                 +------+-------+
+                                                                 |   End User   |
+                                                                 |  (Frontend)  |
+                                                                 +--------------+
+```
+
 ### Nix Development Environment
 A `flake.nix` file is provided to manage system-level dependencies (such as Docker, Colima, and the Google Cloud SDK) that are not managed by `uv`. Run `nix develop` to enter a shell with these tools pre-installed.
 
-## Project structure
+## Invoke Tasks
 
-The directory structure of the project looks like this:
-```txt
-├── configs/                  # Configuration files
-├── data/                     # Data directory
+The project uses `invoke` to manage common tasks with default arguments. You can run them using `uv run invoke <task_name>`.
 
-├── dockerfiles/              # Dockerfiles
-│   ├── api.dockerfile
+*   `fetch-data`: Fetch protein data from Hugging Face Hub.
+*   `fetch-model`: Fetch model artifact from Weights & Biases.
+*   `train`: Train the model. Supports various flags for hyperparameters (e.g., `--num-epochs`, `--batch-size`).
+*   `evaluate`: Evaluate the model on benchmark data.
+*   `test`: Run tests and calculate coverage.
+*   `docker-build`: Build docker images.
 
-│   └── train.dockerfile
-├── docs/                     # Documentation
-│   ├── README.md
-│   └── source/
-│       └── index.md
-├── models/                   # Trained models
-│   └── model.pth
-├── notebooks/                # Jupyter notebooks
-├── old/                      # Legacy code and scripts
-├── reports/                  # Reports
-│   └── figures/
-│       └── training_statistics.png
-├── src/                      # Source code
-│   └── uaag2/
-│       ├── __init__.py
-│       ├── api.py
-│       ├── data.py
-│       ├── evaluate.py
+## Using the API
 
-│       ├── model.py
-│       ├── train.py
-│       └── visualize.py
-├── tests/                    # Tests
-│   ├── __init__.py
-│   ├── test_api.py
-│   ├── test_data.py
-│   └── test_model.py
-├── LICENSE
-├── pyproject.toml            # Python project file
-├── README.md                 # Project README
-├── tasks.py                  # Project tasks
-└── uv.lock                   # Dependency lock file
-```
+The UAAG2 API is deployed and running on Google Cloud Run on the **URL** [https://uaag2-api-233301800073.europe-west1.run.app/](https://uaag2-api-233301800073.europe-west1.run.app/)
 
-## API Usage
+The API can alternatively be run locally using `uv run python src/uaag2/api.py`. In this case, it is available at `http://localhost:8000`.
 
-The application provides a FastAPI backend for molecule generation.
-
-### Starting the Server
-```bash
-uv run python src/uaag2/api.py
-```
-The server will start at `http://localhost:8000`.
-
-### Using the Frontend
-Visit `http://localhost:8000` in your browser to inspect the UI.
+![API Interface](reports/figures/q23.png)
 
 ### Programmatic Access
 
@@ -87,47 +92,62 @@ Visit `http://localhost:8000` in your browser to inspect the UI.
 You can generate molecules by sending a POST request to the `/generate` endpoint with a `.pt` file.
 
 ```bash
-curl -X POST -F "file=@data/benchmarks/single_ecoli.pt" http://localhost:8000/generate
+curl -X POST -F "file=@data/benchmarks/ENVZ_ECOLI.pt" https://uaag2-api-233301800073.europe-west1.run.app/generate
 ```
 
 #### Using Python
 ```python
 import requests
 
-url = "http://localhost:8000/generate"
-files = {'file': open('data/benchmarks/single_ecoli.pt', 'rb')}
+url = "https://uaag2-api-233301800073.europe-west1.run.app/generate"
+files = {'file': open('data/benchmarks/ENVZ_ECOLI.pt', 'rb')}
 
 response = requests.post(url, files=files)
 print(response.json())
 ```
 
-## Docker Deployment
+## Project Architecture
 
-To build and run the API using Docker (compatible with Google Cloud Run):
-
-### Build the Image
-```bash
-docker build -f dockerfiles/api.dockerfile -t uaag2-api .
 ```
-
-### Run Locally
-```bash
-docker run -p 8080:8080 uaag2-api
+                                      +--------------------------------------------------+
+                                      |              GOOGLE CLOUD PLATFORM               |
+                                      |                                                  |
+ +-------------+   git push           |  +-------------+       +------------------+      |
+ |  Developer  +------------------------>| Cloud Build +------>+ Artifact Registry|      |
+ | (Local/uv)  |   (Trigger)          |  | (Build Img) | push  | (Docker Images)  |      |
+ +-----+-------+                      |  +-------------+       +--------+---------+      |
+       |                              |                                 |                |
+       | pre-commit                   |                                 | pull           |
+       v                              |                         +-------v-------+        |
+ +-------------+   +--------------+   |           stream data   | Compute Engine|        |
+ | git commit  +-->+ GitHub       |   |         +-------------->| (Training VM) |        |
+ | (Quality)   |   | Actions (CI) |   |         |               +-------+-------+        |
+ +-------------+   +--------------+   |         |                       |                |
+                                      |         |                       | logs           |
+ +-------------+                      |         |                       v                |
+ | HuggingFace +--------------------------------+                       |                |
+ | (Datasets)  |                      |                                 |                |
+ +-------------+                      |                                 |                |
+                                      |                                 |                |
+ +-------------+                      |                                 |                |
+ |    WandB    |<-------------------------------------------------------+                |
+ |(Experiments)|                      |                                                  |
+ +-----+-------+                      |                                                  |
+       |                              |                                                  |
+       | register                     |                                                  |
+       v                              |                                                  |
+ +-----+-------+                      |  +-----------------+     +--------------+        |
+ | Model Reg   |    dev trigger       |  |  API Deploy WF  +---->+  Cloud Run   |        |
+ |(Versioning) +------------------------>|  (Retag/Push)   |     | (Serverless) |        |
+ +-------------+   (Tag: staging)     |  +-----------------+     +------+-------+        |
+                                      |                                 ^                |
+                                      +---------------------------------|----------------+
+                                                                        |
+                                                                 +------+-------+
+                                                                 |   End User   |
+                                                                 |  (Frontend)  |
+                                                                 +--------------+
 ```
-The API will be available at `http://localhost:8080`.
-
-### Deploy to Google Cloud Run
-1.  **Tag and Push:**
-    ```bash
-    docker tag uaag2-api gcr.io/YOUR_PROJECT_ID/uaag2-api
-    docker push gcr.io/YOUR_PROJECT_ID/uaag2-api
-    ```
-2.  **Deploy:**
-    ```bash
-    gcloud run deploy uaag2-api --image gcr.io/YOUR_PROJECT_ID/uaag2-api --platform managed --region europe-north1 --allow-unauthenticated
-    ```
-
-
 
 
 *Project template created using [mlops_template](https://github.com/SkafteNicki/mlops_template), a [cookiecutter template](https://github.com/cookiecutter/cookiecutter) for getting started with Machine Learning Operations (MLOps).*

@@ -66,8 +66,8 @@ will check the repositories and the code to verify your answers.
 * [x] Add command line interfaces and project commands to your code where it makes sense (M9)
 * [x] Construct one or multiple docker files for your code (M10)
 * [x] Build the docker files locally and make sure they work as intended (M10)
-* [ ] Write one or multiple configurations files for your experiments (M11)
-* [ ] Used Hydra to load the configurations and manage your hyperparameters (M11)
+* [x] Write one or multiple configurations files for your experiments (M11)
+* [x] Used Hydra to load the configurations and manage your hyperparameters (M11)
 * [x] Use profiling to optimize your code (M12)
 * [x] Use logging to log important events in your code (M14)
 * [x] Use Weights & Biases to log training progress and other important metrics/artifacts in your code (M14)
@@ -77,7 +77,7 @@ will check the repositories and the code to verify your answers.
 ### Week 2
 
 * [x] Write unit tests related to the data part of your code (M16)
-* [ ] Write unit tests related to model construction and or model training (M16)
+* [x] Write unit tests related to model construction and or model training (M16)
 * [x] Calculate the code coverage (M16)
 * [x] Get some continuous integration running on the GitHub repository (M17)
 * [x] Add caching and multi-os/python/pytorch testing to your continuous integration (M17)
@@ -88,33 +88,33 @@ will check the repositories and the code to verify your answers.
 * [x] Create a data storage in GCP Bucket for your data and link this with your data version control setup (M21)
 * [x] Create a trigger workflow for automatically building your docker images (M21)
 * [x] Get your model training in GCP using either the Engine or Vertex AI (M21)
-* [ ] Create a FastAPI application that can do inference using your model (M22)
-* [ ] Deploy your model in GCP using either Functions or Run as the backend (M23)
-* [ ] Write API tests for your application and setup continues integration for these (M24)
-* [ ] Load test your application (M24)
+* [x] Create a FastAPI application that can do inference using your model (M22)
+* [x] Deploy your model in GCP using either Functions or Run as the backend (M23)
+* [x] Write API tests for your application and setup continues integration for these (M24)
+* [x] Load test your application (M24)
 * [ ] Create a more specialized ML-deployment API using either ONNX or BentoML, or both (M25)
-* [ ] Create a frontend for your API (M26)
+* [x] Create a frontend for your API (M26)
 
 ### Week 3
 
 * [ ] Check how robust your model is towards data drifting (M27)
 * [ ] Setup collection of input-output data from your deployed application (M27)
 * [ ] Deploy to the cloud a drift detection API (M27)
-* [ ] Instrument your API with a couple of system metrics (M28)
-* [ ] Setup cloud monitoring of your instrumented application (M28)
+* [x] Instrument your API with a couple of system metrics (M28)
+* [x] Setup cloud monitoring of your instrumented application (M28)
 * [ ] Create one or more alert systems in GCP to alert you if your app is not behaving correctly (M28)
 * [ ] If applicable, optimize the performance of your data loading using distributed data loading (M29)
 * [ ] If applicable, optimize the performance of your training pipeline by using distributed training (M30)
-* [ ] Play around with quantization, compilation and pruning for you trained models to increase inference speed (M31)
+* [x] Play around with quantization, compilation and pruning for you trained models to increase inference speed (M31)
 
 ### Extra
 
-* [ ] Write some documentation for your application (M32)
+* [x] Write some documentation for your application (M32)
 * [ ] Publish the documentation to GitHub Pages (M32)
-* [ ] Revisit your initial project description. Did the project turn out as you wanted?
-* [ ] Create an architectural diagram over your MLOps pipeline
-* [ ] Make sure all group members have an understanding about all parts of the project
-* [ ] Uploaded all your code to GitHub
+* [x] Revisit your initial project description. Did the project turn out as you wanted?
+* [x] Create an architectural diagram over your MLOps pipeline
+* [x] Make sure all group members have an understanding about all parts of the project
+* [x] Uploaded all your code to GitHub
 
 ## Group information
 
@@ -123,7 +123,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 1 fill here ---
+Answer:
+142
 
 ### Question 2
 > **Enter the study number for each member in the group**
@@ -134,7 +135,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 2 fill here ---
+Answer:
+s260028, s260029, s257707
 
 ### Question 3
 > **Did you end up using any open-source frameworks/packages not covered in the course during your project? If so**
@@ -148,7 +150,9 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 3 fill here ---
+Answer:
+We used `posebusters` to ensure the chemical validity of our generated molecules, which is critical for our domain but not covered in the standard course. We also utilized `rdkit` and `openbabel` for robust chemical file format handling and feature extraction. We used the `3Dmol.js` library in our frontend to provide interactive 3D visualizations of the generated protein structures, which greatly improved the user experience.
+
 
 ## Coding environment
 
@@ -168,7 +172,9 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 4 fill here ---
+Answer:
+We managed source code dependencies using `uv`. All project dependencies are explicitly defined in the `pyproject.toml` file, separated into standard dependencies and development dependencies. To replicate our environment, a new team member would need to install `uv`. Then, running `uv sync` will install the exact versions specified in the `uv.lock` file into a virtual environment. This `uv.lock` file is committed to version control, ensuring that every developer and every CI/CD runner uses the same packages.
+Further, if you want to work on the google cloud setup, there’s a nix flake (`flake.nix`) with docker CLI, colima (a macOS docker runtime), and gcloud CLI. Once nix is installed (nixos.org) you can write `nix develop` to enter the a develop environment with these dependencies. Afterwards run `colima start` if you’re on macOS, then the `docker` CLI will work. A `flake.lock` file, analogous to `uv.lock`, is also version controlled. If you’re on linux you have to setup your own docker runtime.
 
 ### Question 5
 
@@ -184,7 +190,9 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 5 fill here ---
+Answer:
+We initialized our project using the course cookiecutter template and largely adhered to its structure. We filled out the `src/uaag2` directory for our core source code, keeping it as an installable package. The `configs` directory houses our Hydra configuration files, organized hierarchically for experiments, models, and training parameters. The `dockerfiles`, `data`, `models`, `reports` and `tests` folders are similarly filled out. We removed the `notebooks` folder as we did not use notebooks.
+
 
 ### Question 6
 
@@ -199,7 +207,11 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 6 fill here ---
+Answer:
+We enforced linting, formatting, and type-checking via a precommit hook. We used `ruff` for both linting and formatting. It enforces PEP 8 compliance, organizes imports, and catches common syntax errors.
+Importantly, `ruff` takes care of opinionated stuff like whitespace and line length. By having every committer run (for example) ruff to get their commits merged, we keep the diffs readable by not havnig people touch unrelated stuff. (For example, a person doesn't fix another persons whitespace in an unrelated commit.)
+
+For type checking we used `mypy` to try it out---although we haven't added very many type annotations. (We however disabled `mypy` later on.) For larger projects, this lets programmers catch bugs early and also serves as documentation; in Python, we often see types commented as documentation on function arguments. Static typechecking can also come with optimization benefits, but that's outside the scope of python and mypy.
 
 ## Version control
 
@@ -218,7 +230,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 7 fill here ---
+Answer:
+We implemented about 20 unit tests using `pytest`. These tests verify: data loading integrity (ensuring correct tensor shapes), model forward passes (checking for crashes during inference), and API endpoint functionality (verifying HTTP 200 responses). We also included basic performance tests on our API. These tests run automatically in our CI pipeline to prevent regressions.
 
 ### Question 8
 
@@ -233,7 +246,41 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 8 fill here ---
+Answer:
+We provide our full report below:
+```
+Name                                           Stmts   Miss  Cover
+------------------------------------------------------------------
+src/uaag2/__init__.py                              6      0   100%
+src/uaag2/api.py                                 122     47    61%
+src/uaag2/bond_analyze.py                         63     52    17%
+src/uaag2/datasets/__init__.py                     2      0   100%
+src/uaag2/datasets/uaag_dataset.py               460    357    22%
+src/uaag2/diffusion/__init__.py                    0      0   100%
+src/uaag2/diffusion/categorical.py               145     93    36%
+src/uaag2/diffusion/continuous.py                444    351    21%
+src/uaag2/e3moldiffusion/__init__.py               0      0   100%
+src/uaag2/e3moldiffusion/convs.py                383    296    23%
+src/uaag2/e3moldiffusion/coordsatomsbonds.py     382    278    27%
+src/uaag2/e3moldiffusion/gnn.py                  210    153    27%
+src/uaag2/e3moldiffusion/modules.py              190    105    45%
+src/uaag2/equivariant_diffusion.py               386    302    22%
+src/uaag2/hf_data_report.py                       32      5    84%
+src/uaag2/losses.py                              127    109    14%
+src/uaag2/utils.py                               347    307    12%
+tests/__init__.py                                  4      0   100%
+tests/performancetests/__init__.py                 0      0   100%
+tests/performancetests/test_model.py              70     39    44%
+tests/test_api.py                                 39      1    97%
+tests/test_data.py                                57      4    93%
+tests/test_hf_data_report.py                       8      0   100%
+tests/test_model.py                               20      0   100%
+------------------------------------------------------------------
+TOTAL                                           3497   2499    29%
+```
+The low percentage is largely due to the dataset file (`uaag2/datasets/uaag_dataset.py`) and diffusion modules containing copied evaluation routines and experimental features that are currently inactive or used for debugging, which significantly inflates the line count. Ideally, we'd refactor the code to reduce code deduplication.
+
+Even with 100% coverage, we would not blindly trust the code. Coverage does not verify scientific correctness (e.g., if the diffusion process yields valid molecules) or catch logic errors that don't crash the program. We rely on validation metrics and manual inspection of generated molecules for trust.
 
 ### Question 9
 
@@ -248,7 +295,11 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 9 fill here ---
+Answer:
+We mainly adopted a feature-branch workflow throughout the project. For minor cases, we disobeyed this rule, and decided to not include the rule in the repository for convenience. For most changes, each members worked on separate, short-lived branches.
+
+To merge changes, we opened pull requests. This process was integral to our quality control. Each PR automatically triggered our CI pipeline, running unit tests and linters. We established a policy that a PR could not be merged unless checks pass. This workflow allowed us to review each other's code, discuss implementation details in a few cases, and catch bugs (especially CI bugs) before merging so as not to disrupt each other.
+Later on, we also had an automatic workflow for training the model on the main branch, so pushing many small commits directly to the main branch would be wasteful.
 
 ### Question 10
 
@@ -263,7 +314,12 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 10 fill here ---
+Answer:
+We made a conscious decision to use HuggingFace (HF) Datasets for our data management instead of the traditional DVC setup. This setup is far more widespread in the project's domain.
+
+While DVC is excellent for generic file versioning and decoupling storage from code, setting it up with a GCP bucket added complexity that we felt wasn't necessary given the available tools in the open-source ecosystem. Hugging Face essentially acts as both our remote storage and our version control system for data.
+
+We only really used one version of our dataset throughout this short project, but we recognize how version controlling data past (longer-lived) ML projects is crucial; sometimes you simply come in doubt what version of your data you trained your model on (which is no good).
 
 ### Question 11
 
@@ -280,7 +336,13 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 11 fill here ---
+Answer:
+Our Continuous Integration (CI) setup uses github actions. We have organized the workflows into several specialized files to keep them maintainable.
+1.  `test.yaml`: This is our primary validation workflow. It triggers on pull requests and pushes to main. It sets up the environment, installs dependencies using `uv` (leveraging caching to speed up builds), and runs our `pytest` suite. Crucially, we test on both Linux and macOS runners to ensure our code works on both platforms (we deploy on Linux but mainly develop locally on macOS).
+2.  `lint.yaml`: This workflow runs `ruff check` and `ruff format` to enforce code checks. It fails the CI if code standards aren't met.
+3.  `hf_data_report.yaml`: A valid scheduled workflow that runs periodically to inspect our Hugging Face dataset and generate a report, ensuring data quality over time.
+
+We extensively use the `actions/cache` action to cache our `uv` virtual environment (`.venv`), which reduced our CI runtime from minutes to seconds for subsequent runs. [Link to Test Workflow](https://github.com/HirahTang/UAAG2/blob/mlops/.github/workflows/test.yaml)
 
 ## Running code and tracking experiments
 
@@ -299,7 +361,11 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 12 fill here ---
+Answer:
+We configured experiments using `Hydra`, which allows for hierarchical configuration. All parameters are stored in `yaml` files in the `configs/` directory. Running the default experiment is as simple as:
+`uv run invoke train`. Generally `tasks.py` is the entrypoint to running things.
+
+We also use `invoke fetch-data` to download our dataset from the Hugging Face Hub, `invoke docker-build` to build the training image, and `invoke test` to run pytests.
 
 ### Question 13
 
@@ -314,7 +380,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 13 fill here ---
+Answer:
+We use managed dependencies (uv and nix), `Hydra`, `WandB`, and Docker. `WandB` automatically captures this config, alongside the exact git commit hash representing the code version, and the random seed used for initialization.
+
+This means that to reproduce an experiment, we don't need to guess parameters. We can look up the run in WandB, checkout the specific git commit, build the Docker container (which ensures the OS and library versions are identical), and run the training command with the seed and config retrieved from the logs.
 
 ### Question 14
 
@@ -331,7 +400,12 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 14 fill here ---
+Answer:
+![WandB Model Registry](figures/q14_model_registry.png)
+![WandB Train History](figures/q14_train_histories.png)
+We utilized Weights & Biases (WandB) as our central experiment tracking platform. The first screenshot demonstrates our use of the **Model Registry**. Instead of just saving model weights to a disk, we push them to the registry, versioning them semantically (v1, v2, etc.). This links the specific artifact directly to the training metrics that produced it. We tagged our best performing model as `staging`, which our API deployment workflow then automatically retrieves, tests, re-tags as `production` and deploys to the API. Note that this is a smaller subset of the data, resulting in noisy training -- we will run a full-scale experiment at a later date.
+
+The second screenshot showcases our **Training and Validation Histories**. We tracked the Cross-Entropy Loss to monitor convergence. Crucially, we also logged complex, domain-specific metrics such as **Molecule Validity** (via PoseBusters) and **Graph Connectivity**. In generative chemistry, a model can easily "cheat" the loss function while producing physically impossible molecules (e.g., carbon with 5 bonds), so these auxiliary metrics were vital for true performance assessment. We also utilized the **System Metrics** tab (not shown but actively used) to monitor GPU memory usage and temperature, which helped us debug the OOM issues mentioned earlier. The ability to overlay runs allowed us to compare the effect of different `virtual_node` sizes on the final validity score, leading to our final architecture choice.
 
 ### Question 15
 
@@ -346,7 +420,12 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 15 fill here ---
+Answer:
+We used different images for different use cases. We have a `train_gpu.dockerfile` which is built on top of a CUDA-enabled base image (like `pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime`) to support GPU acceleration for training jobs. We also have a cpu/mps version `train.dockerfiler` for local debugging. And an `api.Dockerfile` for deploying our API.
+
+We use multi-stage builds in our Dockerfiles. This involves a "builder" stage that compiles dependencies and a "runner" stage that only copies the necessary artifacts. To run our CPU/MPS training container, one would use:
+`docker run uaag2-train:latest`.
+[Link to train dockerfile](https://github.com/HirahTang/UAAG2/blob/mlops/dockerfiles/train_gpu.dockerfile)
 
 ### Question 16
 
@@ -361,7 +440,11 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 16 fill here ---
+Answer:
+Most errors were in the cloud. Particularly there can be a slight discrepancy between the docker mages built locally and in the cloud because we found that google cloud unexpectedly used our gitignore file to ignore files.
+Generally, debugging was done locally by running unittests, docker images and using our API manually before pushing to check for errors in the CI pipeline.
+We ran into problems where pytorch-scatter did not support MPS (Apple Silicon) and we had to conditionally switch input tensors to the CPU when on this backend.
+We briefly played around with the PyTorch profiler to spot obvious mistaskes, but did not make impactful use of it. The code is very much not optimized, but it's fast enough for our use case.
 
 ## Working in the cloud
 
@@ -378,7 +461,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 17 fill here ---
+Answer:
+We utilized several GCP services: **Artifact Registry** for storing and versioning our Docker images; **Cloud Build** for automatically building these images from our GitHub repository; **Cloud Run** for hosting our inference API; and **Vertex AI** for running GPU-accelerated training jobs.
 
 ### Question 18
 
@@ -393,7 +477,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 18 fill here ---
+Answer:
+We only used GCE VMs directly for the exercises. For building docker images we used Cloud build without specifying what hardware/VM to build on. For Vertex AI, we trained on the n1-standard-8 machine type with a single NVIDIA T4 GPU.
 
 ### Question 19
 
@@ -402,7 +487,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 19 fill here ---
+Answer:
+As mentioned previously, we used HuggingFace Datasets for our storage and versioning needs rather than GCP buckets. This provided a more convenient interface in our setting.
 
 ### Question 20
 
@@ -411,7 +497,9 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 20 fill here ---
+Answer:
+![Artifact Registry](figures/q20.png)
+This image displays our GCP Artifact Registry where we store the Docker images for our API and training jobs. It serves as the bridge between our CI/CD build process and our deployment targets.
 
 ### Question 21
 
@@ -420,7 +508,9 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 21 fill here ---
+Answer:
+![Cloud Build History](figures/q21.png)
+Here is our Cloud Build history, showing a log of automated builds triggered by pushes to our repository. This ensures that every deployment is based on a clean, verified build of latest code.
 
 ### Question 22
 
@@ -435,7 +525,12 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 22 fill here ---
+Answer:
+Yes, we successfully trained our model in the cloud using Vertex AI. The process involves:
+1.  Building our training Docker image via Cloud Build.
+2.  Pushing the image to the Artifact Registry.
+3.  Creating the Vertex AI job (configured in `configs/vertex.yaml`).
+This is all done in our CI. The training action is run only on the mlops branch and only if tests pass to reduce erroneuous runs.
 
 ## Deployment
 
@@ -452,7 +547,13 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 23 fill here ---
+Answer:
+![Frontend](figures/q23.png)
+
+We successfully built an API for our model using `FastAPI`. The core of the API is the `/generate` endpoint, which accepts a `.pt` (PyTorch) file containing the protein structure and returns the generated ligand layout. We further spent time to develop a frontend; see our `src/uaag2/static/index.html` file. With interactive 3D visualizations of the generated ligands, we believe we have created a user-friendly interface.
+You can test it out by running `uv run invoke fetch-data` and then using the `data/benchmarks/ENVZ_ECOLI.pt` file to generate samples on our website.
+
+
 
 ### Question 24
 
@@ -468,7 +569,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 24 fill here ---
+Answer:
+We deployed our API to the cloud using GCP Cloud Run. This was a convenient choice for our use case because it is serverless -- it scales down to zero when not in use, saving us credits, and scales up automatically when traffic increases.
+
+Deployment was automated via our CI/CD pipeline. When we add the `staging` alias in WandB, and if the model passes into production, the pipeline will automatically deploy the new version of the model/API to the cloud. It is accessible on: https://uaag2-api-233301800073.europe-west1.run.app/ or via `curl -X POST -F "file=@data/benchmarks/ENVZ_ECOLI.pt" https://uaag2-api-233301800073.europe-west1.run.app/generate` (run `uv run invoke fetch-data` first to get the `ENVZ_ECOLI.pt` file).
 
 ### Question 25
 
@@ -483,7 +587,12 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 25 fill here ---
+Answer:
+For verification, we employed both unit testing and load testing. Unit tests were written using `FastAPI.testclient` to mock requests and ensure the internal logic (input validation, model inference call) works correctly.
+
+For load testing, we utilized `Locust`. We created a `locustfile` that simply gets the `health` endpoint of our API. We ran tests simulating up to 10 concurrent users and found that the server handled this just fine.
+We also performed manual tests, generating samples as two different users at the same time. Also while running the locust API test simultaneously.
+The manual test at first found that the `generate` endpoint was blocking the server, so that other users would not get responese. We fixed this.
 
 ### Question 26
 
@@ -498,7 +607,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 26 fill here ---
+Answer:
+We leveraged the built-in monitoring tools provided by GCP Cloud Run. These give us visibility into key metrics like Request Count, Latency (p50, p95, p99), Container CPU utilization, and Memory usage. We can also see HTTP 5xx error rates, which allows us to quickly react if the service starts failing.
+
+While we did not implement a custom model drift detection system, we understand its importance. In a production setting, data distribution can change (e.g., users uploading new types of proteins not seen during training). Implementing drift detection would allow us to monitor the input data statistics and alert us when retraining is necessary, ensuring the longevity and continued accuracy of our application.
 
 ## Overall discussion of project
 
@@ -517,7 +629,9 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 27 fill here ---
+Answer:
+![Billing](figures/q27.png)
+5.20 USD. 3.72 USD of which was spent on the Artifact registry probably reflecting that we had trouble getting images to compile (until figuring out that gcloud respects .gitignore, so necessary files weren't being uploaded). It's a nice feeling once everything is set up, however it's extremely tedious to do.
 
 ### Question 28
 
@@ -533,7 +647,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 28 fill here ---
+Answer:
+We used HuggingFace for version controlling and storing our dataset because it is standard for data repositories in the project's application field. We used nix (nixos.org) for managing macOS docker setup because this is outside the domain of uv. Lastly, we created an interactive web interface with `3dmol.js` where users can upload a file and immediately see the generated 3D molecule structure of the generated ligand. This makes our project accessible to non-technical users who might not be comfortable using `curl` or writing API scripts.
 
 ### Question 29
 
@@ -550,7 +665,57 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 29 fill here ---
+Answer:
+```
+                                      +----------------------------------------------+
+                                      |              GOOGLE CLOUD PLATFORM           |
+                                      |                                              |
+ +-----------------+                  |  +-------------+       +------------------+  |
+ | git commit      |                  |  | Cloud Build +------>+ Artifact Registry|  |
+ | w/ linting hook |                  |  | (Build Img) | push  | (Docker Images)  |  |
+ +-----+-----------+                  |  +-------------+       +--------+---------+  |
+       |                              |    ^                            |            |
+       |                              |    |                            | pull       |
+       v                              |    |                    +-------v-------+    |
+ +-------------+   +--------------+   |    |      stream data   | Vertex AI     |    |
+ | git push    +-->+ GitHub       |---------    +-------------->| (Training)    |    |
+ | (Trigger)   |   | Actions (CI) |   |         |               +-------+-------+    |
+ +-------------+   +--------------+   |         |                       |            |
+                                      |         |                       | logs       |
+ +-------------+                      |         |                       v            |
+ | HuggingFace +--------------------------------+                       |            |
+ | (Datasets)  |                      |                                 |            |
+ +-------------+                      |                                 |            |
+                                      |                                 |            |
+ +-------------+                      |                                 |            |
+ |    WandB    |<-------------------------------------------------------+            |
+ |(Experiments)|                      |                                              |
+ +-----+-------+                      |                                              |
+       |                              |                                              |
+       | register                     |                                              |
+       v                              |                                              |
+ +-----+-------+                      |  +-----------------+     +--------------+    |
+ | Model Reg   |    dev trigger       |  |  API Deploy WF  +---->+  Cloud Run   |    |
+ |(Versioning) +------------------------>|                 |     | (Serverless) |    |
+ +-------------+   (Tag: staging)     |  +-----------------+     +------+-------+    |
+                                      |                                 ^            |
+                                      +---------------------------------|------------+
+                                                                        |
+                                                                 +------+-------+
+                                                                 |   End User   |
+                                                                 |  (Frontend)  |
+                                                                 +--------------+
+```
+Our system architecture illustrates a robust MLOps pipeline.
+1.  **Development**: Developers work locally using `uv` for reproducible environments. `pre-commit` hooks ensure code quality before commits are even made.
+2.  **CI**: Pushing to GitHub triggers **GitHub Actions** which run our test suite and linters.
+3.  **Build**: Validated code triggers **Cloud Build** to construct Docker images for Training and API, which are stored in **Artifact Registry**.
+4.  **Training**: We train on **Vertex AI** using GPUs. The training job streams data directly from **Hugging Face** and logs all metrics and artifacts to **Weights & Biases (WandB)**.
+5.  **Staging & Deployment**: When a model is tagged as `staging` in the **WandB Model Registry**, it triggers a deployment workflow. This safeguards production from untested models.
+6.  **Serving**: The valid API image is automatically deployed to **Cloud Run**, creating a scalable, serverless endpoint.
+7.  **Interaction**: End-users interact with the system via our **Frontend** (or via requests), which calls the Cloud Run API.
+
+This architecture was chosen for its distinct separation of concerns. Local development is decoupled from cloud execution via Docker. Training is decoupled from Serving via the Model Registry. This means we can retrain the model (updating the registry) without touching the API code, and vice versa. The use of Artifact Registry as the central hub ensures that we can rollback to any previous version of the image if a deployment fails.
 
 ### Question 30
 
@@ -564,7 +729,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 30 fill here ---
+Answer:
+Getting the model to train in Google Cloud, because building the GPU image is slow and required a lot of iteration on minor errors. Using AI is great for overcoming challenges (perhaps because a lot of this setup stuff is well-documented online). But in general, making sure everything works locally, then deploying something minimal to the cloud and then expanding for full funcitonality from there is a good strategy.
 
 ### Question 31
 
@@ -582,4 +748,14 @@ will check the repositories and the code to verify your answers.
 > *We have used ChatGPT to help debug our code. Additionally, we used GitHub Copilot to help write some of our code.*
 > Answer:
 
---- question 31 fill here ---
+Answer:
+Members contributed to all parts through frequent pair-programming sessions. In particular however,
+*   **s260028** focused on WandB, CI and the API.
+*   **s260029** focused on infrastructure, testing and cloud deployment.
+*   **s257707** focused on model development, configuration and solving the problem setting.
+
+We leveraged Generative AI (frontier models in Cursor and Antigravity) during development to minimize time spent writing boilerplate code -- which also assisted in writing a report draft. (We have **extensively** edited every answer in this draft.) We further used the GitHub Copilot agent to help solve simple GitHub issues.
+
+The model itself has largely been developed as a research project prior to this course; it has been completely refactored for the course however.
+You can see the prior work on the `main` branch. Our branch is `mlops`. During the course we have revamped the code structure,
+dependency management and fixed bugs in the model code. The frontend also did not exist. In other words, all the deliverables in this report have been developed during the course.
