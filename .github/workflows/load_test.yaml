@@ -1,0 +1,100 @@
+name: Load Test
+
+on:
+  workflow_run:
+    workflows: ["Test and deploy"]
+    types:
+      - completed
+    branches: [mlops]
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'API URL to test (leave empty for default Cloud Run URL)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write  # Required for GCP authentication
+
+jobs:
+  load-test:
+    name: Run Load Tests
+    runs-on: ubuntu-latest
+    # Only run if the deployment was successful (when triggered by workflow_run)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Auth with GCP
+        if: ${{ github.event.inputs.api_url == '' }}
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Set up Cloud SDK
+        if: ${{ github.event.inputs.api_url == '' }}
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Get API URL
+        id: get-url
+        run: |
+          if [ -n "${{ github.event.inputs.api_url }}" ]; then
+            echo "API_URL=${{ github.event.inputs.api_url }}" >> $GITHUB_OUTPUT
+          else
+            # Get the Cloud Run service URL
+            API_URL=$(gcloud run services describe uaag2-api --region europe-west1 --format 'value(status.url)' 2>/dev/null || echo "")
+            if [ -z "$API_URL" ]; then
+              echo "Failed to get API URL from Cloud Run"
+              exit 1
+            fi
+            echo "API_URL=$API_URL" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Wait for API to be ready
+        run: |
+          API_URL="${{ steps.get-url.outputs.API_URL }}"
+          echo "Waiting for API at $API_URL to be ready..."
+          for i in {1..30}; do
+            if curl -s --fail "$API_URL/health" > /dev/null 2>&1; then
+              echo "API is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/30: API not ready yet, waiting..."
+            sleep 10
+          done
+          echo "API did not become ready in time"
+          exit 1
+
+      - name: Run load tests
+        run: |
+          API_URL="${{ steps.get-url.outputs.API_URL }}"
+          echo "Running load tests against $API_URL"
+          uv run locust \
+            -f tests/performancetests/locustfile.py \
+            --host "$API_URL" \
+            --users 10 \
+            --spawn-rate 2 \
+            --run-time 30s \
+            --headless \
+            --only-summary
+
+      - name: Upload load test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: locust_*.html
+          if-no-files-found: ignore
