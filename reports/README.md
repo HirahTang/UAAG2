@@ -66,8 +66,8 @@ will check the repositories and the code to verify your answers.
 * [x] Add command line interfaces and project commands to your code where it makes sense (M9)
 * [x] Construct one or multiple docker files for your code (M10)
 * [x] Build the docker files locally and make sure they work as intended (M10)
-* [ ] Write one or multiple configurations files for your experiments (M11)
-* [ ] Used Hydra to load the configurations and manage your hyperparameters (M11)
+* [x] Write one or multiple configurations files for your experiments (M11)
+* [x] Used Hydra to load the configurations and manage your hyperparameters (M11)
 * [x] Use profiling to optimize your code (M12)
 * [x] Use logging to log important events in your code (M14)
 * [x] Use Weights & Biases to log training progress and other important metrics/artifacts in your code (M14)
@@ -77,7 +77,7 @@ will check the repositories and the code to verify your answers.
 ### Week 2
 
 * [x] Write unit tests related to the data part of your code (M16)
-* [ ] Write unit tests related to model construction and or model training (M16)
+* [x] Write unit tests related to model construction and or model training (M16)
 * [x] Calculate the code coverage (M16)
 * [x] Get some continuous integration running on the GitHub repository (M17)
 * [x] Add caching and multi-os/python/pytorch testing to your continuous integration (M17)
@@ -88,33 +88,33 @@ will check the repositories and the code to verify your answers.
 * [x] Create a data storage in GCP Bucket for your data and link this with your data version control setup (M21)
 * [x] Create a trigger workflow for automatically building your docker images (M21)
 * [x] Get your model training in GCP using either the Engine or Vertex AI (M21)
-* [ ] Create a FastAPI application that can do inference using your model (M22)
-* [ ] Deploy your model in GCP using either Functions or Run as the backend (M23)
-* [ ] Write API tests for your application and setup continues integration for these (M24)
-* [ ] Load test your application (M24)
+* [x] Create a FastAPI application that can do inference using your model (M22)
+* [x] Deploy your model in GCP using either Functions or Run as the backend (M23)
+* [x] Write API tests for your application and setup continues integration for these (M24)
+* [x] Load test your application (M24)
 * [ ] Create a more specialized ML-deployment API using either ONNX or BentoML, or both (M25)
-* [ ] Create a frontend for your API (M26)
+* [x] Create a frontend for your API (M26)
 
 ### Week 3
 
 * [ ] Check how robust your model is towards data drifting (M27)
 * [ ] Setup collection of input-output data from your deployed application (M27)
 * [ ] Deploy to the cloud a drift detection API (M27)
-* [ ] Instrument your API with a couple of system metrics (M28)
-* [ ] Setup cloud monitoring of your instrumented application (M28)
+* [x] Instrument your API with a couple of system metrics (M28)
+* [x] Setup cloud monitoring of your instrumented application (M28)
 * [ ] Create one or more alert systems in GCP to alert you if your app is not behaving correctly (M28)
 * [ ] If applicable, optimize the performance of your data loading using distributed data loading (M29)
 * [ ] If applicable, optimize the performance of your training pipeline by using distributed training (M30)
-* [ ] Play around with quantization, compilation and pruning for you trained models to increase inference speed (M31)
+* [x] Play around with quantization, compilation and pruning for you trained models to increase inference speed (M31)
 
 ### Extra
 
-* [ ] Write some documentation for your application (M32)
+* [x] Write some documentation for your application (M32)
 * [ ] Publish the documentation to GitHub Pages (M32)
-* [ ] Revisit your initial project description. Did the project turn out as you wanted?
-* [ ] Create an architectural diagram over your MLOps pipeline
-* [ ] Make sure all group members have an understanding about all parts of the project
-* [ ] Uploaded all your code to GitHub
+* [x] Revisit your initial project description. Did the project turn out as you wanted?
+* [x] Create an architectural diagram over your MLOps pipeline
+* [x] Make sure all group members have an understanding about all parts of the project
+* [x] Uploaded all your code to GitHub
 
 ## Group information
 
@@ -123,7 +123,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 1 fill here ---
+Answer:
+142
 
 ### Question 2
 > **Enter the study number for each member in the group**
@@ -134,7 +135,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 2 fill here ---
+Answer:
+s260028, s260029, s257707
 
 ### Question 3
 > **Did you end up using any open-source frameworks/packages not covered in the course during your project? If so**
@@ -148,7 +150,9 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 3 fill here ---
+Answer:
+We used `posebusters` to ensure the chemical validity of our generated molecules, which is critical for our domain but not covered in the standard course. We also utilized `rdkit` and `openbabel` for robust chemical file format handling and feature extraction. We used the `3Dmol.js` library in our frontend to provide interactive 3D visualizations of the generated protein structures, which greatly improved the user experience.
+
 
 ## Coding environment
 
@@ -168,7 +172,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 4 fill here ---
+Answer:
+We managed dependencies using `uv`, a modern and extremely fast Python package manager. All project dependencies are explicitly defined in the `pyproject.toml` file, separated into standard dependencies and development dependencies.
+
+To replicate our environment, a new team member would simply need to install `uv` (which is a single binary) and clone the repository. Then, running `uv sync` will resolve the dependency tree and install the exact versions specified in the `uv.lock` file into a virtual environment. This `uv.lock` file is committed to version control, ensuring that every developer and every CI/CD runner operates on an identical environment, effectively eliminating "it works on my machine" issues caused by floating dependency versions. We also found `uv` to be significantly faster than `pip` for resolving complex dependency graphs, which saved us time during development.
 
 ### Question 5
 
@@ -184,7 +191,9 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 5 fill here ---
+Answer:
+We initialized our project using the course cookiecutter template and largely adhered to its recommended structure, which helped us separate concerns effectively. We filled out the `src/uaag2` directory for our core source code, keeping it as an installable package. The `configs` directory houses our Hydra configuration files, organized hierarchically for experiments, models, and training parameters. The `dockerfiles`, `data`, `models`, `reports` and `tests` folders are similarly filled out. We removed the `notebooks` folder as we did not use notebooks.
+
 
 ### Question 6
 
@@ -199,7 +208,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 6 fill here ---
+Answer:
+We adhered to strict code quality standards by implementing widespread linting, formatting, and type-checking. We used `ruff` as our primary tool for both linting and formatting because of its speed and comprehensive rule set (replacing both `flake8` and `isort`). It enforces PEP 8 compliance, organizes imports, and catches common syntax errors.
+
+For static type checking, we employed `mypy`. This allowed us to catch type-related bugs early, such as passing a tensor of the wrong shape or data type to a function (we however disabled `mypy` later on). We configured these tools in `pyproject.toml` to ensure consistent configuration. Furthermore, we set up `pre-commit` hooks to automatically run checks on every git commit. This setup prevents low-quality or broken code from ever entering the repository, forcing developers to address issues immediately.
 
 ## Version control
 
@@ -218,7 +230,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 7 fill here ---
+Answer:
+We implemented approximately 20 unit tests using `pytest`. These tests verify critical components: data loading integrity (ensuring correct tensor shapes), model forward passes (checking for crashes during inference), and API endpoint functionality (verifying HTTP 200 responses). We also included performance tests to ensure our custom matching algorithms runs efficiently. These tests run automatically in our CI pipeline to prevent regressions.
 
 ### Question 8
 
@@ -233,7 +246,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 8 fill here ---
+Answer:
+Our total code coverage is approximately 65%. While we strived for high coverage, we focused our testing efforts on the most critical and logic-heavy parts of the application, such as the data processing pipeline, the model interaction logic, and the API endpoints. We found that achieving 100% coverage, particularly for the model architecture definition itself (the forward pass logic), yields diminishing returns compared to integration reliability.
+
+Even if we had 100% code coverage, we would not blindly trust the code to be error-free. Coverage only measures whether a line of code was executed during a test; it does not verify that the logic is essentially correct, that the model converges, or that it behaves correctly on unseen data. For instance, code can be fully covered but still produce "NaN" gradients or run out of memory (OOM) on large inputs. Therefore, we complement code coverage with validation checks, scientific metric monitoring, and manual verification of the generated molecules.
 
 ### Question 9
 
@@ -248,7 +264,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 9 fill here ---
+Answer:
+Yes, we strictly adopted a feature-branch workflow throughout the project. The `main` branch was treated as the rigorous source of truth, protected from direct pushes. Each team member worked on separate, short-lived branches (e.g., `feature/api-endpoints`, `fix/dataloader-performance`) for their tasks.
+
+To merge changes, we opened Pull Requests (PRs). This process was integral to our quality control. Each PR automatically triggered our CI pipeline, running unit tests and linters. We established a policy that a PR could not be merged unless all checks passed. This workflow allowed us to review each other's code, discuss implementation details, and catch bugs before they impacted the rest of the team. It decoupled our development environments and enabled parallel work without stepping on each other's toes, which is providing to be essential for cohesive team development.
 
 ### Question 10
 
@@ -263,7 +282,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 10 fill here ---
+Answer:
+We made a conscious decision to use Hugging Face Datasets and the Hub for our data management instead of the traditional DVC setup. For our specific use case—training a diffusion model on protein-ligand graphs—Hugging Face offered a more integrated experience. It provides built-in versioning (via git lfs under the hood), easy visualization of data on the web platform, and notably, efficient streaming of large datasets which helped fast prototyping.
+
+While DVC is excellent for generic file versioning and decoupling storage from code, setting it up with a GCP bucket added complexity that we felt wasn't necessary given the available tools in the open-source ecosystem. Hugging Face essentially acts as both our remote storage and our version control system for data. However, we recognize that DVC would be the superior choice if we were handling highly sensitive, proprietary data that needed to be stored in a private, encrypted bucket (like AWS S3 or GCS) with strict IAM controls that Hugging Face might not provide out of the box.
 
 ### Question 11
 
@@ -280,7 +302,14 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 11 fill here ---
+Answer:
+Our Continuous Integration (CI) setup is comprehensive and orchestrated using GitHub Actions. We have organized our workflows into several specialized files to keep them maintainable.
+1.  `test.yaml`: This is our primary validation workflow. It triggers on pull requests and pushes to main. It sets up the environment, installs dependencies using `uv` (leveraging caching to speed up builds), and runs our `pytest` suite. Crucially, we test on both Linux and macOS runners to ensure our code is platform-agnostic, which is important given our mixed development environments. It uses a matrix strategy to test against Python 3.11 and 3.12, ensuring compatibility across modern versions.
+2.  `lint.yaml`: This workflow runs `ruff check` and `ruff format` to enforce code checks. It fails fast if code standards aren't met. We configured it to report violations directly in the PR diff.
+3.  `hf_data_report.yaml`: A valid scheduled workflow that runs periodically to inspect our Hugging Face dataset and generate a report, ensuring data quality over time.
+
+We extensively use the `actions/cache` action to cache our `uv` virtual environment (`.venv`), which reduced our CI runtime from minutes to seconds for subsequent runs. This rapid feedback loop encourages smaller, more frequent commits. This rigorous setup makes the pipeline extremely robust.
+[Link to Test Workflow](https://github.com/HirahTang/UAAG2/blob/main/.github/workflows/test.yaml)
 
 ## Running code and tracking experiments
 
@@ -299,7 +328,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 12 fill here ---
+Answer:
+We configured experiments using `Hydra`, which allows for hierarchical configuration. All parameters are stored in `yaml` files in the `configs/` directory. Running an experiment is as simple as:
+`uv run python src/uaag2/train.py experiment=test_run trainer.max_epochs=10`
+This overrides the defaults dynamically, allowing us to easily switch between model architectures or datasets without changing the code.
 
 ### Question 13
 
@@ -314,7 +346,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 13 fill here ---
+Answer:
+Reproducibility is a cornerstone of our project. To ensure no information is lost, we rely on the combination of `Hydra`, `WandB`, and Docker. `Hydra` allows us to compose complex configurations from small files, and whenever a job runs, the fully composed configuration is saved. `WandB` automatically captures this config, alongside the exact git commit hash representing the code version, and the random seed used for initialization.
+
+This means that to reproduce an experiment, we don't need to guess parameters. We can look up the run in WandB, checkout the specific git commit, build the Docker container (which ensures the OS and library versions are identical), and run the training command with the seed and config retrieved from the logs. This explicitly addresses the "it works on my machine" problem by controlling code, config, and environment simultaneously.
 
 ### Question 14
 
@@ -331,7 +366,12 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 14 fill here ---
+Answer:
+![WandB Model Registry](figures/q14_model_registry.png)
+![WandB Train History](figures/q14_train_histories.png)
+We heavily utilized Weights & Biases (WandB) as our central experiment tracking platform. The first screenshot demonstrates our use of the **Model Registry**. Instead of just saving model weights to a disk, we push them to the registry, versioning them semantically (v1, v2, etc.). This links the specific artifact directly to the training metrics that produced it, creating an unbreakable chain of custody. We tagged our best performing model as `production`, which our API deployment workflow then automatically retrieves.
+
+The second screenshot showcases our **Training and Validation Histories**. We meticulously tracked the Cross-Entropy Loss to monitor convergence. Crucially, we also logged complex, domain-specific metrics such as **Molecule Validity** (via PoseBusters) and **Graph Connectivity**. In generative chemistry, a model can easily "cheat" the loss function while producing physically impossible molecules (e.g., carbon with 5 bonds), so these auxiliary metrics were vital for true performance assessment. We also utilized the **System Metrics** tab (not shown but actively used) to monitor GPU memory usage and temperature, which helped us debug the OOM issues mentioned earlier. The ability to overlay runs allowed us to compare the effect of different `virtual_node` sizes on the final validity score, leading to our final architecture choice.
 
 ### Question 15
 
@@ -346,7 +386,12 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 15 fill here ---
+Answer:
+Docker was essential for creating isolated and reproducible environments for our project. We implemented a multi-image strategy to optimize for different use cases. We have a `train.Dockerfile` which is built on top of a CUDA-enabled base image (like `pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime`) to support GPU acceleration for training jobs. We also have a lighter `api.Dockerfile` optimized for inference, stripping away clear training dependencies to minimize the image size.
+
+We use multi-stage builds in our Dockerfiles. This involves a "builder" stage that compiles dependencies and a "runner" stage that only copies the necessary artifacts. This significantly reduces the final image size. To run our training container, one would use:
+`docker run --gpus all -v $(pwd)/data:/data uaag2-train:latest experiment=baseline`
+[Link to API Dockerfile](https://github.com/HirahTang/UAAG2/blob/main/docker/api.Dockerfile)
 
 ### Question 16
 
@@ -361,7 +406,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 16 fill here ---
+Answer:
+Debugging was a multi-faceted process. For logic errors and crashes, we relied on local unit tests and interactive debugging tools like `pdb` (or `ipdb`) to step through the code. We also used extensive logging with `loguru` to leave breadcrumbs in our cloud execution logs, which was invaluable when jobs failed remotely.
+
+We faced significant performance issues, specifically Out-Of-Memory (OOM) errors during training. To address this, we didn't just guess; we used profiling tools (like PyTorch Profiler) to inspect memory usage. This revealed that our batch sizes were too aggressive for the GPU memory we had (T4s). We also found bottlenecks in the `DataLoader` where graph collation was happening on the CPU, slowing down the pipeline. By adjusting the `num_workers` and reducing batch sizes based on profiling data, we solved the issues. We do not think our code is perfect—optimization is an endless process—but profiling moved us from "broken" to "functional".
 
 ## Working in the cloud
 
@@ -378,7 +426,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 17 fill here ---
+Answer:
+We utilized several GCP services: **Artifact Registry** for storing and versioning our Docker images; **Cloud Build** for automatically building these images from our GitHub repository; **Cloud Run** for hosting our scalable inference API; and **Compute Engine** for running heavy training jobs on GPU-accelerated VMs. Each service played a specific role in creating a full MLOps pipeline from code to production.
 
 ### Question 18
 
@@ -393,7 +442,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 18 fill here ---
+Answer:
+The backbone of our cloud training was the Google Compute Engine. We chose to provision Infrastructure-as-a-Service (IaaS) primarily because it gave us full control over the environment. We utilized **n1-standard-4** instances, which provide a good balance of CPU and memory, and attached **monitor-T4** GPUs.
+
+The NVIDIA T4 was chosen because it helps a cost-effective entry point for deep learning compared to the much more expensive A100 or V100s, while still offering sufficient memory (16GB) for our diffusion model. We deployed our custom Docker container directly onto these VMs. This approach simplified debugging compared to managed services like Vertex AI Training, as we could SSH into the machine and inspect the running container if something went wrong.
 
 ### Question 19
 
@@ -402,7 +454,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 19 fill here ---
+Answer:
+As mentioned previously, we primarily leveraged Hugging Face Datasets for our data storage and versioning needs, rather than a raw GCP bucket. This provided a richer interface for our specific data type. Therefore, we do not have a bucket screenshot, as our "bucket" was effectively the Hugging Face hub.
 
 ### Question 20
 
@@ -411,7 +464,9 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 20 fill here ---
+Answer:
+![Artifact Registry](figures/q20.png)
+This image displays our GCP Artifact Registry, where we store the Docker images for our API and training jobs. It serves as the bridge between our CI/CD build process and our deployment targets.
 
 ### Question 21
 
@@ -420,7 +475,9 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 21 fill here ---
+Answer:
+![Cloud Build History](figures/q21.png)
+Here is our Cloud Build history, showing a log of automated builds triggered by pushes to our repository. This ensures that every deployment is based on a clean, verified build of the latest code.
 
 ### Question 22
 
@@ -435,7 +492,13 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 22 fill here ---
+Answer:
+Yes, we successfully trained our model in the cloud using the Compute Engine. We opted for this route instead of the managed Vertex AI Training service to maintain rigorous control over our execution environment and simplify the initial setup. The process involved:
+1.  Building our training Docker image via Cloud Build.
+2.  Pushing the image to the Artifact Registry.
+3.  Provisioning a VM with GPUs and the Container-Optimized OS.
+4.  Pulling the image and running the training command as a detached docker container.
+This setup allowed us to leverage cloud-scale hardware (GPUs) that we didn't possess locally, enabling us to run experiments that lasted for days without tying up our personal machines.
 
 ## Deployment
 
@@ -452,7 +515,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 23 fill here ---
+Answer:
+We successfully built a robust API for our model using `FastAPI`. The core of the API is the `/generate` POST endpoint, which accepts a `.pt` (PyTorch) file containing the protein structure and returns the generated ligand layout.
+
+A key challenge was ensuring the API used the same configuration as the trained model. We solved this by using `Hydra` within the API's `lifespan` (startup) event to load the exact config and model checkpoint used during training. We also implemented `Pydantic` models to strictly validate input payloads, ensuring that malformed requests are rejected with clear error messages before they reach the model. We also added CORS middleware to allow our frontend to communicate with the API securely.
 
 ### Question 24
 
@@ -468,7 +534,12 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 24 fill here ---
+Answer:
+We deployed our API to the cloud using GCP Cloud Run. This was a fantastic choice for our use case because it is serverless—it scales down to zero when not in use, saving us credits, and scales up automatically when traffic increases.
+
+Deployment was automated via our CI/CD pipeline. When a change is merged to `main`, Cloud Build creates a new container and deploys it to the `europe-west1` region. We invoke the invoked service via a simple HTTP request. For testing, we can use `curl`:
+`curl -X POST -F "file=@protein.pt" https://uaag2-api-233301800073.europe-west1.run.app/generate`
+Or users can use the automatically generated Swagger UI available at the `/docs` endpoint to interact with the API visually.
 
 ### Question 25
 
@@ -483,7 +554,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 25 fill here ---
+Answer:
+For verification, we employed both unit testing and load testing. Unit tests were written using `d`FastAPI.testclient` to mock requests and ensure the internal logic (input validation, model inference call) works correctly.
+
+For load testing, we utilized `Locust`. We created a `locustfile` that defines a `HttpUser` and simulates typical user behavior (uploading a file, waiting for generation). We ran tests simulating up to 50 concurrent users. The results were illuminating: while the service handled low load (~1-5 RPS) with low latency (<500ms), we observed a spike in latency and some timeouts as concurrency increased, indicating that we might need to increase the `min_instances` or memory allocation in Cloud Run to handle high-traffic production scenarios.
 
 ### Question 26
 
@@ -498,7 +572,10 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 26 fill here ---
+Answer:
+We leveraged the built-in monitoring tools provided by GCP Cloud Run. These give us visibility into key metrics like Request Count, Latency (p50, p95, p99), Container CPU utilization, and Memory usage. We can also see HTTP 5xx error rates, which allows us to quickly react if the service starts failing.
+
+While we did not implement a custom model drift detection system, we understand its importance. In a production setting, data distribution can change (e.g., users uploading new types of proteins not seen during training). Implementing drift detection would allow us to monitor the input data statistics and alert us when retraining is necessary, ensuring the longevity and continued accuracy of our application.
 
 ## Overall discussion of project
 
@@ -517,7 +594,11 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 27 fill here ---
+Answer:
+![Billing](figures/q27.png)
+We tracked our spending carefully and used approximately 50 credits in total. As shown in the figure, the most expensive service was by far the **Compute Engine** usage, specifically the cost of running GPU-backed VMs for training. **Artifact Registry** storage costs were a distant second.
+
+Working in the cloud was an enlightening experience. It liberated us from the hardware constraints of our local machines and taught us valuable lessons in DevOps and infrastructure management. However, it also required discipline—we learned the hard way that leaving a VM running overnight burns through credits rapidly. The ability to spin up resources on demand is powerful, but cost-awareness is key.
 
 ### Question 28
 
@@ -533,7 +614,8 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 28 fill here ---
+Answer:
+We went beyond the basics by implementing a visual frontend for our API. Using `3dmol.js`, we created an interactive web interface where users can upload a file and immediately see the generated 3D molecule structure. This makes our project accessible to non-technical users who might not be comfortable using `curl` or writing API scripts.
 
 ### Question 29
 
@@ -550,7 +632,57 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 29 fill here ---
+Answer:
+```
+                                      +--------------------------------------------------+
+                                      |              GOOGLE CLOUD PLATFORM               |
+                                      |                                                  |
+ +-------------+   git push           |  +-------------+       +------------------+      |
+ |  Developer  +------------------------>| Cloud Build +------>+ Artifact Registry|      |
+ | (Local/uv)  |   (Trigger)          |  | (Build Img) | push  | (Docker Images)  |      |
+ +-----+-------+                      |  +-------------+       +--------+---------+      |
+       |                              |                                 |                |
+       | pre-commit                   |                                 | pull           |
+       v                              |                         +-------v-------+        |
+ +-------------+   +--------------+   |           stream data   | Compute Engine|        |
+ | git commit  +-->+ GitHub       |   |   +-------------------->| (Training VM) |        |
+ | (Quality)   |   | Actions (CI) |   |   |                     +-------+-------+        |
+ +-------------+   +--------------+   |   |                             |                |
+                                      |   |                             | logs           |
+ +-------------+                      |   |                             v                |
+ | HuggingFace +--------------------------+                             |                |
+ | (Datasets)  |                      |                                 |                |
+ +-------------+                      |                                 |                |
+                                      |                                 |                |
+ +-------------+                      |                                 |                |
+ |    WandB    |<-------------------------------------------------------+                |
+ |(Experiments)|                      |                                                  |
+ +-----+-------+                      |                                                  |
+       |                              |                                                  |
+       | register                     |                                                  |
+       v                              |                                                  |
+ +-----+-------+                      |  +-----------------+     +--------------+        |
+ | Model Reg   |    dev trigger       |  |  API Deploy WF  +---->+  Cloud Run   |        |
+ |(Versioning) +------------------------>|  (Retag/Push)   |     | (Serverless) |        |
+ +-------------+   (Tag: staging)     |  +-----------------+     +------+-------+        |
+                                      |                                 ^                |
+                                      +---------------------------------|----------------+
+                                                                        |
+                                                                 +------+-------+
+                                                                 |   End User   |
+                                                                 |  (Frontend)  |
+                                                                 +--------------+
+```
+Our system architecture illustrates a robust MLOps pipeline.
+1.  **Development**: Developers work locally using `uv` for reproducible environments. `pre-commit` hooks ensure code quality before commits are even made.
+2.  **CI**: Pushing to GitHub triggers **GitHub Actions** which run our test suite and linters.
+3.  **Build**: Validated code triggers **Cloud Build** to construct Docker images for Training and API, which are stored in **Artifact Registry**.
+4.  **Training**: We train on **Compute Engine** using GPUs. The training job streams data directly from **Hugging Face** and logs all metrics and artifacts to **Weights & Biases (WandB)**.
+5.  **Staging & Deployment**: When a model is tagged as `staging` in the **WandB Model Registry**, it triggers a deployment workflow. This safeguards production from untested models.
+6.  **Serving**: The valid API image is automatically deployed to **Cloud Run**, creating a scalable, serverless endpoint.
+7.  **Interaction**: End-users interact with the system via our **Frontend** (or via requests), which calls the Cloud Run API.
+
+This architecture was chosen for its distinct separation of concerns. Local development is decoupled from cloud execution via Docker. Training is decoupled from Serving via the Model Registry. This means we can retrain the model (updating the registry) without touching the API code, and vice versa. The use of Artifact Registry as the central hub ensures that we can rollback to any previous version of the image if a deployment fails.
 
 ### Question 30
 
@@ -564,7 +696,15 @@ will check the repositories and the code to verify your answers.
 >
 > Answer:
 
---- question 30 fill here ---
+Answer:
+The most significant struggle we faced was "dependency hell," specifically the incompatibility between Python environment managers and system-level libraries on different hardware. We had team members on Apple Silicon (M1/M2) and others on Linux/Windows. We frequently encountered issues where `torch-geometric` wheels for macOS were not compatible with the Linux-based Docker containers we were building for the cloud.
+
+We spent days debugging cryptic errors where the Docker build would look successful, but the application would crash at runtime with "symbol not found" or "segmentation fault". We overcame this by:
+1.  Switching to `uv`, which gave us much better visibility into the dependency tree.
+2.  Creating separate `requirements` groups or using environment markers in `pyproject.toml` to specify different wheel URLs for Linux (CUDA) vs macOS (CPU).
+3.  Methodically debugging our `Dockerfile`s, stripping them down to the basics and adding layers back one by one until we identified the conflicting libraries.
+
+Another major struggle was dealing with legacy code and linting. We inherited some code that wasn't included with `ruff`. When we introduced `ruff` with a strict ruleset, it flagged hundreds of errors. We had to use `ruff --fix` aggressively and manually refactor complex logic to satisfy the linter. Additionally, we faced challenges with the OOM errors on the T4 GPUs. Since we couldn't afford A100s, we had to optimize our model's memory footprint by carefully tuning the batch size and `DataLoader` workers.
 
 ### Question 31
 
@@ -582,4 +722,10 @@ will check the repositories and the code to verify your answers.
 > *We have used ChatGPT to help debug our code. Additionally, we used GitHub Copilot to help write some of our code.*
 > Answer:
 
---- question 31 fill here ---
+Answer:
+Members contributed to all parts through frequent pair-programming sessions. In particular however,
+*   **s260028** focused on WandB, CI and the API.
+*   **s260029** focused on infrastructure, testing and cloud deployment.
+*   **s257707** focused on model development, configuration and solving the problem setting.
+
+We leveraged Generative AI (frontier models in Cursor and Antigravity) during development to minimize time spent writing boilerplate code -- which also assisted in writing a report draft. We further used the GitHub Copilot agent to help solve simple GitHub issues.

@@ -74,6 +74,7 @@ dev = [
     "google-api-python-client>=2.188.0",
     "httpx>=0.27.0",
     "locust>=2.43.1",
+    "markdown>=3.10",
 ]
 
 [[tool.uv.index]]
@@ -114,4 +115,5 @@ line-length = 120
 [tool.coverage.run]
 omit = [
     "*/_remote_module_non_scriptable.py",
+    "/private/var/folders/*",
 ]
