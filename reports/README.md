@@ -247,9 +247,40 @@ We implemented approximately 20 unit tests using `pytest`. These tests verify cr
 > Answer:
 
 Answer:
-Our total code coverage is approximately 65%. While we strived for high coverage, we focused our testing efforts on the most critical and logic-heavy parts of the application, such as the data processing pipeline, the model interaction logic, and the API endpoints. We found that achieving 100% coverage, particularly for the model architecture definition itself (the forward pass logic), yields diminishing returns compared to integration reliability.
+We provide our full report below:
+```
+Name                                           Stmts   Miss  Cover
+------------------------------------------------------------------
+src/uaag2/__init__.py                              6      0   100%
+src/uaag2/api.py                                 122     47    61%
+src/uaag2/bond_analyze.py                         63     52    17%
+src/uaag2/datasets/__init__.py                     2      0   100%
+src/uaag2/datasets/uaag_dataset.py               460    357    22%
+src/uaag2/diffusion/__init__.py                    0      0   100%
+src/uaag2/diffusion/categorical.py               145     93    36%
+src/uaag2/diffusion/continuous.py                444    351    21%
+src/uaag2/e3moldiffusion/__init__.py               0      0   100%
+src/uaag2/e3moldiffusion/convs.py                383    296    23%
+src/uaag2/e3moldiffusion/coordsatomsbonds.py     382    278    27%
+src/uaag2/e3moldiffusion/gnn.py                  210    153    27%
+src/uaag2/e3moldiffusion/modules.py              190    105    45%
+src/uaag2/equivariant_diffusion.py               386    302    22%
+src/uaag2/hf_data_report.py                       32      5    84%
+src/uaag2/losses.py                              127    109    14%
+src/uaag2/utils.py                               347    307    12%
+tests/__init__.py                                  4      0   100%
+tests/performancetests/__init__.py                 0      0   100%
+tests/performancetests/test_model.py              70     39    44%
+tests/test_api.py                                 39      1    97%
+tests/test_data.py                                57      4    93%
+tests/test_hf_data_report.py                       8      0   100%
+tests/test_model.py                               20      0   100%
+------------------------------------------------------------------
+TOTAL                                           3497   2499    29%
+```
+The low percentage is largely due to the dataset file (`uaag2/datasets/uaag_dataset.py`) and diffusion modules containing copied evaluation routines and experimental features that are currently inactive or used for debugging, which significantly inflates the line count.
 
-Even if we had 100% code coverage, we would not blindly trust the code to be error-free. Coverage only measures whether a line of code was executed during a test; it does not verify that the logic is essentially correct, that the model converges, or that it behaves correctly on unseen data. For instance, code can be fully covered but still produce "NaN" gradients or run out of memory (OOM) on large inputs. Therefore, we complement code coverage with validation checks, scientific metric monitoring, and manual verification of the generated molecules.
+Even with 100% coverage, we would not blindly trust the code. Coverage does not verify scientific correctness (e.g., if the diffusion process yields valid molecules) or catch logic errors that don't crash the program. We rely on validation metrics and manual inspection of generated molecules for trust.
 
 ### Question 9
 
@@ -331,7 +362,9 @@ We extensively use the `actions/cache` action to cache our `uv` virtual environm
 Answer:
 We configured experiments using `Hydra`, which allows for hierarchical configuration. All parameters are stored in `yaml` files in the `configs/` directory. Running an experiment is as simple as:
 `uv run python src/uaag2/train.py experiment=test_run trainer.max_epochs=10`
-This overrides the defaults dynamically, allowing us to easily switch between model architectures or datasets without changing the code.
+This overrides the defaults dynamically.
+
+To simplify common workflows, we also implemented several `invoke` tasks (defined in `tasks.py`). For example: we use `invoke fetch-data` to seamlessly download our dataset from the Hugging Face Hub, `invoke train` to launch training jobs with predefined defaults, `invoke evaluate` to run benchmarks, and `invoke test` to run pytests. This abstraction layer helps standardized how team members and CI pipelines interact with the codebase.
 
 ### Question 13
 
@@ -369,7 +402,7 @@ This means that to reproduce an experiment, we don't need to guess parameters. W
 Answer:
 ![WandB Model Registry](figures/q14_model_registry.png)
 ![WandB Train History](figures/q14_train_histories.png)
-We heavily utilized Weights & Biases (WandB) as our central experiment tracking platform. The first screenshot demonstrates our use of the **Model Registry**. Instead of just saving model weights to a disk, we push them to the registry, versioning them semantically (v1, v2, etc.). This links the specific artifact directly to the training metrics that produced it, creating an unbreakable chain of custody. We tagged our best performing model as `production`, which our API deployment workflow then automatically retrieves.
+We heavily utilized Weights & Biases (WandB) as our central experiment tracking platform. The first screenshot demonstrates our use of the **Model Registry**. Instead of just saving model weights to a disk, we push them to the registry, versioning them semantically (v1, v2, etc.). This links the specific artifact directly to the training metrics that produced it, creating an unbreakable chain of custody. We tagged our best performing model as `staging`, which our API deployment workflow then automatically retrieves, tests, re-tags as `production` and deploys to the API. Note that this is a smaller subset of the data, resulting in noisy training -- we will run a full-scale experiment at a later date.
 
 The second screenshot showcases our **Training and Validation Histories**. We meticulously tracked the Cross-Entropy Loss to monitor convergence. Crucially, we also logged complex, domain-specific metrics such as **Molecule Validity** (via PoseBusters) and **Graph Connectivity**. In generative chemistry, a model can easily "cheat" the loss function while producing physically impossible molecules (e.g., carbon with 5 bonds), so these auxiliary metrics were vital for true performance assessment. We also utilized the **System Metrics** tab (not shown but actively used) to monitor GPU memory usage and temperature, which helped us debug the OOM issues mentioned earlier. The ability to overlay runs allowed us to compare the effect of different `virtual_node` sizes on the final validity score, leading to our final architecture choice.
 
