@@ -1,4 +1,4 @@
-name: Check staged model
+name: Test wandb model and deploy
 
 on:
   repository_dispatch:
