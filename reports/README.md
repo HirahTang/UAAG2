@@ -231,7 +231,7 @@ For type checking we used `mypy` to try it out---although we haven't added very 
 > Answer:
 
 Answer:
-We implemented about 20 unit tests using `pytest`. These tests verify: data loading integrity (ensuring correct tensor shapes), model forward passes (checking for crashes during inference), and API endpoint functionality (verifying HTTP 200 responses). We also included performance tests to ensure our custom matching algorithms runs efficiently. These tests run automatically in our CI pipeline to prevent regressions.
+We implemented about 20 unit tests using `pytest`. These tests verify: data loading integrity (ensuring correct tensor shapes), model forward passes (checking for crashes during inference), and API endpoint functionality (verifying HTTP 200 responses). We also included basic performance tests on our API. These tests run automatically in our CI pipeline to prevent regressions.
 
 ### Question 8
 
@@ -278,7 +278,7 @@ tests/test_model.py                               20      0   100%
 ------------------------------------------------------------------
 TOTAL                                           3497   2499    29%
 ```
-The low percentage is largely due to the dataset file (`uaag2/datasets/uaag_dataset.py`) and diffusion modules containing copied evaluation routines and experimental features that are currently inactive or used for debugging, which significantly inflates the line count.
+The low percentage is largely due to the dataset file (`uaag2/datasets/uaag_dataset.py`) and diffusion modules containing copied evaluation routines and experimental features that are currently inactive or used for debugging, which significantly inflates the line count. Ideally, we'd refactor the code to reduce code deduplication.
 
 Even with 100% coverage, we would not blindly trust the code. Coverage does not verify scientific correctness (e.g., if the diffusion process yields valid molecules) or catch logic errors that don't crash the program. We rely on validation metrics and manual inspection of generated molecules for trust.
 
@@ -298,7 +298,8 @@ Even with 100% coverage, we would not blindly trust the code. Coverage does not 
 Answer:
 We mainly adopted a feature-branch workflow throughout the project. For minor cases, we disobeyed this rule, and decided to not include the rule in the repository for convenience. For most changes, each members worked on separate, short-lived branches.
 
-To merge changes, we opened Pull Requests (PRs). This process was integral to our quality control. Each PR automatically triggered our CI pipeline, running unit tests and linters. We established a policy that a PR could not be merged unless checks pass. This workflow allowed us to review each other's code, discuss implementation details, and catch bugs before they impacted the rest of the team. Our workflow enabled parallel work without stepping on each other's toes.
+To merge changes, we opened pull requests. This process was integral to our quality control. Each PR automatically triggered our CI pipeline, running unit tests and linters. We established a policy that a PR could not be merged unless checks pass. This workflow allowed us to review each other's code, discuss implementation details in a few cases, and catch bugs (especially CI bugs) before merging so as not to disrupt each other.
+Later on, we also had an automatic workflow for training the model on the main branch, so pushing many small commits directly to the main branch would be wasteful.
 
 ### Question 10
 
@@ -314,9 +315,11 @@ To merge changes, we opened Pull Requests (PRs). This process was integral to ou
 > Answer:
 
 Answer:
-We made a conscious decision to use HuggingFace (HF) Datasets for our data management instead of the traditional DVC setup. This setup is far more widespread in the project's domain. HF offers a very integrated experience and provides built-in versioning (via git lfs under the hood), easy visualization of data on the web platform, and notably, efficient and easy streaming of datasets which helped fast prototyping.
+We made a conscious decision to use HuggingFace (HF) Datasets for our data management instead of the traditional DVC setup. This setup is far more widespread in the project's domain.
 
-While DVC is excellent for generic file versioning and decoupling storage from code, setting it up with a GCP bucket added complexity that we felt wasn't necessary given the available tools in the open-source ecosystem. Hugging Face essentially acts as both our remote storage and our version control system for data. However, we recognize that DVC is powerful for version controlling on GitHub.
+While DVC is excellent for generic file versioning and decoupling storage from code, setting it up with a GCP bucket added complexity that we felt wasn't necessary given the available tools in the open-source ecosystem. Hugging Face essentially acts as both our remote storage and our version control system for data.
+
+We only really used one version of our dataset throughout this short project, but we recognize how version controlling data past (longer-lived) ML projects is crucial; sometimes you simply come in doubt what version of your data you trained your model on (which is no good).
 
 ### Question 11
 
@@ -334,13 +337,12 @@ While DVC is excellent for generic file versioning and decoupling storage from c
 > Answer:
 
 Answer:
-Our Continuous Integration (CI) setup is comprehensive and orchestrated using GitHub Actions. We have organized our workflows into several specialized files to keep them maintainable.
-1.  `test.yaml`: This is our primary validation workflow. It triggers on pull requests and pushes to main. It sets up the environment, installs dependencies using `uv` (leveraging caching to speed up builds), and runs our `pytest` suite. Crucially, we test on both Linux and macOS runners to ensure our code is platform-agnostic, which is important given our mixed development environments. It uses a matrix strategy to test against Python 3.11 and 3.12, ensuring compatibility across modern versions.
-2.  `lint.yaml`: This workflow runs `ruff check` and `ruff format` to enforce code checks. It fails fast if code standards aren't met. We configured it to report violations directly in the PR diff.
+Our Continuous Integration (CI) setup uses github actions. We have organized the workflows into several specialized files to keep them maintainable.
+1.  `test.yaml`: This is our primary validation workflow. It triggers on pull requests and pushes to main. It sets up the environment, installs dependencies using `uv` (leveraging caching to speed up builds), and runs our `pytest` suite. Crucially, we test on both Linux and macOS runners to ensure our code works on both platforms (we deploy on Linux but mainly develop locally on macOS).
+2.  `lint.yaml`: This workflow runs `ruff check` and `ruff format` to enforce code checks. It fails the CI if code standards aren't met.
 3.  `hf_data_report.yaml`: A valid scheduled workflow that runs periodically to inspect our Hugging Face dataset and generate a report, ensuring data quality over time.
 
-We extensively use the `actions/cache` action to cache our `uv` virtual environment (`.venv`), which reduced our CI runtime from minutes to seconds for subsequent runs. This rapid feedback loop encourages smaller, more frequent commits. This rigorous setup makes the pipeline extremely robust.
-[Link to Test Workflow](https://github.com/HirahTang/UAAG2/blob/main/.github/workflows/test.yaml)
+We extensively use the `actions/cache` action to cache our `uv` virtual environment (`.venv`), which reduced our CI runtime from minutes to seconds for subsequent runs. [Link to Test Workflow](https://github.com/HirahTang/UAAG2/blob/main/.github/workflows/test.yaml)
 
 ## Running code and tracking experiments
 
@@ -360,11 +362,10 @@ We extensively use the `actions/cache` action to cache our `uv` virtual environm
 > Answer:
 
 Answer:
-We configured experiments using `Hydra`, which allows for hierarchical configuration. All parameters are stored in `yaml` files in the `configs/` directory. Running an experiment is as simple as:
-`uv run python src/uaag2/train.py experiment=test_run trainer.max_epochs=10`
-This overrides the defaults dynamically.
+We configured experiments using `Hydra`, which allows for hierarchical configuration. All parameters are stored in `yaml` files in the `configs/` directory. Running the default experiment is as simple as:
+`uv run invoke train`. Generally `tasks.py` is the entrypoint to running things.
 
-To simplify common workflows, we also implemented several `invoke` tasks (defined in `tasks.py`). For example: we use `invoke fetch-data` to seamlessly download our dataset from the Hugging Face Hub, `invoke train` to launch training jobs with predefined defaults, `invoke evaluate` to run benchmarks, and `invoke test` to run pytests. This abstraction layer helps standardized how team members and CI pipelines interact with the codebase.
+We also use `invoke fetch-data` to download our dataset from the Hugging Face Hub, `invoke docker-build` to build the training image, and `invoke test` to run pytests.
 
 ### Question 13
 
@@ -380,7 +381,7 @@ To simplify common workflows, we also implemented several `invoke` tasks (define
 > Answer:
 
 Answer:
-Reproducibility is a cornerstone of our project. To ensure no information is lost, we rely on the combination of `Hydra`, `WandB`, and Docker. `Hydra` allows us to compose complex configurations from small files, and whenever a job runs, the fully composed configuration is saved. `WandB` automatically captures this config, alongside the exact git commit hash representing the code version, and the random seed used for initialization.
+We use managed dependencies (uv and nix), `Hydra`, `WandB`, and Docker. `WandB` automatically captures this config, alongside the exact git commit hash representing the code version, and the random seed used for initialization.
 
 This means that to reproduce an experiment, we don't need to guess parameters. We can look up the run in WandB, checkout the specific git commit, build the Docker container (which ensures the OS and library versions are identical), and run the training command with the seed and config retrieved from the logs. This explicitly addresses the "it works on my machine" problem by controlling code, config, and environment simultaneously.
 
