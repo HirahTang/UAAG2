@@ -43,7 +43,7 @@ jobs:
   deploy-api:
     name: Deploy API
     needs: test
-    # if: github.ref == 'refs/heads/mlops'
+    if: github.ref == 'refs/heads/mlops'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
