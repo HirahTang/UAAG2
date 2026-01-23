@@ -67,12 +67,12 @@ jobs:
         run: |
           API_URL="${{ steps.get-url.outputs.API_URL }}"
           echo "Waiting for API at $API_URL to be ready..."
-          for i in {1..30}; do
+          for i in {1..60}; do
             if curl -s --fail "$API_URL/health" > /dev/null 2>&1; then
               echo "API is ready!"
               exit 0
             fi
-            echo "Attempt $i/30: API not ready yet, waiting..."
+            echo "Attempt $i/60: API not ready yet, waiting..."
             sleep 10
           done
           echo "API did not become ready in time"
