@@ -173,9 +173,8 @@ We used `posebusters` to ensure the chemical validity of our generated molecules
 > Answer:
 
 Answer:
-We managed dependencies using `uv`, a modern and extremely fast Python package manager. All project dependencies are explicitly defined in the `pyproject.toml` file, separated into standard dependencies and development dependencies.
-
-To replicate our environment, a new team member would simply need to install `uv` (which is a single binary) and clone the repository. Then, running `uv sync` will resolve the dependency tree and install the exact versions specified in the `uv.lock` file into a virtual environment. This `uv.lock` file is committed to version control, ensuring that every developer and every CI/CD runner operates on an identical environment, effectively eliminating "it works on my machine" issues caused by floating dependency versions. We also found `uv` to be significantly faster than `pip` for resolving complex dependency graphs, which saved us time during development.
+We managed source code dependencies using `uv`. All project dependencies are explicitly defined in the `pyproject.toml` file, separated into standard dependencies and development dependencies. To replicate our environment, a new team member would need to install `uv`. Then, running `uv sync` will install the exact versions specified in the `uv.lock` file into a virtual environment. This `uv.lock` file is committed to version control, ensuring that every developer and every CI/CD runner uses the same packages.
+Further, if you want to work on the google cloud setup, there’s a nix flake (`flake.nix`) with docker CLI, colima (a macOS docker runtime), and gcloud CLI. Once nix is installed (nixos.org) you can write `nix develop` to enter the a develop environment with these dependencies. Afterwards run `colima start` if you’re on macOS, then the `docker` CLI will work. A `flake.lock` file, analogous to `uv.lock`, is also version controlled. If you’re on linux you have to setup your own docker runtime.
 
 ### Question 5
 
@@ -192,7 +191,7 @@ To replicate our environment, a new team member would simply need to install `uv
 > Answer:
 
 Answer:
-We initialized our project using the course cookiecutter template and largely adhered to its recommended structure, which helped us separate concerns effectively. We filled out the `src/uaag2` directory for our core source code, keeping it as an installable package. The `configs` directory houses our Hydra configuration files, organized hierarchically for experiments, models, and training parameters. The `dockerfiles`, `data`, `models`, `reports` and `tests` folders are similarly filled out. We removed the `notebooks` folder as we did not use notebooks.
+We initialized our project using the course cookiecutter template and largely adhered to its structure. We filled out the `src/uaag2` directory for our core source code, keeping it as an installable package. The `configs` directory houses our Hydra configuration files, organized hierarchically for experiments, models, and training parameters. The `dockerfiles`, `data`, `models`, `reports` and `tests` folders are similarly filled out. We removed the `notebooks` folder as we did not use notebooks.
 
 
 ### Question 6
@@ -209,9 +208,10 @@ We initialized our project using the course cookiecutter template and largely ad
 > Answer:
 
 Answer:
-We adhered to strict code quality standards by implementing widespread linting, formatting, and type-checking. We used `ruff` as our primary tool for both linting and formatting because of its speed and comprehensive rule set (replacing both `flake8` and `isort`). It enforces PEP 8 compliance, organizes imports, and catches common syntax errors.
+We enforced linting, formatting, and type-checking via a precommit hook. We used `ruff` for both linting and formatting. It enforces PEP 8 compliance, organizes imports, and catches common syntax errors.
+Importantly, `ruff` takes care of opinionated stuff like whitespace and line length. By having every committer run (for example) ruff to get their commits merged, we keep the diffs readable by not havnig people touch unrelated stuff. (For example, a person doesn't fix another persons whitespace in an unrelated commit.)
 
-For static type checking, we employed `mypy`. This allowed us to catch type-related bugs early, such as passing a tensor of the wrong shape or data type to a function (we however disabled `mypy` later on). We configured these tools in `pyproject.toml` to ensure consistent configuration. Furthermore, we set up `pre-commit` hooks to automatically run checks on every git commit. This setup prevents low-quality or broken code from ever entering the repository, forcing developers to address issues immediately.
+For type checking we used `mypy` to try it out---although we haven't added very many type annotations. (We however disabled `mypy` later on.) For larger projects, this lets programmers catch bugs early and also serves as documentation; in Python, we often see types commented as documentation on function arguments. Static typechecking can also come with optimization benefits, but that's outside the scope of python and mypy.
 
 ## Version control
 
@@ -231,7 +231,7 @@ For static type checking, we employed `mypy`. This allowed us to catch type-rela
 > Answer:
 
 Answer:
-We implemented approximately 20 unit tests using `pytest`. These tests verify critical components: data loading integrity (ensuring correct tensor shapes), model forward passes (checking for crashes during inference), and API endpoint functionality (verifying HTTP 200 responses). We also included performance tests to ensure our custom matching algorithms runs efficiently. These tests run automatically in our CI pipeline to prevent regressions.
+We implemented about 20 unit tests using `pytest`. These tests verify: data loading integrity (ensuring correct tensor shapes), model forward passes (checking for crashes during inference), and API endpoint functionality (verifying HTTP 200 responses). We also included performance tests to ensure our custom matching algorithms runs efficiently. These tests run automatically in our CI pipeline to prevent regressions.
 
 ### Question 8
 
