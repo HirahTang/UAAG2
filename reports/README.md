@@ -441,9 +441,10 @@ We use multi-stage builds in our Dockerfiles. This involves a "builder" stage th
 > Answer:
 
 Answer:
-Debugging was a multi-faceted process. For logic errors and crashes, we relied on local unit tests and interactive debugging tools like `pdb` (or `ipdb`) to step through the code. We also used extensive logging with `loguru` to leave breadcrumbs in our cloud execution logs, which was invaluable when jobs failed remotely.
-
-We faced significant performance issues, specifically Out-Of-Memory (OOM) errors during training. To address this, we didn't just guess; we used profiling tools (like PyTorch Profiler) to inspect memory usage. This revealed that our batch sizes were too aggressive for the GPU memory we had (T4s). We also found bottlenecks in the `DataLoader` where graph collation was happening on the CPU, slowing down the pipeline. By adjusting the `num_workers` and reducing batch sizes based on profiling data, we solved the issues. We do not think our code is perfect—optimization is an endless process—but profiling moved us from "broken" to "functional".
+Most errors were in the cloud. Particularly there can be a slight discrepancy between the docker mages built locally and in the cloud because we found that google cloud unexpectedly used our gitignore file to ignore files.
+Generally, debugging was done locally by running unittests, docker images and using our API manually before pushing to check for errors in the CI pipeline.
+We ran into problems where pytorch-scatter did not support MPS (Apple Silicon) and we had to conditionally switch input tensors to the CPU when on this backend.
+We briefly played around with the PyTorch profiler to spot obvious mistaskes, but did not make impactful use of it. The code is very much not optimized, but it's fast enough for our use case.
 
 ## Working in the cloud
 
