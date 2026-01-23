@@ -119,10 +119,6 @@ jobs:
           # Use the specific model version that was just staged
           MODEL_ARTIFACT: "yhsure-university-of-copenhagen-org/wandb-registry-uaag2/uaag_models:${{ needs.identify_event.outputs.model_name }}"
         run: |
-           # If model_name output is not available from add_production_alias, we might need to pass it through from identify_event.
-           # However, let's use the one from identify_event as it is reliable.
-           # The user request says "after staging a model to production".
-           # We will fetch that specific model version.
            uv run invoke fetch-model --artifact "yhsure-university-of-copenhagen-org/wandb-registry-uaag2/uaag_models:${{ needs.identify_event.outputs.model_name }}" --output "models/good_model"
 
       - name: Submit build to Cloud Build
