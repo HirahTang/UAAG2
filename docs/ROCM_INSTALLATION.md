@@ -169,10 +169,10 @@ PyG extensions (torch-cluster, torch-scatter, torch-sparse) **must be built from
    ```bash
    # On LUMI
    module load buildtools/23.09
-   
+
    # On Ubuntu/Debian
    sudo apt-get install build-essential
-   
+
    # On RHEL/CentOS
    sudo yum groupinstall "Development Tools"
    ```
