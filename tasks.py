@@ -95,6 +95,7 @@ except Exception as e:
 @task
 def train(
     ctx: Context,
+    experiment: str = "",
     batch_size: int = 8,
     num_epochs: int = 50,
     train_size: float = 0.99,
@@ -105,40 +106,61 @@ def train(
     num_layers: int = 7,
     gpus: int = 1,
     logger_type: str = "wandb",
-    save_dir: str = "models/",
     data_path: str = "data/pdb_subset.lmdb",
     data_info_path: str = "data/statistic.pkl",
     pdbbind_weight: float = 10.0,
     use_metadata_sampler: bool = False,
-    experiment_id: str = "",
 ) -> None:
-    """Train model."""
-    import datetime
+    """Train model using Hydra configuration.
 
-    if not experiment_id:
-        experiment_id = f"uaag2_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    Args:
+        experiment: Optional experiment config (e.g., 'production', 'quick_test')
+        batch_size: Batch size for training
+        num_epochs: Number of training epochs
+        train_size: Fraction of data to use for training
+        test_size: Number of samples for testing
+        lr: Learning rate
+        max_virtual_nodes: Maximum number of virtual nodes
+        mask_rate: Masking rate for data augmentation
+        num_layers: Number of model layers
+        gpus: Number of GPUs to use
+        logger_type: Logger type ('wandb' or 'tensorboard')
+        data_path: Path to training data
+        data_info_path: Path to data info file
+        pdbbind_weight: Weight for PDBBind dataset
+        use_metadata_sampler: Whether to use metadata sampler
+    """
+    # Build Hydra overrides
+    overrides = []
 
-    ctx.run(
-        f"uv run src/{PROJECT_NAME}/train.py "
-        f"logger_type={logger_type} "
-        f"data.batch_size={batch_size} "
-        f"gpus={gpus} "
-        f"num_epochs={num_epochs} "
-        f"data.train_size={train_size} "
-        f"data.test_size={test_size} "
-        f"optimizer.lr={lr} "
-        f"data.mask_rate={mask_rate} "
-        f"model.max_virtual_nodes={max_virtual_nodes} "
-        f"model.num_layers={num_layers} "
-        f"data.pdbbind_weight={pdbbind_weight} "
-        f"data.training_data={data_path} "
-        f"data.data_info_path={data_info_path} "
-        f"save_dir={save_dir} "
-        f"id={experiment_id} "
-        f"data.use_metadata_sampler={use_metadata_sampler}",
-        echo=True,
-        pty=not WINDOWS,
+    # Add experiment config if specified
+    if experiment:
+        overrides.append(f"+experiment={experiment}")
+
+    # Add parameter overrides (only non-default values to keep command clean)
+    overrides.extend(
+        [
+            f"data.batch_size={batch_size}",
+            f"gpus={gpus}",
+            f"num_epochs={num_epochs}",
+            f"data.train_size={train_size}",
+            f"data.test_size={test_size}",
+            f"optimizer.lr={lr}",
+            f"data.mask_rate={mask_rate}",
+            f"model.max_virtual_nodes={max_virtual_nodes}",
+            f"model.num_layers={num_layers}",
+            f"data.pdbbind_weight={pdbbind_weight}",
+            f"data.training_data={data_path}",
+            f"data.data_info_path={data_info_path}",
+            f"logger_type={logger_type}",
+            f"data.use_metadata_sampler={use_metadata_sampler}",
+        ]
     )
+
+    # Build command
+    cmd = f"uv run python src/{PROJECT_NAME}/train.py " + " ".join(overrides)
+
+    ctx.run(cmd, echo=True, pty=not WINDOWS)
 
 
 @task

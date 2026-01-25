@@ -13,13 +13,16 @@
     * To lint code, use `uv run ruff check . --fix`.
 * The project uses `invoke` for task management. To see available tasks, use `uv run invoke --list` or refer to the
     `tasks.py` file.
+    * Quick training via invoke: `uv run invoke train --gpus=1 --batch-size=32`
+    * With experiment config: `uv run invoke train --experiment=production --gpus=8`
 * The project uses `pre-commit` for managing pre-commit hooks. To run all hooks on all files, use
     `uv run pre-commit run --all-files`. For more information, refer to the `.pre-commit-config.yaml` file.
 * The project uses `Hydra` for configuration management:
     * Training configurations are in `configs/` directory with YAML files.
-    * To run training: `uv run python src/uaag2/train.py`
+    * Direct training command: `uv run python src/uaag2/train.py`
     * To override config: `uv run python src/uaag2/train.py optimizer.lr=0.001 data.batch_size=64`
     * See `docs/HYDRA_CONFIG.md` for detailed usage guide.
+    * Both `invoke train` and direct `python src/uaag2/train.py` work - invoke provides convenience wrappers
 
 # GPU Support
 
