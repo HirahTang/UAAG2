@@ -21,6 +21,22 @@
     * To override config: `uv run python src/uaag2/train.py optimizer.lr=0.001 data.batch_size=64`
     * See `docs/HYDRA_CONFIG.md` for detailed usage guide.
 
+# GPU Support
+
+The project supports multiple GPU backends:
+
+* **NVIDIA GPUs (CUDA)**: Default installation via `uv sync` installs PyTorch with CUDA 12.8
+* **AMD GPUs (ROCm)**: For AMD GPUs (e.g., LUMI supercomputer), use:
+  * Quick install: `bash install_rocm.sh`
+  * See `docs/ROCM_INSTALLATION.md` for detailed instructions
+* **Apple Silicon (MPS)**: Automatically used on macOS with Apple Silicon
+
+Platform-specific installations:
+* Linux x86_64 with NVIDIA GPUs: `uv sync` (default, uses CUDA 12.8)
+* Linux x86_64 with AMD GPUs: `bash install_rocm.sh` (uses ROCm 6.2)
+* macOS: `uv sync` (uses CPU/MPS)
+* Linux ARM64: `uv sync` (CPU only)
+
 # Code style
 
 * Follow existing code style.
