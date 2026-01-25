@@ -24,17 +24,24 @@ uv pip install --upgrade \
     torch==2.7.0+rocm6.2 \
     --index-url https://download.pytorch.org/whl/rocm6.2
 
-# Install PyG extensions for ROCm
-uv pip install --upgrade \
-    torch-cluster==1.6.3+pt27rocm6.2 \
-    torch-scatter==2.1.2+pt27rocm6.2 \
-    torch-sparse==0.6.18+pt27rocm6.2 \
-    torch-spline-conv==1.2.2+pt27rocm6.2 \
-    --find-links https://data.pyg.org/whl/torch-2.7.0+rocm6.2.html
-
 # Install other dependencies
 uv sync
+
+# Build PyG extensions from source (no prebuilt ROCm wheels available)
+# Note: torch-spline-conv is not used in this codebase
+uv pip install --no-build-isolation --upgrade \
+    torch-cluster==1.6.3 \
+    torch-scatter==2.1.2 \
+    torch-sparse==0.6.18
 ```
+
+**Important Notes:**
+- PyTorch Geometric extensions (torch-cluster, torch-scatter, torch-sparse) don't have prebuilt ROCm wheels
+- They will be **built from source** automatically, which requires:
+  - C++ compiler (gcc/g++)
+  - On LUMI: `module load buildtools/23.09`
+- Build time: ~5-10 minutes depending on system
+- torch-spline-conv is not used in this codebase and is excluded
 
 ## Verification
 
@@ -154,18 +161,39 @@ If `torch.cuda.is_available()` returns `False`:
 
 ### Build Failures for PyG Extensions
 
-If PyG extensions fail to install:
+PyG extensions (torch-cluster, torch-scatter, torch-sparse) **must be built from source** for ROCm as there are no prebuilt wheels available.
 
-1. **Ensure development tools are available:**
+**Common issues:**
+
+1. **Missing compiler:**
    ```bash
    # On LUMI
    module load buildtools/23.09
+   
+   # On Ubuntu/Debian
+   sudo apt-get install build-essential
+   
+   # On RHEL/CentOS
+   sudo yum groupinstall "Development Tools"
    ```
 
-2. **Try installing with verbose output:**
+2. **ROCm headers not found:**
    ```bash
-   uv pip install -v torch-cluster==1.6.3+pt27rocm6.2 \
-       --find-links https://data.pyg.org/whl/torch-2.7.0+rocm6.2.html
+   # Ensure ROCm is in your path
+   export ROCM_PATH=/opt/rocm
+   export HIP_PATH=/opt/rocm/hip
+   ```
+
+3. **Try installing with verbose output:**
+   ```bash
+   uv pip install -v --no-build-isolation torch-cluster==1.6.3
+   ```
+
+4. **Build one extension at a time** to identify which one fails:
+   ```bash
+   uv pip install --no-build-isolation torch-scatter==2.1.2
+   uv pip install --no-build-isolation torch-cluster==1.6.3
+   uv pip install --no-build-isolation torch-sparse==0.6.18
    ```
 
 ### Version Compatibility
