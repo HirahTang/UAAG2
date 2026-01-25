@@ -51,7 +51,7 @@ dependencies = [
     "torch-scatter==2.1.2+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
     "torch-sparse==0.6.18+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
     "torch-spline-conv==1.2.2+pt27cpu; sys_platform == 'linux' and platform_machine == 'aarch64'",
-    # Linux x86 (Docker GPU): CUDA 12.8 versions with +pt27cu128 suffix
+    # Linux x86 (Default): CUDA 12.8 versions with +pt27cu128 suffix (use UV_PYTORCH_BACKEND=rocm for ROCm)
     "torch-cluster==1.6.3+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "torch-scatter==2.1.2+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "torch-sparse==0.6.18+pt27cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
@@ -87,10 +87,16 @@ name = "pytorch-gpu"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/rocm6.2"
+explicit = true
+
 [tool.uv]
 find-links = [
   "https://data.pyg.org/whl/torch-2.7.0+cpu.html",
-  "https://data.pyg.org/whl/torch-2.7.0+cu128.html"
+  "https://data.pyg.org/whl/torch-2.7.0+cu128.html",
+  "https://data.pyg.org/whl/torch-2.7.0+rocm6.2.html"
 ]
 
 environments = [

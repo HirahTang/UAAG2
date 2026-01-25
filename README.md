@@ -67,6 +67,48 @@ The architecture is an **$E(3)$-equivariant Graph Neural Network** based on the 
 ### Nix Development Environment
 A `flake.nix` file is provided to manage system-level dependencies (such as Docker, Colima, and the Google Cloud SDK) that are not managed by `uv`. Run `nix develop` to enter a shell with these tools pre-installed.
 
+## Installation
+
+### Prerequisites
+- Python 3.12
+- [uv](https://docs.astral.sh/uv/) package manager
+
+### Quick Start
+
+#### Default Installation (CUDA)
+For Linux systems with NVIDIA GPUs:
+```bash
+git clone https://github.com/HirahTang/UAAG2.git
+cd UAAG2
+uv sync
+```
+
+#### AMD GPUs with ROCm (LUMI Supercomputer)
+For systems with AMD GPUs (e.g., LUMI supercomputer):
+```bash
+git clone https://github.com/HirahTang/UAAG2.git
+cd UAAG2
+bash install_rocm.sh
+```
+
+See [docs/ROCM_INSTALLATION.md](docs/ROCM_INSTALLATION.md) for detailed ROCm setup instructions.
+
+#### macOS (Apple Silicon)
+```bash
+git clone https://github.com/HirahTang/UAAG2.git
+cd UAAG2
+uv sync
+```
+
+### Platform Support
+
+| Platform | GPU Type | Backend | Installation |
+|----------|----------|---------|--------------|
+| Linux x86_64 | NVIDIA | CUDA 12.8 | `uv sync` |
+| Linux x86_64 | AMD Instinct | ROCm 6.2 | `bash install_rocm.sh` |
+| macOS | Apple Silicon | MPS | `uv sync` |
+| Linux ARM64 | CPU only | - | `uv sync` |
+
 ## Invoke Tasks
 
 The project uses `invoke` to manage common tasks with default arguments. You can run them using `uv run invoke <task_name>`.
