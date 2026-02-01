@@ -76,22 +76,24 @@ def main(hparams):
     test_data = torch.utils.data.Subset(test_data_setup, test_indices)
     # test_data
     # convert the UAAG2Dataset parameters in test_data
-
-    with open(hparams.metadata_path, "rb") as f:
-        metadata = pickle.load(f)
-    weights = []
-    for i in range(len(train_data)):
-        key = f"{i:08}".encode("ascii")
-        source_name = metadata[key]
-        if source_name in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
-            weights.append(hparams.pdbbind_weight)
-        else:
-            weights.append(1.0)
-    weights = np.array(weights)
-    weights = weights / weights.sum()
-    
-    sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
-    # sampler = RandomSampler(train_data)
+    if hparams.use_metadata_sampler and hparams.metadata_path is not None:
+        with open(hparams.metadata_path, "rb") as f:
+            metadata = pickle.load(f)
+        weights = []
+        for i in range(len(train_data)):
+            key = f"{i:08}".encode("ascii")
+            source_name = metadata[key]
+            if source_name in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
+                weights.append(hparams.pdbbind_weight)
+            else:
+                weights.append(1.0)
+        weights = np.array(weights)
+        weights = weights / weights.sum()
+        
+        sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
+    else:
+        
+        sampler = RandomSampler(train_data)
 
     datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data, sampler=sampler)
     
@@ -120,7 +122,7 @@ def main(hparams):
         devices=hparams.gpus if hparams.gpus else 1,
         strategy=strategy,
         plugins=LightningEnvironment(),
-        num_nodes=1,
+        num_nodes=hparams.num_nodes,
         logger=logger,
         enable_checkpointing=True,
         accumulate_grad_batches=hparams.accum_batch,
@@ -189,6 +191,7 @@ if __name__ == "__main__":
     
     parser.add_argument('--data_info_path', type=str, default="/home/qcx679/hantang/UAAG2/data/full_graph/statistic.pkl")
     parser.add_argument('--training_data', type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.lmdb")
+    parser.add_argument("--use_metadata_sampler", default=False, action="store_true")
     parser.add_argument('--metadata_path', type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl")
     # parser.add_argument(
     #     "--conf", "-c", type=open, action=LoadFromFile, help="Configuration yaml file"
@@ -368,6 +371,7 @@ if __name__ == "__main__":
 
     # GENERAL
     parser.add_argument("-i", "--id", type=str, default=0)
+    parser.add_argument("--num_nodes", default=1, type=int)
     parser.add_argument("-g", "--gpus", default=1, type=int)
     parser.add_argument("-e", "--num-epochs", default=300, type=int)
     parser.add_argument("--eval-freq", default=1.0, type=float)
