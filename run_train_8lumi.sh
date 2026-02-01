@@ -38,6 +38,11 @@ export AMD_DIRECT_DISPATCH=0         # Proven stability fix [8, 9]
 export NCCL_SOCKET_IFNAME=hsn0,hsn1,hsn2,hsn3 # Use Slingshot 11 interconnect [10, 11]
 export NCCL_NET_GDR_LEVEL=3          # Enable GPU Direct RDMA [10, 11]
 
+# Additional stability fixes for dataloader issues
+export PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8,max_split_size_mb:512
+export OMP_NUM_THREADS=7             # Match cpus-per-task to avoid oversubscription
+export OPENBLAS_NUM_THREADS=1        # Prevent nested parallelism
+
 # MIOpen cache must be on /tmp to avoid Lustre file-locking issues [10, 12]
 export MIOPEN_USER_DB_PATH="/tmp/$(whoami)-miopen-cache-$SLURM_NODEID"
 export MIOPEN_CUSTOM_CACHE_DIR=$MIOPEN_USER_DB_PATH
