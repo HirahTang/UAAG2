@@ -69,4 +69,4 @@ python scripts/run_train.py \
   --id Full_mask_8_gpu_$MODEL --max-virtual-nodes 5 --use_metadata_sampler \
   --training_data $DATA_PATH \
   --data_info_path $DATA_INFO_PATH \
-  --metadata_path $METADATA_PATH --num-workers 1 \
+  --metadata_path $METADATA_PATH --num-workers 4 \
