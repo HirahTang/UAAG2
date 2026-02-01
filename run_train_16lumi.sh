@@ -70,4 +70,4 @@ srun --cpu-bind=mask_cpu:$MYMASKS \
   --id Full_mask_16_gpu_$MODEL --max-virtual-nodes 5 --use_metadata_sampler \
   --training_data $DATA_PATH \
   --data_info_path $DATA_INFO_PATH \
-  --metadata_path $METADATA_PATH --num_workers 1 \
+  --metadata_path $METADATA_PATH
