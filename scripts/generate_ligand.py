@@ -62,7 +62,7 @@ def main(hparams):
         raise ValueError("Logger type not recognized")
     
     print("Loading data from: ", hparams.benchmark_path)
-    data_file = torch.load(hparams.benchmark_path)
+    data_file = torch.load(hparams.benchmark_path, weights_only=False)
     
     # Split data into partitions based on split_index
     NUM_PARTITIONS = 10
@@ -126,7 +126,7 @@ def main(hparams):
         
 if __name__ == '__main__':
     
-    DEFAULT_SAVE_DIR = os.path.join("/datasets/biochem/unaagi", "ProteinGymSampling")
+    DEFAULT_SAVE_DIR = os.path.join("/flash/project_465002574/UAAG2_main/results/UAAG_model", "ProteinGymSampling")
     parser = ArgumentParser()
     # parser = add_arguments(parser)
     
