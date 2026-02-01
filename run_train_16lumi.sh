@@ -38,6 +38,20 @@ export AMD_DIRECT_DISPATCH=0         # Proven stability fix [8, 9]
 export NCCL_SOCKET_IFNAME=hsn0,hsn1,hsn2,hsn3 # Use Slingshot 11 interconnect [10, 11]
 export NCCL_NET_GDR_LEVEL=3          # Enable GPU Direct RDMA [10, 11]
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+
+# Multi-node distributed training configuration
+# Get the master node hostname (first node in the allocation)
+export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
+export MASTER_PORT=29500
+echo "MASTER_ADDR=${MASTER_ADDR}"
+echo "MASTER_PORT=${MASTER_PORT}"
+
+# Additional NCCL settings for multi-node
+export NCCL_DEBUG=INFO
+export NCCL_IB_DISABLE=0
+export NCCL_SOCKET_NTHREADS=8
+export NCCL_NSOCKS_PERTHREAD=4
+
 # MIOpen cache must be on /tmp to avoid Lustre file-locking issues [10, 12]
 export MIOPEN_USER_DB_PATH="/tmp/$(whoami)-miopen-cache-$SLURM_NODEID"
 export MIOPEN_CUSTOM_CACHE_DIR=$MIOPEN_USER_DB_PATH
