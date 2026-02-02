@@ -775,8 +775,19 @@ class UAAG2DataModule(pl.LightningDataModule):
         return dataloader
     
     def test_dataloader(self):
+        # Filter out samples with no pocket atoms
+        valid_indices = []
+        for idx in range(len(self.test_data)):
+            sample = self.test_data[idx]
+            # Check if there are pocket atoms (is_ligand == 0)
+            if (sample.is_ligand == 0).any():
+                valid_indices.append(idx)
+        
+        # Create a subset with only valid samples
+        filtered_test_data = Subset(self.test_data, valid_indices)
+        
         dataloader = DataLoader(
-            dataset=self.test_data,
+            dataset=filtered_test_data,
             batch_size=self.cfg.batch_size,
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
