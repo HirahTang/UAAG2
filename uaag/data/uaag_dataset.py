@@ -46,18 +46,10 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         self.pocket_noise = pocket_noise
         if self.pocket_noise:
             self.noise_scale = noise_scale
+        self.data_path = data_path
         
-        self.env = lmdb.open(
-            data_path,
-            readonly=True,
-            lock=False,
-            subdir=False,
-            readahead=False,
-            meminit=False,
-        )
         
-        with self.env.begin() as txn:
-            self.length = pickle.loads(txn.get(b"__len__"))
+        
         # self.load_dataset()
         self.charge_emb = {
             -1: 0,
@@ -74,6 +66,17 @@ class UAAG2Dataset(torch.utils.data.Dataset):
     #     self.data
         
     def __len__(self):
+        env = lmdb.open(
+            self.data_path,
+            readonly=True,
+            lock=False,
+            subdir=False,
+            readahead=False,
+            meminit=False,
+        )
+        with env.begin() as txn:
+            self.length = pickle.loads(txn.get(b"__len__"))
+        env.close()
         return self.length
     
     def pocket_centering(self, batch):
@@ -90,11 +93,21 @@ class UAAG2Dataset(torch.utils.data.Dataset):
     
     def __getitem__(self, idx):
         
-        with self.env.begin() as txn:
+        env = lmdb.open(
+            self.data_path,
+            readonly=True,
+            lock=False,
+            subdir=False,
+            readahead=False,
+            meminit=False,
+        )
+        
+        with env.begin() as txn:
             key = f"{idx:08}".encode("ascii")
             byteflow = txn.get(key)
         graph_data = pickle.loads(byteflow)
         assert isinstance(graph_data, Data), f"Expected torch_geometric.data.Data, got {type(graph)}"
+        env.close()
         # TODO zero center the positions by the mean of the pocket atoms
         
         # graph_data = self.data[idx]
