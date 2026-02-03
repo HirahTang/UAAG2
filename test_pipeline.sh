@@ -21,8 +21,8 @@ echo ""
 MODEL=UAAG_model
 CKPT_PATH=/flash/project_465002574/UAAG2_main/${MODEL}/last.ckpt
 CONFIG_FILE=/flash/project_465002574/UAAG2_main/slurm_config/slurm_config.txt
-NUM_SAMPLES=16  # Reduced for testing
-BATCH_SIZE=8
+NUM_SAMPLES=8  # Reduced for testing
+BATCH_SIZE=4
 VIRTUAL_NODE_SIZE=15
 TEST_PROTEIN_ID="ENVZ_ECOLI"
 TEST_ITER="test"
@@ -56,7 +56,7 @@ cat > ${TEST_SCRIPT} << 'EOF'
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=60G
 #SBATCH --time=1:00:00
-#SBATCH --array=40-41
+#SBATCH --array=4,29
 #SBATCH -o /scratch/project_465002574/UAAG_logs/test_pipeline_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/test_pipeline_%A_%a.log
 
@@ -171,13 +171,13 @@ MODEL=MODEL_PLACEHOLDER
 CONFIG_FILE=CONFIG_FILE_PLACEHOLDER
 NUM_SAMPLES=NUM_SAMPLES_PLACEHOLDER
 
-# Get protein ID and split indices from the array tasks used in sampling (40-41)
-PROTEIN_ID=$(awk -v ArrayID=40 '$1==ArrayID {print $2; exit}' ${CONFIG_FILE})
+# Get protein ID and split indices from the array tasks used in sampling (4=ENVZ split0, 29=ENVZ split1)
+PROTEIN_ID=$(awk -v ArrayID=4 '$1==ArrayID {print $2; exit}' ${CONFIG_FILE})
 BASELINE=$(awk -v ID="${PROTEIN_ID}" '$2==ID {print $3; exit}' ${CONFIG_FILE})
-SPLIT_0=$(awk -v ArrayID=40 '$1==ArrayID {print $4; exit}' ${CONFIG_FILE})
-SPLIT_1=$(awk -v ArrayID=41 '$1==ArrayID {print $4; exit}' ${CONFIG_FILE})
+SPLIT_0=$(awk -v ArrayID=4 '$1==ArrayID {print $4; exit}' ${CONFIG_FILE})
+SPLIT_1=$(awk -v ArrayID=29 '$1==ArrayID {print $4; exit}' ${CONFIG_FILE})
 
-echo "Protein: ${PROTEIN_ID} (from config array task 40)"
+echo "Protein: ${PROTEIN_ID} (array tasks 4, 29)"
 echo "Baseline: ${BASELINE}"
 echo "Splits processed: ${SPLIT_0}, ${SPLIT_1}"
 echo ""
@@ -187,22 +187,19 @@ OUTPUT_DIR="/scratch/project_465002574/UNAAGI_result/results/TEST/${PROTEIN_ID}_
 
 # Step 1: Post-processing
 echo "[$(date)] Step 1: Running post-processing..."
-# Process both splits
-SAMPLES_PATH_0="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split${SPLIT_0}/Samples"
-SAMPLES_PATH_1="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split${SPLIT_1}/Samples"
+# Use wildcard pattern to process all splits
+SAMPLES_PATTERN="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples"
 
-python scripts/post_analysis.py --analysis_path "${SAMPLES_PATH_0} ${SAMPLES_PATH_1}"
+python scripts/post_analysis.py --analysis_path ${SAMPLES_PATTERN}
 
 if [ $? -eq 0 ]; then
     echo "[$(date)] ✓ Post-processing completed"
     
-    # aa_distribution.csv should be in one of the split directories
-    if [ -f "${SAMPLES_PATH_0}/aa_distribution.csv" ]; then
-        AA_DIST_CSV="${SAMPLES_PATH_0}/aa_distribution.csv"
-    elif [ -f "${SAMPLES_PATH_1}/aa_distribution.csv" ]; then
-        AA_DIST_CSV="${SAMPLES_PATH_1}/aa_distribution.csv"
-    else
-        echo "[$(date)] ✗ aa_distribution.csv not found in either split!"
+    # aa_distribution.csv should be created in the first split directory found
+    AA_DIST_CSV=$(find /scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples -name "aa_distribution.csv" | head -1)
+    
+    if [ -z "${AA_DIST_CSV}" ]; then
+        echo "[$(date)] ✗ aa_distribution.csv not found!"
         exit 1
     fi
     
