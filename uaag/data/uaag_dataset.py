@@ -106,7 +106,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             key = f"{idx:08}".encode("ascii")
             byteflow = txn.get(key)
         graph_data = pickle.loads(byteflow)
-        assert isinstance(graph_data, Data), f"Expected torch_geometric.data.Data, got {type(graph)}"
+        assert isinstance(graph_data, Data), f"Expected torch_geometric.data.Data, got {type(graph_data)}"
         env.close()
         # TODO zero center the positions by the mean of the pocket atoms
         
@@ -173,6 +173,9 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             edge_mask = ligand_mask[graph_data.edge_index[0]] & ligand_mask[graph_data.edge_index[1]]
             filtered_edge_index = graph_data.edge_index[:, edge_mask]
             graph_data.edge_attr = graph_data.edge_attr[edge_mask]
+            # Convert edge_ligand to tensor if needed before indexing
+            if not isinstance(graph_data.edge_ligand, torch.Tensor):
+                graph_data.edge_ligand = torch.tensor(graph_data.edge_ligand)
             graph_data.edge_ligand = graph_data.edge_ligand[edge_mask]
             
             # Remap edge indices to new node indices
@@ -236,7 +239,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             
             virtual_new_id = torch.tensor(range(len(graph_data.x)))[-sample_n:]
             virtual_existed = torch.tensor(range(len(graph_data.x)))[:-sample_n]
-            grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_existed)
+            grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_existed, indexing='ij')
             grid1 = grid1.flatten()
             grid2 = grid2.flatten()
             # create the new edge index as a bidirectional graph
@@ -246,9 +249,9 @@ class UAAG2Dataset(torch.utils.data.Dataset):
 
             edge_index_new = torch.cat([graph_data.edge_index, new_edge_index], dim=1)
             edge_attr_new = torch.cat([graph_data.edge_attr, torch.zeros(new_edge_index.size(1))])
-            edge_ligand_new = torch.cat([torch.tensor(graph_data.edge_ligand), torch.zeros(new_edge_index.size(1))])
+            edge_ligand_new = torch.cat([graph_data.edge_ligand.float(), torch.zeros(new_edge_index.size(1))])
             
-            grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_new_id)
+            grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_new_id, indexing='ij')
             mask = grid1 != grid2
             grid1 = grid1[mask]
             grid2 = grid2[mask]
@@ -281,7 +284,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             pos=graph_data.pos,
             edge_index=graph_data.edge_index,
             edge_attr=graph_data.edge_attr,
-            edge_ligand=torch.tensor(graph_data.edge_ligand).float(),
+            edge_ligand=graph_data.edge_ligand.float() if isinstance(graph_data.edge_ligand, torch.Tensor) else torch.tensor(graph_data.edge_ligand).float(),
             charges=graph_data.charges,
             degree=graph_data.degree,
             is_aromatic=graph_data.is_aromatic,
@@ -289,7 +292,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             hybridization=graph_data.hybridization,
             is_backbone=graph_data.is_backbone,
             is_ligand=graph_data.is_ligand,
-            ligand_size=torch.tensor(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
+            ligand_size=(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
             id=graph_data.compound_id,
         )
         
@@ -474,7 +477,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         
         # Adding a new full connected graph of new nodes to backbone nodes
         
-        grid1, grid2 = torch.meshgrid(ids_new_node, ids_backbone)
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_backbone, indexing='ij')
         grid1 = grid1.flatten()
         grid2 = grid2.flatten()
         # create the new edge index as a bidirectional graph
@@ -494,7 +497,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         # Adding edge information between the new nodes and the existed background context nodes
         # print("Adding edges inside ligand")
         
-        grid1, grid2 = torch.meshgrid(ids_new_node, ids_existed)
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_existed, indexing='ij')
         grid1 = grid1.flatten()
         grid2 = grid2.flatten()
         # create the new edge index as a bidirectional graph
@@ -509,7 +512,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         # from IPython import embed; embed()
         # Adding edge information inside the new nodes
         
-        grid1, grid2 = torch.meshgrid(ids_new_node, ids_new_node)
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_new_node, indexing='ij')
         mask = grid1 != grid2
         grid1 = grid1[mask]
         grid2 = grid2[mask]
@@ -706,7 +709,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         
         ids_backbone = ids_new[is_backbone_new==1]
         # ids_existed = torch.tensor([i for i in ids_new if i not in ids_new_node and i not in ids_backbone])
-        grid1, grid2 = torch.meshgrid(ids_new_node, ids_backbone)
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_backbone, indexing='ij')
         grid1 = grid1.flatten()
         grid2 = grid2.flatten()
         # create the new edge index as a bidirectional graph
@@ -718,7 +721,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         edge_attr_new = torch.cat([edge_attr, torch.zeros(new_edge_index.size(1))])
         edge_ligand_new = torch.cat([edge_ligand, torch.ones(new_edge_index.size(1))])
         
-        grid1, grid2 = torch.meshgrid(ids_new_node, ids_new_node)
+        grid1, grid2 = torch.meshgrid(ids_new_node, ids_new_node, indexing='ij')
         mask = grid1 != grid2
         grid1 = grid1[mask]
         grid2 = grid2[mask]
