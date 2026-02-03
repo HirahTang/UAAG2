@@ -9,8 +9,8 @@
 #SBATCH --mem=60G
 #SBATCH --time=2-00:00:00
 #SBATCH --array=0-9
-#SBATCH -o logs/PUMA_job_%A_%a.log
-#SBATCH -e logs/PUMA_job_%A_%a.log
+#SBATCH -o /scratch/project_465002574/UAAG_logs/PUMA_job_%A_%a.log
+#SBATCH -e /scratch/project_465002574/UAAG_logs/PUMA_job_%A_%a.log
 
 echo "============================================================================"
 echo "UAAG PUMA NCAA Benchmark Sampling"
@@ -35,7 +35,7 @@ echo "Running on branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "Commit hash:       $(git rev-parse HEAD)"
 
 MODEL=UAAG_model
-CKPT_PATH=/flash/project_465002574/${MODEL}/last.ckpt
+CKPT_PATH=/flash/project_465002574/UAAG2_main/${MODEL}/last.ckpt
 BENCHMARK_PATH=/scratch/project_465002574/UNAAGI_benchmarks/2roc_puma.pt
 SPLIT_INDEX=${SLURM_ARRAY_TASK_ID}
 NUM_SAMPLES=1000

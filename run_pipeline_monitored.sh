@@ -11,7 +11,7 @@
 # CONFIGURATION
 # ============================================================================
 MODEL=UAAG_model
-CKPT_PATH=/flash/project_465002574/${MODEL}/last.ckpt
+CKPT_PATH=/flash/project_465002574/UAAG2_main/${MODEL}/last.ckpt
 CONFIG_FILE=/flash/project_465002574/UAAG2_main/slurm_config/slurm_config.txt
 NUM_SAMPLES=1000
 BATCH_SIZE=8
@@ -35,6 +35,7 @@ STATE_FILE="${SCRIPT_DIR}/pipeline_state.txt"
 LOG_FILE="${SCRIPT_DIR}/pipeline_monitor.log"
 
 mkdir -p ${SCRIPT_DIR}
+mkdir -p /scratch/project_465002574/UAAG_logs
 
 # ============================================================================
 # FUNCTIONS
@@ -137,8 +138,8 @@ while true; do
 #SBATCH --mem=60G
 #SBATCH --time=SAMPLING_TIME_PLACEHOLDER
 #SBATCH --array=SAMPLING_ARRAY_PLACEHOLDER
-#SBATCH -o logs/sampling_iter_ITER_%A_%a.log
-#SBATCH -e logs/sampling_iter_ITER_%A_%a.log
+#SBATCH -o /scratch/project_465002574/UAAG_logs/sampling_iter_ITER_%A_%a.log
+#SBATCH -e /scratch/project_465002574/UAAG_logs/sampling_iter_ITER_%A_%a.log
 
 rocm-smi || echo "Warning: rocm-smi not available"
 echo "Job $SLURM_JOB_ID is running on node: $SLURMD_NODENAME"
@@ -230,8 +231,8 @@ SAMPLING_EOF
 #SBATCH --cpus-per-task=7
 #SBATCH --mem=60G
 #SBATCH --time=ANALYSIS_TIME_PLACEHOLDER
-#SBATCH -o logs/analysis_iter_ITER_PROT_%j.log
-#SBATCH -e logs/analysis_iter_ITER_PROT_%j.log
+#SBATCH -o /scratch/project_465002574/UAAG_logs/analysis_iter_ITER_PROT_%j.log
+#SBATCH -e /scratch/project_465002574/UAAG_logs/analysis_iter_ITER_PROT_%j.log
 
 module load LUMI
 module load CrayEnv
