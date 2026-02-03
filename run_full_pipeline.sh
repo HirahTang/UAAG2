@@ -12,7 +12,7 @@
 # CONFIGURATION - ONLY EDIT THIS SECTION
 # ============================================================================
 MODEL=UAAG_model
-CKPT_PATH=/flash/project_465002574/${MODEL}/UAAG_model/last.ckpt
+CKPT_PATH=/flash/project_465002574/${MODEL}/last.ckpt
 CONFIG_FILE=/flash/project_465002574/UAAG2_main/slurm_config/slurm_config.txt
 NUM_SAMPLES=1000
 BATCH_SIZE=8
@@ -56,10 +56,13 @@ for i in {1..5}; do
     cat > ${SAMPLING_SCRIPT} << 'SAMPLING_EOF'
 #!/bin/bash
 #SBATCH --job-name=UAAG_samp_ITER
-#SBATCH --ntasks=1 --cpus-per-task=4
-#SBATCH --mem-per-cpu=4G
-#SBATCH --gpus-per-node=1
+#SBATCH --account=project_465002574
 #SBATCH --partition=SAMPLING_PARTITION_PLACEHOLDER
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=7
+#SBATCH --gpus-per-node=1
+#SBATCH --mem=60G
 #SBATCH --time=SAMPLING_TIME_PLACEHOLDER
 #SBATCH --array=SAMPLING_ARRAY_PLACEHOLDER
 #SBATCH -o logs/sampling_iter_ITER_%A_%a.log
@@ -102,7 +105,8 @@ python scripts/generate_ligand.py \
     --virtual_node_size ${VIRTUAL_NODE_SIZE} \
     --num-samples ${NUM_SAMPLES} \
     --benchmark-path ${BENCHMARK_PATH} \
-    --split_index ${SPLIT_INDEX}
+    --split_index ${SPLIT_INDEX} \
+    --data_info_path /flash/project_465002574/UAAG2_main/data/statistic.pkl
 
 echo "[$(date)] Sampling completed for ${RUN_ID}"
 SAMPLING_EOF
@@ -117,7 +121,6 @@ SAMPLING_EOF
     sed -i "s|VIRTUAL_NODE_SIZE_PLACEHOLDER|${VIRTUAL_NODE_SIZE}|g" ${SAMPLING_SCRIPT}
     sed -i "s|SAMPLING_TIME_PLACEHOLDER|${SAMPLING_TIME}|g" ${SAMPLING_SCRIPT}
     sed -i "s|SAMPLING_PARTITION_PLACEHOLDER|${SAMPLING_PARTITION}|g" ${SAMPLING_SCRIPT}
-    sed -i "s|SAMPLING_EXCLUDE_PLACEHOLDER|${SAMPLING_EXCLUDE}|g" ${SAMPLING_SCRIPT}
     sed -i "s|SAMPLING_ARRAY_PLACEHOLDER|${SAMPLING_ARRAY}|g" ${SAMPLING_SCRIPT}
     
     # Submit sampling job
@@ -129,12 +132,14 @@ SAMPLING_EOF
     cat > ${ANALYSIS_SCRIPT} << 'ANALYSIS_EOF'
 #!/bin/bash
 #SBATCH --job-name=UAAG_anal_ITER
-#SBATCH --ntasks=1 --cpus-per-task=4
-#SBATCH --mem-per-cpu=4G
+#SBATCH --account=project_465002574
 #SBATCH --partition=ANALYSIS_PARTITION_PLACEHOLDER
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=7
+#SBATCH --mem=60G
 #SBATCH --time=ANALYSIS_TIME_PLACEHOLDER
 #SBATCH --array=ANALYSIS_ARRAY_PLACEHOLDER
-#SBATCH --exclude=SAMPLING_EXCLUDE_PLACEHOLDER
 #SBATCH -o logs/analysis_iter_ITER_%A_%a.log
 #SBATCH -e logs/analysis_iter_ITER_%A_%a.log
 
@@ -193,7 +198,6 @@ ANALYSIS_EOF
     sed -i "s|TOTAL_NUM_PLACEHOLDER|${TOTAL_NUM}|g" ${ANALYSIS_SCRIPT}
     sed -i "s|ANALYSIS_TIME_PLACEHOLDER|${ANALYSIS_TIME}|g" ${ANALYSIS_SCRIPT}
     sed -i "s|ANALYSIS_PARTITION_PLACEHOLDER|${ANALYSIS_PARTITION}|g" ${ANALYSIS_SCRIPT}
-    sed -i "s|SAMPLING_EXCLUDE_PLACEHOLDER|${SAMPLING_EXCLUDE}|g" ${ANALYSIS_SCRIPT}
     sed -i "s|ANALYSIS_ARRAY_PLACEHOLDER|${ANALYSIS_ARRAY}|g" ${ANALYSIS_SCRIPT}
     
     # Submit analysis job with dependency on all 10 sampling splits for each protein

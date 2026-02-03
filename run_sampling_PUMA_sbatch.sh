@@ -1,33 +1,46 @@
 #!/bin/bash
 #SBATCH --job-name=PUMA_sampling
-#SBATCH --ntasks=1 --cpus-per-task=4
-#SBATCH --mem-per-cpu=4G
+#SBATCH --account=project_465002574
+#SBATCH --partition=standard-g
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=7
 #SBATCH --gpus-per-node=1
-#SBATCH --partition=gpu,boomsma
+#SBATCH --mem=60G
 #SBATCH --time=2-00:00:00
 #SBATCH --array=0-9
-#SBATCH --exclude=hendrixgpu01fl,hendrixgpu16fl,hendrixgpu19fl,hendrixgpu04fl,hendrixgpu26fl,hendrixgpu24fl,hendrixgpu25fl,hendrixgpu06fl
 #SBATCH -o logs/PUMA_job_%A_%a.log
 #SBATCH -e logs/PUMA_job_%A_%a.log
 
-nvidia-smi
-echo "Job $SLURM_JOB_ID is running on node: $SLURMD_NODENAME"
-echo "Hostname: $(hostname)"
+echo "============================================================================"
+echo "UAAG PUMA NCAA Benchmark Sampling"
+echo "============================================================================"
+echo "Job ID: $SLURM_JOB_ID"
+echo "Running on node: $SLURMD_NODENAME"
+echo "Array task ID: $SLURM_ARRAY_TASK_ID"
+echo "Start time: $(date)"
+echo "============================================================================"
 
-source ~/.bashrc
-conda activate targetdiff
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/qcx679/.conda/envs/targetdiff/lib
+# Load modules for LUMI
+module load LUMI
+module load CrayEnv
+module load lumi-container-wrapper/0.4.2-cray-python-default
+export PATH="/flash/project_465002574/unaagi_env/bin:$PATH"
+
+rocm-smi || echo "Warning: rocm-smi not available"
 
 git fetch origin
 git checkout main
 echo "Running on branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "Commit hash:       $(git rev-parse HEAD)"
 
-MODEL=Full_mask_5_virtual_node_mask_token_atomic_only_mask_diffusion_0917
-CKPT_PATH=/home/qcx679/hantang/UAAG2/3DcoordsAtomsBonds_0/run${MODEL}/last.ckpt
-BENCHMARK_PATH=/home/qcx679/hantang/UAAG2/data/full_graph/benchmarks/2roc_puma.pt
+MODEL=UAAG_model
+CKPT_PATH=/flash/project_465002574/${MODEL}/last.ckpt
+BENCHMARK_PATH=/flash/project_465002574/UAAG2_main/data/benchmarks/2roc_puma.pt
 SPLIT_INDEX=${SLURM_ARRAY_TASK_ID}
 NUM_SAMPLES=1000
+BATCH_SIZE=8
+VIRTUAL_NODE_SIZE=15
 
 # Construct unique run ID with split index
 RUN_ID="${MODEL}/PUMA_${MODEL}_variational_sampling_${NUM_SAMPLES}_split${SPLIT_INDEX}"
@@ -39,25 +52,58 @@ echo "Benchmark: ${BENCHMARK_PATH}"
 python scripts/generate_ligand.py \
     --load-ckpt ${CKPT_PATH} \
     --id ${RUN_ID} \
-    --batch-size 8 \
-    --virtual_node_size 15 \
+    --batch-size ${BATCH_SIZE} \
+    --virtual_node_size ${VIRTUAL_NODE_SIZE} \
     --num-samples ${NUM_SAMPLES} \
     --benchmark-path ${BENCHMARK_PATH} \
-    --split_index ${SPLIT_INDEX}
+    --split_index ${SPLIT_INDEX} \
+    --data_info_path /flash/project_465002574/UAAG2_main/data/statistic.pkl
 
 echo "[$(date)] PUMA sampling completed for ${RUN_ID}"
 
-# Post-processing and analysis
-SAMPLES_PATH="/datasets/biochem/unaagi/ProteinGymSampling/run${RUN_ID}/Samples"
-OUTPUT_DIR="/home/qcx679/hantang/UAAG2/results/${MODEL}/PUMA_${MODEL}_variational_sampling_${NUM_SAMPLES}_split${SPLIT_INDEX}"
+if [ $? -eq 0 ]; then
+    echo "[$(date)] ✓ PUMA sampling completed successfully"
+else
+    echo "[$(date)] ✗ PUMA sampling failed with exit code $?"
+    exit 1
+fi
 
+# Post-processing and analysis
+SAMPLES_PATH="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID}/Samples"
+OUTPUT_DIR="/scratch/project_465002574/UNAAGI_result/results/${MODEL}/PUMA_${MODEL}_variational_sampling_${NUM_SAMPLES}_split${SPLIT_INDEX}"
+
+echo ""
+echo "============================================================================"
+echo "Starting PUMA Post-Processing and Analysis"
+echo "============================================================================"
 echo "[$(date)] Starting PUMA analysis for ${RUN_ID}..."
+
 python scripts/post_analysis.py --analysis_path ${SAMPLES_PATH}
+
+if [ $? -eq 0 ]; then
+    echo "[$(date)] ✓ Post-processing completed successfully"
+else
+    echo "[$(date)] ✗ Post-processing failed with exit code $?"
+    exit 1
+fi
+
 python scripts/result_eval_uniform_uaa.py \
-    --benchmark /home/qcx679/hantang/UAAG2/data/uaa_benchmark_csv/PUMA_reframe.csv \
+    --benchmark /flash/project_465002574/UAAG2_main/data/uaa_benchmark_csv/PUMA_reframe.csv \
     --aa_output ${SAMPLES_PATH}/aa_distribution.csv \
     --output_dir ${OUTPUT_DIR} \
     --total_num ${NUM_SAMPLES}
 
-echo "[$(date)] PUMA analysis completed for ${RUN_ID}"
+if [ $? -eq 0 ]; then
+    echo "[$(date)] ✓ PUMA evaluation completed successfully"
+else
+    echo "[$(date)] ✗ PUMA evaluation failed with exit code $?"
+    exit 1
+fi
+
+echo ""
+echo "============================================================================"
+echo "PUMA Analysis Completed Successfully!"
+echo "============================================================================"
+echo "End time: $(date)"
 echo "Results saved to: ${OUTPUT_DIR}"
+echo "============================================================================"
