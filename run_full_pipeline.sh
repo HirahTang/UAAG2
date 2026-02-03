@@ -234,11 +234,10 @@ if [ $? -eq 0 ]; then
     echo "[$(date)] ✓ Archive created successfully"
     echo "Archive size: $(du -h ${ARCHIVE_NAME} | cut -f1)"
     
-    # Optional: Remove original directories to save space
-    # Uncomment the following lines if you want to delete after archiving
-    # echo "[$(date)] Removing original sample directories..."
-    # rm -rf run${RUN_ID_BASE}_split*/
-    # echo "[$(date)] ✓ Original directories removed"
+    # Remove original directories to save space
+    echo "[$(date)] Removing original sample directories..."
+    rm -rf run${RUN_ID_BASE}_split*/
+    echo "[$(date)] ✓ Original directories removed"
 else
     echo "[$(date)] ✗ Archive creation failed with exit code $?"
     exit 1
