@@ -134,20 +134,153 @@ echo ""
 JOB_ID=$(sbatch --parsable ${TEST_SCRIPT} 2>&1)
 
 if [[ $JOB_ID =~ ^[0-9]+$ ]]; then
-    echo "✓ Test job submitted: ${JOB_ID}"
+    echo "✓ Test sampling job submitted: ${JOB_ID}"
     echo ""
-    echo "Monitor with:"
-    echo "  squeue -j ${JOB_ID}"
-    echo "  tail -f /scratch/project_465002574/UAAG_logs/test_pipeline_${JOB_ID}_*.log"
+    echo "Monitor with: squeue -j ${JOB_ID}"
     echo ""
-    echo "Once complete, check:"
-    echo "  ls -lh /scratch/project_465002574/ProteinGymSampling/run${MODEL}/${TEST_PROTEIN_ID}*test*/Samples/"
-    echo ""
-    echo "If successful, you can run the full pipeline with:"
-    echo "  bash run_pipeline_monitored.sh"
+    
+    # Create analysis script that runs after sampling completes
+    ANALYSIS_SCRIPT="/tmp/test_analysis_${USER}.sh"
+    cat > ${ANALYSIS_SCRIPT} << 'ANALYSIS_EOF'
+#!/bin/bash
+#SBATCH --job-name=UAAG_test_analysis
+#SBATCH --account=project_465002574
+#SBATCH --partition=standard-g
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=7
+#SBATCH --mem=60G
+#SBATCH --time=30:00
+#SBATCH -o /scratch/project_465002574/UAAG_logs/test_analysis_%j.log
+#SBATCH -e /scratch/project_465002574/UAAG_logs/test_analysis_%j.log
+
+echo "============================================================================"
+echo "UAAG Pipeline Test - Analysis & Compression"
+echo "============================================================================"
+echo "Job ID: $SLURM_JOB_ID"
+echo "============================================================================"
+
+module load LUMI
+module load CrayEnv
+module load lumi-container-wrapper/0.4.2-cray-python-default
+export PATH="/flash/project_465002574/unaagi_env/bin:$PATH"
+
+cd /flash/project_465002574/UAAG2_main
+
+MODEL=MODEL_PLACEHOLDER
+CONFIG_FILE=CONFIG_FILE_PLACEHOLDER
+NUM_SAMPLES=NUM_SAMPLES_PLACEHOLDER
+PROTEIN_ID="ENVZ_ECOLI"
+
+# Get baseline
+BASELINE=$(awk -v ID="${PROTEIN_ID}" '$2==ID {print $3; exit}' ${CONFIG_FILE})
+
+RUN_ID_BASE="${MODEL}/${PROTEIN_ID}_${MODEL}_variational_sampling_${NUM_SAMPLES}_test"
+SAMPLES_DIR="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split0/Samples"
+OUTPUT_DIR="/scratch/project_465002574/UNAAGI_result/results/TEST/${PROTEIN_ID}_test"
+
+echo "Protein: ${PROTEIN_ID}"
+echo "Baseline: ${BASELINE}"
+echo ""
+
+# Step 1: Post-processing
+echo "[$(date)] Step 1: Running post-processing..."
+SAMPLES_PATH="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples"
+python scripts/post_analysis.py --analysis_path ${SAMPLES_PATH}
+
+if [ $? -eq 0 ]; then
+    echo "[$(date)] ✓ Post-processing completed"
+else
+    echo "[$(date)] ✗ Post-processing failed"
+    exit 1
+fi
+
+# Step 2: Evaluation
+echo ""
+echo "[$(date)] Step 2: Running evaluation..."
+python scripts/result_eval_uniform.py \
+    --generated ${SAMPLES_DIR}/aa_distribution.csv \
+    --baselines /scratch/project_465002574/UNAAGI_benchmark_values/baselines/${BASELINE} \
+    --total_num ${NUM_SAMPLES} \
+    --output_dir ${OUTPUT_DIR}
+
+if [ $? -eq 0 ]; then
+    echo "[$(date)] ✓ Evaluation completed"
+    echo "Results saved to: ${OUTPUT_DIR}"
+else
+    echo "[$(date)] ✗ Evaluation failed"
+    exit 1
+fi
+
+# Step 3: Compression
+echo ""
+echo "[$(date)] Step 3: Compressing samples..."
+ARCHIVE_DIR="/scratch/project_465002574/UNAAGI_archives/TEST"
+mkdir -p ${ARCHIVE_DIR}
+ARCHIVE_NAME="${ARCHIVE_DIR}/${PROTEIN_ID}_test.tar.gz"
+
+cd /scratch/project_465002574/ProteinGymSampling/
+tar -czf ${ARCHIVE_NAME} run${RUN_ID_BASE}_split*/
+
+if [ $? -eq 0 ]; then
+    echo "[$(date)] ✓ Archive created: ${ARCHIVE_NAME}"
+    echo "Archive size: $(du -h ${ARCHIVE_NAME} | cut -f1)"
+    
+    # Remove original directories
+    echo "[$(date)] Removing original directories..."
+    rm -rf run${RUN_ID_BASE}_split*/
+    echo "[$(date)] ✓ Cleanup completed"
+else
+    echo "[$(date)] ✗ Archive creation failed"
+    exit 1
+fi
+
+echo ""
+echo "============================================================================"
+echo "TEST PIPELINE COMPLETED SUCCESSFULLY!"
+echo "============================================================================"
+echo "Results:"
+echo "  - Evaluation: ${OUTPUT_DIR}"
+echo "  - Archive: ${ARCHIVE_NAME}"
+echo ""
+echo "All systems validated! Ready for full pipeline:"
+echo "  bash run_pipeline_monitored.sh"
+echo "============================================================================"
+ANALYSIS_EOF
+
+    # Replace placeholders
+    sed -i "s|MODEL_PLACEHOLDER|${MODEL}|g" ${ANALYSIS_SCRIPT}
+    sed -i "s|CONFIG_FILE_PLACEHOLDER|${CONFIG_FILE}|g" ${ANALYSIS_SCRIPT}
+    sed -i "s|NUM_SAMPLES_PLACEHOLDER|${NUM_SAMPLES}|g" ${ANALYSIS_SCRIPT}
+    
+    # Submit analysis job with dependency on sampling
+    echo "Submitting test analysis job (runs after sampling completes)..."
+    ANALYSIS_JOB=$(sbatch --parsable --dependency=afterok:${JOB_ID} ${ANALYSIS_SCRIPT} 2>&1)
+    
+    if [[ $ANALYSIS_JOB =~ ^[0-9]+$ ]]; then
+        echo "✓ Test analysis job submitted: ${ANALYSIS_JOB}"
+        echo ""
+        echo "============================================================================"
+        echo "Test Pipeline Submitted"
+        echo "============================================================================"
+        echo "Sampling job: ${JOB_ID} (running)"
+        echo "Analysis job: ${ANALYSIS_JOB} (pending, waits for sampling)"
+        echo ""
+        echo "Monitor progress:"
+        echo "  squeue -j ${JOB_ID},${ANALYSIS_JOB}"
+        echo ""
+        echo "View logs:"
+        echo "  tail -f /scratch/project_465002574/UAAG_logs/test_pipeline_${JOB_ID}_*.log"
+        echo "  tail -f /scratch/project_465002574/UAAG_logs/test_analysis_${ANALYSIS_JOB}.log"
+        echo ""
+        echo "When complete, if successful, run full pipeline with:"
+        echo "  bash run_pipeline_monitored.sh"
+        echo "============================================================================"
+    else
+        echo "✗ Analysis job submission failed: ${ANALYSIS_JOB}"
+        exit 1
+    fi
 else
     echo "✗ Job submission failed: ${JOB_ID}"
     exit 1
 fi
-
-echo "============================================================================"
