@@ -170,18 +170,18 @@ cd /flash/project_465002574/UAAG2_main
 MODEL=MODEL_PLACEHOLDER
 CONFIG_FILE=CONFIG_FILE_PLACEHOLDER
 NUM_SAMPLES=NUM_SAMPLES_PLACEHOLDER
-PROTEIN_ID="ENVZ_ECOLI"
 
-# Get baseline
+# Get protein ID from the first array task (40) used in sampling
+PROTEIN_ID=$(awk -v ArrayID=40 '$1==ArrayID {print $2; exit}' ${CONFIG_FILE})
 BASELINE=$(awk -v ID="${PROTEIN_ID}" '$2==ID {print $3; exit}' ${CONFIG_FILE})
+
+echo "Protein: ${PROTEIN_ID} (from config array task 40)"
+echo "Baseline: ${BASELINE}"
+echo ""
 
 RUN_ID_BASE="${MODEL}/${PROTEIN_ID}_${MODEL}_variational_sampling_${NUM_SAMPLES}_test"
 SAMPLES_DIR="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split0/Samples"
 OUTPUT_DIR="/scratch/project_465002574/UNAAGI_result/results/TEST/${PROTEIN_ID}_test"
-
-echo "Protein: ${PROTEIN_ID}"
-echo "Baseline: ${BASELINE}"
-echo ""
 
 # Step 1: Post-processing
 echo "[$(date)] Step 1: Running post-processing..."
