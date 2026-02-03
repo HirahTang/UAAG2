@@ -25,4 +25,5 @@ wandb*
 *.npz
 *ProteinGymSampling*
 *results*
+tmp_scripts/
 ```
