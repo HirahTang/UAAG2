@@ -171,25 +171,42 @@ MODEL=MODEL_PLACEHOLDER
 CONFIG_FILE=CONFIG_FILE_PLACEHOLDER
 NUM_SAMPLES=NUM_SAMPLES_PLACEHOLDER
 
-# Get protein ID from the first array task (40) used in sampling
+# Get protein ID and split indices from the array tasks used in sampling (40-41)
 PROTEIN_ID=$(awk -v ArrayID=40 '$1==ArrayID {print $2; exit}' ${CONFIG_FILE})
 BASELINE=$(awk -v ID="${PROTEIN_ID}" '$2==ID {print $3; exit}' ${CONFIG_FILE})
+SPLIT_0=$(awk -v ArrayID=40 '$1==ArrayID {print $4; exit}' ${CONFIG_FILE})
+SPLIT_1=$(awk -v ArrayID=41 '$1==ArrayID {print $4; exit}' ${CONFIG_FILE})
 
 echo "Protein: ${PROTEIN_ID} (from config array task 40)"
 echo "Baseline: ${BASELINE}"
+echo "Splits processed: ${SPLIT_0}, ${SPLIT_1}"
 echo ""
 
 RUN_ID_BASE="${MODEL}/${PROTEIN_ID}_${MODEL}_variational_sampling_${NUM_SAMPLES}_test"
-SAMPLES_DIR="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split0/Samples"
 OUTPUT_DIR="/scratch/project_465002574/UNAAGI_result/results/TEST/${PROTEIN_ID}_test"
 
 # Step 1: Post-processing
 echo "[$(date)] Step 1: Running post-processing..."
-SAMPLES_PATH="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples"
-python scripts/post_analysis.py --analysis_path ${SAMPLES_PATH}
+# Process both splits
+SAMPLES_PATH_0="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split${SPLIT_0}/Samples"
+SAMPLES_PATH_1="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split${SPLIT_1}/Samples"
+
+python scripts/post_analysis.py --analysis_path "${SAMPLES_PATH_0} ${SAMPLES_PATH_1}"
 
 if [ $? -eq 0 ]; then
     echo "[$(date)] ✓ Post-processing completed"
+    
+    # aa_distribution.csv should be in one of the split directories
+    if [ -f "${SAMPLES_PATH_0}/aa_distribution.csv" ]; then
+        AA_DIST_CSV="${SAMPLES_PATH_0}/aa_distribution.csv"
+    elif [ -f "${SAMPLES_PATH_1}/aa_distribution.csv" ]; then
+        AA_DIST_CSV="${SAMPLES_PATH_1}/aa_distribution.csv"
+    else
+        echo "[$(date)] ✗ aa_distribution.csv not found in either split!"
+        exit 1
+    fi
+    
+    echo "[$(date)] Found aa_distribution.csv at: ${AA_DIST_CSV}"
 else
     echo "[$(date)] ✗ Post-processing failed"
     exit 1
@@ -199,7 +216,7 @@ fi
 echo ""
 echo "[$(date)] Step 2: Running evaluation..."
 python scripts/result_eval_uniform.py \
-    --generated ${SAMPLES_DIR}/aa_distribution.csv \
+    --generated ${AA_DIST_CSV} \
     --baselines /scratch/project_465002574/UNAAGI_benchmark_values/baselines/${BASELINE} \
     --total_num ${NUM_SAMPLES} \
     --output_dir ${OUTPUT_DIR}
