@@ -36,7 +36,7 @@ echo "Commit hash:       $(git rev-parse HEAD)"
 
 MODEL=UAAG_model
 CKPT_PATH=/flash/project_465002574/${MODEL}/last.ckpt
-BENCHMARK_PATH=/flash/project_465002574/UAAG2_main/data/benchmarks/2roc_puma.pt
+BENCHMARK_PATH=/scratch/project_465002574/UNAAGI_benchmarks/2roc_puma.pt
 SPLIT_INDEX=${SLURM_ARRAY_TASK_ID}
 NUM_SAMPLES=1000
 BATCH_SIZE=8
@@ -88,7 +88,7 @@ else
 fi
 
 python scripts/result_eval_uniform_uaa.py \
-    --benchmark /flash/project_465002574/UAAG2_main/data/uaa_benchmark_csv/PUMA_reframe.csv \
+    --benchmark /scratch/project_465002574/UNAAGI_benchmark_values/uaa_benchmark_csv/PUMA_reframe.csv \
     --aa_output ${SAMPLES_PATH}/aa_distribution.csv \
     --output_dir ${OUTPUT_DIR} \
     --total_num ${NUM_SAMPLES}

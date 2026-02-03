@@ -19,13 +19,13 @@ VIRTUAL_NODE_SIZE=15
 TOTAL_NUM=1000
 
 # Job limits
-MAX_JOBS_ALLOWED=50  # Adjust based on your limit (check with: sacctmgr show qos)
+MAX_JOBS_ALLOWED=25  # Conservative limit to avoid array job submission issues
 CHECK_INTERVAL=300   # Check every 5 minutes (300 seconds)
+PROTEINS_PER_BATCH=1  # Process 1 protein at a time (10 array tasks per job)
 
 # SLURM settings
 SAMPLING_TIME="2-00:00:00"
 SAMPLING_PARTITION="standard-g"
-SAMPLING_ARRAY="0-249%9"
 ANALYSIS_TIME="5:00:00"
 ANALYSIS_PARTITION="standard-g"
 
@@ -68,17 +68,20 @@ wait_for_capacity() {
 if [ ! -f ${STATE_FILE} ]; then
     cat > ${STATE_FILE} << EOF
 # Pipeline state tracking
-# Format: iteration,stage,job_id,status
+# Format: iteration,batch,stage,job_id,status
+# Batches: 0-24 (25 batches × 1 protein = 25 proteins total)
 # Stages: sampling_pending, sampling_running, analysis_pending, analysis_running, completed
 # Status: pending, submitted, running, completed, failed
 EOF
     
-    # Initialize all iterations as pending
+    # Initialize all iterations and batches as pending
     for i in {1..5}; do
-        echo "${i},sampling_pending,," >> ${STATE_FILE}
+        for batch in {0..24}; do
+            echo "${i},${batch},sampling_pending,," >> ${STATE_FILE}
+        done
     done
-    echo "cp2,sampling_pending,," >> ${STATE_FILE}
-    echo "puma,sampling_pending,," >> ${STATE_FILE}
+    echo "cp2,0,sampling_pending,," >> ${STATE_FILE}
+    echo "puma,0,sampling_pending,," >> ${STATE_FILE}
 fi
 
 log_message "============================================================================"
@@ -103,18 +106,26 @@ while true; do
     
     SUBMITTED_THIS_ROUND=0
     
-    # Check each iteration
+    # Check each iteration and batch
     for i in {1..5}; do
-        STAGE=$(grep "^${i}," ${STATE_FILE} | cut -d',' -f2)
-        STATUS=$(grep "^${i}," ${STATE_FILE} | cut -d',' -f4)
-        
-        # Submit sampling if pending
-        if [[ "$STAGE" == "sampling_pending" ]]; then
-            log_message "Iteration ${i}: Submitting sampling job..."
+        for batch in {0..24}; do
+            STAGE=$(grep "^${i},${batch}," ${STATE_FILE} | cut -d',' -f3)
+            STATUS=$(grep "^${i},${batch}," ${STATE_FILE} | cut -d',' -f5)
             
-            # Create sampling script
-            SAMPLING_SCRIPT="${SCRIPT_DIR}/sampling_iter${i}.sh"
-            cat > ${SAMPLING_SCRIPT} << 'SAMPLING_EOF'
+            # Calculate protein range for this batch
+            start_protein=$((batch * PROTEINS_PER_BATCH))
+            end_protein=$((start_protein + PROTEINS_PER_BATCH - 1))
+            start_task=$((start_protein * 10))
+            end_task=$((end_protein * 10 + 9))
+            array_range="${start_task}-${end_task}%9"
+            
+            # Submit sampling if pending
+            if [[ "$STAGE" == "sampling_pending" ]]; then
+                log_message "Iteration ${i}, Batch ${batch} (proteins ${start_protein}-${end_protein}): Submitting sampling..."
+                
+                # Create sampling script
+                SAMPLING_SCRIPT="${SCRIPT_DIR}/sampling_iter${i}_batch${batch}.sh"
+                cat > ${SAMPLING_SCRIPT} << 'SAMPLING_EOF'
 #!/bin/bash
 #SBATCH --job-name=UAAG_samp_ITER
 #SBATCH --account=project_465002574
@@ -180,32 +191,32 @@ SAMPLING_EOF
             sed -i "s|VIRTUAL_NODE_SIZE_PLACEHOLDER|${VIRTUAL_NODE_SIZE}|g" ${SAMPLING_SCRIPT}
             sed -i "s|SAMPLING_TIME_PLACEHOLDER|${SAMPLING_TIME}|g" ${SAMPLING_SCRIPT}
             sed -i "s|SAMPLING_PARTITION_PLACEHOLDER|${SAMPLING_PARTITION}|g" ${SAMPLING_SCRIPT}
-            sed -i "s|SAMPLING_ARRAY_PLACEHOLDER|${SAMPLING_ARRAY}|g" ${SAMPLING_SCRIPT}
+            sed -i "s|SAMPLING_ARRAY_PLACEHOLDER|${array_range}|g" ${SAMPLING_SCRIPT}
             
             SAMPLING_JOB=$(sbatch --parsable ${SAMPLING_SCRIPT} 2>&1)
             
             if [[ $SAMPLING_JOB =~ ^[0-9]+$ ]]; then
-                SAMPLING_JOBS[$i]=${SAMPLING_JOB}
-                sed -i "s|^${i},sampling_pending,,|${i},sampling_running,${SAMPLING_JOB},submitted|" ${STATE_FILE}
-                log_message "  ✓ Iteration ${i} sampling submitted: ${SAMPLING_JOB}"
+                SAMPLING_JOBS["${i}_${batch}"]=${SAMPLING_JOB}
+                sed -i "s|^${i},${batch},sampling_pending,,|${i},${batch},sampling_running,${SAMPLING_JOB},submitted|" ${STATE_FILE}
+                log_message "  ✓ Iteration ${i} Batch ${batch} sampling submitted: ${SAMPLING_JOB} (${array_range})"
                 SUBMITTED_THIS_ROUND=$((SUBMITTED_THIS_ROUND + 1))
                 sleep 2
             else
-                log_message "  ✗ Iteration ${i} sampling failed: ${SAMPLING_JOB}"
+                log_message "  ✗ Iteration ${i} Batch ${batch} sampling failed: ${SAMPLING_JOB}"
             fi
             
-        # Check if sampling completed and submit analysis
-        elif [[ "$STAGE" == "sampling_running" ]]; then
-            JOB_ID=$(grep "^${i}," ${STATE_FILE} | cut -d',' -f3)
+            # Check if sampling completed and submit analysis
+            elif [[ "$STAGE" == "sampling_running" ]]; then
+                JOB_ID=$(grep "^${i},${batch}," ${STATE_FILE} | cut -d',' -f4)
             
-            # Check if all array tasks completed
-            PENDING=$(squeue -j ${JOB_ID} -h -t pending,running 2>/dev/null | wc -l)
-            
-            if [ $PENDING -eq 0 ] && [ -z "${ANALYSIS_JOBS_SUBMITTED[$i]}" ]; then
-                log_message "Iteration ${i}: Sampling completed, submitting analysis jobs..."
+                # Check if all array tasks completed
+                PENDING=$(squeue -j ${JOB_ID} -h -t pending,running 2>/dev/null | wc -l)
                 
-                # Submit 25 analysis jobs
-                for protein_idx in {0..24}; do
+                if [ $PENDING -eq 0 ] && [ -z "${ANALYSIS_JOBS_SUBMITTED["${i}_${batch}"]}" ]; then
+                    log_message "Iteration ${i} Batch ${batch}: Sampling completed, submitting analysis jobs..."
+                    
+                    # Submit analysis jobs for proteins in this batch
+                    for protein_idx in $(seq ${start_protein} ${end_protein}); do
                     ANALYSIS_SCRIPT="${SCRIPT_DIR}/analysis_iter${i}_protein${protein_idx}.sh"
                     
                     # Create analysis script (same as before, using heredoc)
@@ -286,45 +297,46 @@ ANALYSIS_EOF
                         dep_string="${dep_string}:${JOB_ID}_${task_id}"
                     done
                     
-                    sbatch --dependency=${dep_string} ${ANALYSIS_SCRIPT} > /dev/null 2>&1
-                    sleep 0.5
-                done
-                
-                ANALYSIS_JOBS_SUBMITTED[$i]=1
-                sed -i "s|^${i},sampling_running,${JOB_ID},.*|${i},analysis_running,${JOB_ID},completed|" ${STATE_FILE}
-                log_message "  ✓ Iteration ${i}: 25 analysis jobs submitted"
-                SUBMITTED_THIS_ROUND=$((SUBMITTED_THIS_ROUND + 25))
+                        sbatch --dependency=${dep_string} ${ANALYSIS_SCRIPT} > /dev/null 2>&1
+                        sleep 0.5
+                    done
+                    
+                    ANALYSIS_JOBS_SUBMITTED["${i}_${batch}"]=1
+                    sed -i "s|^${i},${batch},sampling_running,${JOB_ID},.*|${i},${batch},analysis_running,${JOB_ID},completed|" ${STATE_FILE}
+                    log_message "  ✓ Iteration ${i} Batch ${batch}: ${PROTEINS_PER_BATCH} analysis jobs submitted"
+                    SUBMITTED_THIS_ROUND=$((SUBMITTED_THIS_ROUND + PROTEINS_PER_BATCH))
+                fi
             fi
-        fi
+        done
     done
     
     # Submit CP2 and PUMA if not done yet
     if ! grep -q "^cp2,.*,completed" ${STATE_FILE}; then
-        CP2_STATUS=$(grep "^cp2," ${STATE_FILE} | cut -d',' -f2)
+        CP2_STATUS=$(grep "^cp2," ${STATE_FILE} | cut -d',' -f3)
         if [[ "$CP2_STATUS" == "sampling_pending" ]]; then
             log_message "Submitting CP2 benchmark..."
             CP2_JOB=$(sbatch --parsable run_sampling_CP2_sbatch.sh 2>&1)
             if [[ $CP2_JOB =~ ^[0-9]+$ ]]; then
-                sed -i "s|^cp2,.*|cp2,running,${CP2_JOB},completed|" ${STATE_FILE}
+                sed -i "s|^cp2,.*|cp2,0,running,${CP2_JOB},completed|" ${STATE_FILE}
                 log_message "  ✓ CP2 submitted: ${CP2_JOB}"
             fi
         fi
     fi
     
     if ! grep -q "^puma,.*,completed" ${STATE_FILE}; then
-        PUMA_STATUS=$(grep "^puma," ${STATE_FILE} | cut -d',' -f2)
+        PUMA_STATUS=$(grep "^puma," ${STATE_FILE} | cut -d',' -f3)
         if [[ "$PUMA_STATUS" == "sampling_pending" ]]; then
             log_message "Submitting PUMA benchmark..."
             PUMA_JOB=$(sbatch --parsable run_sampling_PUMA_sbatch.sh 2>&1)
             if [[ $PUMA_JOB =~ ^[0-9]+$ ]]; then
-                sed -i "s|^puma,.*|puma,running,${PUMA_JOB},completed|" ${STATE_FILE}
+                sed -i "s|^puma,.*|puma,0,running,${PUMA_JOB},completed|" ${STATE_FILE}
                 log_message "  ✓ PUMA submitted: ${PUMA_JOB}"
             fi
         fi
     fi
     
     # Check if all done
-    if grep -q "^5,analysis_running" ${STATE_FILE} && \
+    if grep -q "^5,24,analysis_running" ${STATE_FILE} && \
        grep -q "^cp2,running" ${STATE_FILE} && \
        grep -q "^puma,running" ${STATE_FILE}; then
         log_message "============================================================================"
