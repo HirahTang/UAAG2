@@ -249,7 +249,11 @@ class UAAG2Dataset(torch.utils.data.Dataset):
 
             edge_index_new = torch.cat([graph_data.edge_index, new_edge_index], dim=1)
             edge_attr_new = torch.cat([graph_data.edge_attr, torch.zeros(new_edge_index.size(1))])
-            edge_ligand_new = torch.cat([graph_data.edge_ligand.float(), torch.zeros(new_edge_index.size(1))])
+            # Convert edge_ligand to tensor if needed before calling .float()
+            if isinstance(graph_data.edge_ligand, torch.Tensor):
+                edge_ligand_new = torch.cat([graph_data.edge_ligand.float(), torch.zeros(new_edge_index.size(1))])
+            else:
+                edge_ligand_new = torch.cat([torch.tensor(graph_data.edge_ligand).float(), torch.zeros(new_edge_index.size(1))])
             
             grid1, grid2 = torch.meshgrid(virtual_new_id, virtual_new_id, indexing='ij')
             mask = grid1 != grid2
