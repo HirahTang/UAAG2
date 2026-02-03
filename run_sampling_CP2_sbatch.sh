@@ -3,20 +3,18 @@
 #SBATCH --ntasks=1 --cpus-per-task=4
 #SBATCH --mem-per-cpu=4G
 #SBATCH --gpus-per-node=1
-#SBATCH --partition=gpu,boomsma
+#SBATCH --partition=standard-g
 #SBATCH --time=2-00:00:00
 #SBATCH --array=0-9
-#SBATCH --exclude=hendrixgpu01fl,hendrixgpu16fl,hendrixgpu19fl,hendrixgpu04fl,hendrixgpu26fl,hendrixgpu24fl,hendrixgpu25fl,hendrixgpu06fl
 #SBATCH -o logs/CP2_job_%A_%a.log
 #SBATCH -e logs/CP2_job_%A_%a.log
 
-nvidia-smi
+rocm-smi || echo "Warning: rocm-smi not available"
 echo "Job $SLURM_JOB_ID is running on node: $SLURMD_NODENAME"
-echo "Hostname: $(hostname)"
-
-source ~/.bashrc
-conda activate targetdiff
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/qcx679/.conda/envs/targetdiff/lib
+module load LUMI
+module load CrayEnv
+module load lumi-container-wrapper/0.4.2-cray-python-default
+export PATH="/flash/project_465002574/unaagi_env/bin:$PATH"
 
 git fetch origin
 git checkout main
