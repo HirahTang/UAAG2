@@ -126,7 +126,7 @@ def main(hparams):
         
 if __name__ == '__main__':
     
-    DEFAULT_SAVE_DIR = os.path.join("/flash/project_465002574/UAAG2_main/results/UAAG_model", "ProteinGymSampling")
+    DEFAULT_SAVE_DIR = os.path.join("/scratch/project_465002574", "ProteinGymSampling")
     parser = ArgumentParser()
     # parser = add_arguments(parser)
     

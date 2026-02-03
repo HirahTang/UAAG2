@@ -232,3 +232,9 @@ echo "Monitor jobs with: squeue -u $USER"
 echo "Check logs in: logs/"
 echo "Temporary scripts in: ${SCRIPT_DIR}"
 echo "============================================================================"
+
+python scripts/result_eval_uniform.py \
+    --generated /scratch/project_465002574/ProteinGymSampling/runUAAG_model/ENVZ_ECOLI_test_100_samples/Samples/aa_distribution.csv \
+    --baselines /scratch/project_465002574/UNAAGI_benchmark_values/baselines/ENVZ_ECOLI_Ghose_2023.csv \
+    --total_num 100 \
+    --output_dir /scratch/project_465002574/UNAAGI_result/test/

@@ -39,9 +39,16 @@ PROTEIN_ID=ENVZ_ECOLI
 
 # Output paths
 WORK_DIR=/flash/project_465002574/UAAG2_main
+SAVE_DIR=/scratch/project_465002574/ProteinGymSampling
 RUN_ID="${MODEL}/${PROTEIN_ID}_test_${NUM_SAMPLES}_samples"
 OUTPUT_DIR="${WORK_DIR}/results/${RUN_ID}"
-SAMPLES_DIR="${WORK_DIR}/outputs/${RUN_ID}/Samples"
+SAMPLES_DIR="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID}/Samples"
+
+# Switch to prior_condition branch
+echo ""
+echo "→ Switching to prior_condition branch..."
+git checkout main
+
 
 mkdir -p logs
 mkdir -p ${OUTPUT_DIR}
