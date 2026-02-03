@@ -10,7 +10,8 @@ sys.path.append('..')
 from rdkit import Chem
 
 import torch
-
+import torch.distributed as dist
+        
 from torch.utils.data import Subset, DistributedSampler
 from torch_geometric.data import Dataset, DataLoader, Data
 
@@ -778,8 +779,7 @@ class UAAG2DataModule(pl.LightningDataModule):
         # Use DistributedSampler to ensure each GPU processes unique test samples
         # This prevents multiple GPUs from processing the same samples and
         # overwriting each other's output files
-        import torch.distributed as dist
-        
+
         # Check if we're in distributed mode
         if dist.is_available() and dist.is_initialized():
             sampler = DistributedSampler(
