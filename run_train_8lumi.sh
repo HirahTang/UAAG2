@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=7            # 56 available cores / 8 tasks per node [4]
 #SBATCH --mem=480G                   # Standard memory for a full LUMI-G node [2]
 #SBATCH --time=2-00:00:00
-#SBATCH -o logs/train_%j_8GPUs0201.log
+#SBATCH -o logs/train_%j_8GPUs0203_prior.log
 #SBATCH -e logs/train_%j.log
 
 

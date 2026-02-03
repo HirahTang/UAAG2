@@ -22,8 +22,7 @@ TOTAL_NUM=1000  # For analysis script
 # SLURM settings for sampling jobs
 SAMPLING_TIME="2-00:00:00"
 SAMPLING_PARTITION="gpu,boomsma"
-SAMPLING_EXCLUDE="hendrixgpu01fl,hendrixgpu16fl,hendrixgpu19fl,hendrixgpu04fl,hendrixgpu26fl,hendrixgpu24fl,hendrixgpu25fl,hendrixgpu06fl"
-SAMPLING_ARRAY="0-249%9"  # 250 array jobs (25 proteins × 10 splits)
+SAMPLING_ARRAY="0-249"  # 250 array jobs (25 proteins × 10 splits)
 
 # SLURM settings for analysis jobs
 ANALYSIS_TIME="5:00:00"

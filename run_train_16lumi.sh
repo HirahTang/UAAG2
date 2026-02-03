@@ -67,6 +67,12 @@ MYMASKS="0x${c}000000000000,0x${c}00000000000000,0x${c}0000,0x${c}000000,0x${c},
 # For now, assuming uv-based environment from hantang_env
 cd ${WORK_DIR}
 
+# Switch to prior_condition branch
+echo ""
+echo "→ Switching to main branch..."
+git checkout main
+
+
 # Check GPU
 echo ""
 echo "→ Checking GPU availability..."
