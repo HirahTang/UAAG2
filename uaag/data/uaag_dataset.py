@@ -11,7 +11,7 @@ from rdkit import Chem
 
 import torch
 
-from torch.utils.data import Subset
+from torch.utils.data import Subset, DistributedSampler
 from torch_geometric.data import Dataset, DataLoader, Data
 
 from torch_geometric.data.lightning import LightningDataset
@@ -775,23 +775,28 @@ class UAAG2DataModule(pl.LightningDataModule):
         return dataloader
     
     def test_dataloader(self):
-        # Filter out samples with no pocket atoms
-        valid_indices = []
-        for idx in range(len(self.test_data)):
-            sample = self.test_data[idx]
-            # Check if there are pocket atoms (is_ligand == 0)
-            if (sample.is_ligand == 0).any():
-                valid_indices.append(idx)
+        # Use DistributedSampler to ensure each GPU processes unique test samples
+        # This prevents multiple GPUs from processing the same samples and
+        # overwriting each other's output files
+        import torch.distributed as dist
         
-        # Create a subset with only valid samples
-        filtered_test_data = Subset(self.test_data, valid_indices)
+        # Check if we're in distributed mode
+        if dist.is_available() and dist.is_initialized():
+            sampler = DistributedSampler(
+                self.test_data,
+                shuffle=False,  # Keep test order deterministic
+                drop_last=False  # Process all test samples
+            )
+        else:
+            sampler = None
         
         dataloader = DataLoader(
-            dataset=filtered_test_data,
+            dataset=self.test_data,
             batch_size=self.cfg.batch_size,
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
             shuffle=False,
+            sampler=sampler,  # Use distributed sampler in multi-GPU mode
             persistent_workers=False,
         )
         return dataloader
