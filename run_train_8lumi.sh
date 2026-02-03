@@ -58,6 +58,11 @@ export NCCL_NET_GDR_LEVEL=3          # Enable GPU Direct RDMA [10, 11]
 # For now, assuming uv-based environment from hantang_env
 cd ${WORK_DIR}
 
+# Switch to prior_condition branch
+echo ""
+echo "→ Switching to prior_condition branch..."
+git checkout prior_condition
+
 # Check GPU
 echo ""
 echo "→ Checking GPU availability..."
@@ -71,8 +76,7 @@ python scripts/run_train.py \
   --batch-size 8 --test-interval 5 \
   --gpus 8 --mask-rate 0 --test-size 32 --train-size 0.99 \
   --num_nodes 1 \
-  --id Full_mask_8_gpu_${MODEL}_0202 --max-virtual-nodes 5 --use_metadata_sampler \
+  --id Full_mask_8_gpu_${MODEL}_0203_prior --max-virtual-nodes 5 --use_metadata_sampler \
   --training_data $DATA_PATH \
   --data_info_path $DATA_INFO_PATH \
-  --metadata_path $METADATA_PATH --num-workers 4 \
-  --load-ckpt /flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFull_mask_8_gpu_UAAG_model_official_8_0202/last.ckpt \
+  --metadata_path $METADATA_PATH --num-workers 4
