@@ -21,7 +21,7 @@ echo ""
 MODEL=UAAG_model
 CKPT_PATH=/flash/project_465002574/UAAG2_main/${MODEL}/last.ckpt
 CONFIG_FILE=/flash/project_465002574/UAAG2_main/slurm_config/slurm_config.txt
-NUM_SAMPLES=100  # Reduced for testing
+NUM_SAMPLES=16  # Reduced for testing
 BATCH_SIZE=8
 VIRTUAL_NODE_SIZE=15
 TEST_PROTEIN_ID="ENVZ_ECOLI"
