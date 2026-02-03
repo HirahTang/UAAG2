@@ -681,37 +681,39 @@ class Trainer(pl.LightningModule):
     
     
     def on_validation_epoch_end(self):
-        torch.cuda.empty_cache()
-        if (self.current_epoch + 1) % self.hparams.test_interval == 0:
-            if self.local_rank == 0:
-                print(f"Running evaluation in epoch {self.current_epoch + 1}")
-            final_res = self.run_evaluation(
-                step=self.i,
-                device="cuda" if self.hparams.gpus > 1 else "cpu",
-                dataset_info=self.dataset_info,
-                ngraphs=64,
-                bs=self.hparams.inference_batch_size,
-                verbose=True,
-                inner_verbose=False,
-                eta_ddim=1.0,
-                ddpm=True,
-                every_k_step=1,
-            )
+        # torch.cuda.empty_cache()
+        pass
+        
+        # if (self.current_epoch + 1) % self.hparams.test_interval == 0:
+        #     if self.local_rank == 0:
+        #         print(f"Running evaluation in epoch {self.current_epoch + 1}")
+        #     final_res = self.run_evaluation(
+        #         step=self.i,
+        #         device="cuda" if self.hparams.gpus > 1 else "cpu",
+        #         dataset_info=self.dataset_info,
+        #         ngraphs=64,
+        #         bs=self.hparams.inference_batch_size,
+        #         verbose=True,
+        #         inner_verbose=False,
+        #         eta_ddim=1.0,
+        #         ddpm=True,
+        #         every_k_step=1,
+        #     )
 
-            self.i += 1
-            self.log(
-                "validity",
-                final_res["validity"],
-                on_epoch=True,
-                sync_dist=True,
-            )
+        #     self.i += 1
+        #     self.log(
+        #         "validity",
+        #         final_res["validity"],
+        #         on_epoch=True,
+        #         sync_dist=True,
+        #     )
             
-            self.log(
-                "connectivity",
-                final_res["connectivity"],
-                on_epoch=True,
-                sync_dist=True,
-            )
+        #     self.log(
+        #         "connectivity",
+        #         final_res["connectivity"],
+        #         on_epoch=True,
+        #         sync_dist=True,
+        #     )
          
     
     # @torch.no_grad()
