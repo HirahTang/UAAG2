@@ -187,27 +187,29 @@ OUTPUT_DIR="/scratch/project_465002574/UNAAGI_result/results/TEST/${PROTEIN_ID}_
 
 # Step 1: Post-processing
 echo "[$(date)] Step 1: Running post-processing..."
-# Use wildcard pattern to process all splits
-SAMPLES_PATTERN="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples"
-
-python scripts/post_analysis.py --analysis_path ${SAMPLES_PATTERN}
-
-if [ $? -eq 0 ]; then
-    echo "[$(date)] ✓ Post-processing completed"
-    
-    # aa_distribution.csv should be created in the first split directory found
-    AA_DIST_CSV=$(find /scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples -name "aa_distribution.csv" | head -1)
-    
-    if [ -z "${AA_DIST_CSV}" ]; then
-        echo "[$(date)] ✗ aa_distribution.csv not found!"
-        exit 1
+# Process each split directory separately
+for SPLIT_DIR in /scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples; do
+    if [ -d "${SPLIT_DIR}" ]; then
+        echo "[$(date)] Processing ${SPLIT_DIR}..."
+        python scripts/post_analysis.py --analysis_path "${SPLIT_DIR}"
+        if [ $? -ne 0 ]; then
+            echo "[$(date)] ✗ Post-processing failed for ${SPLIT_DIR}"
+            exit 1
+        fi
     fi
-    
-    echo "[$(date)] Found aa_distribution.csv at: ${AA_DIST_CSV}"
-else
-    echo "[$(date)] ✗ Post-processing failed"
+done
+
+echo "[$(date)] ✓ Post-processing completed for all splits"
+
+# aa_distribution.csv should be created in one of the split directories
+AA_DIST_CSV=$(find /scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples -name "aa_distribution.csv" | head -1)
+
+if [ -z "${AA_DIST_CSV}" ]; then
+    echo "[$(date)] ✗ aa_distribution.csv not found!"
     exit 1
 fi
+
+echo "[$(date)] Found aa_distribution.csv at: ${AA_DIST_CSV}"
 
 # Step 2: Evaluation
 echo ""
