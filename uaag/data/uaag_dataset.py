@@ -10,9 +10,8 @@ sys.path.append('..')
 from rdkit import Chem
 
 import torch
-import torch.distributed as dist
-        
-from torch.utils.data import Subset, DistributedSampler
+
+from torch.utils.data import Subset
 from torch_geometric.data import Dataset, DataLoader, Data
 
 from torch_geometric.data.lightning import LightningDataset
@@ -149,6 +148,42 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
         graph_data.charges = charges.float()
+        
+        # 50% chance to remove pocket atoms (train without context)
+        if torch.rand(1).item() < 0.5:
+            # Keep only ligand atoms (is_ligand == 1)
+            ligand_mask = graph_data.is_ligand == 1
+            
+            # Filter all node attributes
+            graph_data.x = graph_data.x[ligand_mask]
+            graph_data.pos = graph_data.pos[ligand_mask]
+            graph_data.charges = charges[ligand_mask]
+            graph_data.degree = graph_data.degree[ligand_mask]
+            graph_data.is_aromatic = graph_data.is_aromatic[ligand_mask]
+            graph_data.is_in_ring = graph_data.is_in_ring[ligand_mask]
+            graph_data.hybridization = graph_data.hybridization[ligand_mask]
+            graph_data.is_backbone = graph_data.is_backbone[ligand_mask]
+            graph_data.is_ligand = graph_data.is_ligand[ligand_mask]
+            
+            # Create mapping from old indices to new indices
+            old_indices = torch.where(ligand_mask)[0]
+            new_index_map = {old_idx.item(): new_idx for new_idx, old_idx in enumerate(old_indices)}
+            
+            # Filter edges: keep only edges where both nodes are ligand atoms
+            edge_mask = ligand_mask[graph_data.edge_index[0]] & ligand_mask[graph_data.edge_index[1]]
+            filtered_edge_index = graph_data.edge_index[:, edge_mask]
+            graph_data.edge_attr = graph_data.edge_attr[edge_mask]
+            graph_data.edge_ligand = graph_data.edge_ligand[edge_mask]
+            
+            # Remap edge indices to new node indices
+            new_edge_index = torch.zeros_like(filtered_edge_index)
+            for i in range(filtered_edge_index.size(1)):
+                new_edge_index[0, i] = new_index_map[filtered_edge_index[0, i].item()]
+                new_edge_index[1, i] = new_index_map[filtered_edge_index[1, i].item()]
+            graph_data.edge_index = new_edge_index
+            
+            charges = graph_data.charges  # Update charges reference
+        
         reconstruct_mask = graph_data.is_ligand - graph_data.is_backbone
         new_backbone = graph_data.is_backbone[reconstruct_mask==1]
         # randomly change contents in new_backbone to 1 by the prob of 0.5
@@ -624,7 +659,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         sample_size = torch.randint(1, self.sample_size + 1, (1,)).item()
         reconstruct_mask = 1 - self.data.is_backbone
 
-        # Since this is PRIOR sampling (no pocket), we create molec ules from scratch
+        # Since this is PRIOR sampling (no pocket), we create molecules from scratch
         # Create new ligand nodes with random features from prior distribution
         
         x = self.data.x[reconstruct_mask==0]
@@ -776,27 +811,12 @@ class UAAG2DataModule(pl.LightningDataModule):
         return dataloader
     
     def test_dataloader(self):
-        # Use DistributedSampler to ensure each GPU processes unique test samples
-        # This prevents multiple GPUs from processing the same samples and
-        # overwriting each other's output files
-
-        # Check if we're in distributed mode
-        if dist.is_available() and dist.is_initialized():
-            sampler = DistributedSampler(
-                self.test_data,
-                shuffle=False,  # Keep test order deterministic
-                drop_last=False  # Process all test samples
-            )
-        else:
-            sampler = None
-        
         dataloader = DataLoader(
             dataset=self.test_data,
             batch_size=self.cfg.batch_size,
             num_workers=self.cfg.num_workers,
             pin_memory=self.pin_memory,
             shuffle=False,
-            sampler=sampler,  # Use distributed sampler in multi-GPU mode
             persistent_workers=False,
         )
         return dataloader
