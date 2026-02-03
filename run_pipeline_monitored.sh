@@ -148,6 +148,8 @@ module load CrayEnv
 module load lumi-container-wrapper/0.4.2-cray-python-default
 export PATH="/flash/project_465002574/unaagi_env/bin:$PATH"
 
+cd /flash/project_465002574/UAAG2_main
+
 git fetch origin
 git checkout main
 
@@ -239,6 +241,8 @@ module load CrayEnv
 module load lumi-container-wrapper/0.4.2-cray-python-default
 export PATH="/flash/project_465002574/unaagi_env/bin:$PATH"
 
+cd /flash/project_465002574/UAAG2_main
+
 git fetch origin
 git checkout main
 
@@ -248,25 +252,57 @@ NUM_SAMPLES=NUM_SAMPLES_PLACEHOLDER
 TOTAL_NUM=TOTAL_NUM_PLACEHOLDER
 PROTEIN_IDX=PROTEIN_IDX_PLACEHOLDER
 
-ID=$(awk -v ArrayID=${PROTEIN_IDX} 'BEGIN{count=0} {if(count==ArrayID){print $2; exit} if(NR>1 && prev!=$2){count++} prev=$2}' ${CONFIG_FILE})
+# Get protein ID: find the line where this protein first appears
+# Protein 0 = first unique protein, Protein 1 = second unique protein, etc.
+ID=$(awk -v prot_idx=${PROTEIN_IDX} 'NR>1 {
+    if (!seen[$2]++) {
+        if (count++ == prot_idx) {
+            print $2
+            exit
+        }
+    }
+}' ${CONFIG_FILE})
+
 BASELINE=$(awk -v ID="${ID}" '$2==ID {print $3; exit}' ${CONFIG_FILE})
 
 RUN_ID_BASE="${MODEL}/${ID}_${MODEL}_variational_sampling_${NUM_SAMPLES}_ITER"
-SAMPLES_DIR="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split0/Samples"
 OUTPUT_DIR="/scratch/project_465002574/UNAAGI_result/results/${MODEL}/${ID}_${MODEL}_variational_sampling_${NUM_SAMPLES}_ITER"
 
 echo "============================================================================"
 echo "UAAG Analysis - Protein ${ID} (Iteration ITER)"
 echo "============================================================================"
 
-SAMPLES_PATH="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples"
-python scripts/post_analysis.py --analysis_path ${SAMPLES_PATH}
+# Step 1: Post-processing - process each split separately
+echo "[$(date)] Running post-processing for all splits..."
+for SPLIT_DIR in /scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples; do
+    if [ -d "${SPLIT_DIR}" ]; then
+        echo "[$(date)] Processing ${SPLIT_DIR}..."
+        python scripts/post_analysis.py --analysis_path "${SPLIT_DIR}"
+        if [ $? -ne 0 ]; then
+            echo "[$(date)] ✗ Post-processing failed for ${SPLIT_DIR}"
+            exit 1
+        fi
+    fi
+done
+echo "[$(date)] ✓ Post-processing completed for all splits"
+
+# Step 2: Evaluation
+echo "[$(date)] Running evaluation..."
+AA_DIST_CSV=$(find /scratch/project_465002574/ProteinGymSampling/run${RUN_ID_BASE}_split*/Samples -name "aa_distribution.csv" | head -1)
+
+if [ -z "${AA_DIST_CSV}" ]; then
+    echo "[$(date)] ✗ aa_distribution.csv not found!"
+    exit 1
+fi
 
 python scripts/result_eval_uniform.py \
-    --generated ${SAMPLES_DIR}/aa_distribution.csv \
+    --generated ${AA_DIST_CSV} \
     --baselines /scratch/project_465002574/UNAAGI_benchmark_values/baselines/${BASELINE} \
     --total_num ${TOTAL_NUM} \
     --output_dir ${OUTPUT_DIR}
+
+# Step 3: Compression and cleanup
+echo "[$(date)] Compressing and archiving..."
 
 ARCHIVE_DIR="/scratch/project_465002574/UNAAGI_archives/${MODEL}"
 mkdir -p ${ARCHIVE_DIR}
