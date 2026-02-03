@@ -50,10 +50,22 @@ echo "==========================================================================
 SCRIPT_DIR="/flash/project_465002574/UAAG2_main/tmp_scripts"
 mkdir -p ${SCRIPT_DIR}
 
+# Array to store sampling job IDs for later dependency
+declare -a SAMPLING_JOBS
+
+# Step 1: Submit all sampling jobs first
+echo ""
+echo "Step 1: Submitting all sampling jobs (5 iterations)..."
+echo "------------------------------------------------------------"
+
+# Step 1: Submit all sampling jobs first
+echo ""
+echo "Step 1: Submitting all sampling jobs (5 iterations)..."
+echo "------------------------------------------------------------"
+
 # Loop through 5 iterations and submit jobs
 for i in {1..5}; do
-    echo ""
-    echo "Submitting jobs for iteration ${i}..."
+    echo "Iteration ${i}: Creating sampling job..."
     
     # Create sampling script
     SAMPLING_SCRIPT="${SCRIPT_DIR}/sampling_iter${i}.sh"
@@ -127,13 +139,23 @@ SAMPLING_EOF
     sed -i "s|SAMPLING_PARTITION_PLACEHOLDER|${SAMPLING_PARTITION}|g" ${SAMPLING_SCRIPT}
     sed -i "s|SAMPLING_ARRAY_PLACEHOLDER|${SAMPLING_ARRAY}|g" ${SAMPLING_SCRIPT}
     
-    # Submit sampling job
+    # Submit sampling job and store job ID
     SAMPLING_JOB=$(sbatch --parsable ${SAMPLING_SCRIPT})
-    echo "  Sampling job submitted: ${SAMPLING_JOB}"
+    SAMPLING_JOBS[$i]=${SAMPLING_JOB}
+    echo "  ✓ Iteration ${i} sampling submitted: ${SAMPLING_JOB}"
+done
+
+echo ""
+echo "Step 2: Submitting all analysis jobs (125 jobs: 5 iterations × 25 proteins)..."
+echo "------------------------------------------------------------"
+
+# Loop through iterations again to submit analysis jobs
+for i in {1..5}; do
+    SAMPLING_JOB=${SAMPLING_JOBS[$i]}
+    echo "Iteration ${i}: Submitting 25 analysis jobs (depends on ${SAMPLING_JOB})..."
     
     # Submit individual analysis jobs per protein (25 proteins)
     # Each analysis job depends only on its 10 sampling splits
-    echo "  Submitting 25 per-protein analysis jobs..."
     
     for protein_idx in {0..24}; do
         # Create per-protein analysis script
@@ -278,16 +300,14 @@ ANALYSIS_EOF
         ANALYSIS_JOB=$(sbatch --parsable --dependency=${dep_string} ${ANALYSIS_SCRIPT})
         
         if [ $((protein_idx % 5)) -eq 0 ]; then
-            echo "    Protein ${protein_idx}: ${ANALYSIS_JOB} (depends on sampling tasks ${start_task}-${end_task})"
+            echo "  Protein ${protein_idx}: ${ANALYSIS_JOB} (sampling tasks ${start_task}-${end_task})"
         fi
     done
-    echo "  ✓ All 25 analysis jobs submitted for iteration ${i}"
 done
 
 echo ""
-echo "============================================================================"
-echo "Submitting CP2 and PUMA UAA benchmark jobs..."
-echo "============================================================================"
+echo "Step 3: Submitting CP2 and PUMA UAA benchmark jobs..."
+echo "------------------------------------------------------------"
 
 # Submit CP2 jobs (10 array jobs, no iterations)
 echo "Submitting CP2 jobs..."
