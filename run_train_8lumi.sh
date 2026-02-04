@@ -79,4 +79,5 @@ python scripts/run_train.py \
   --id Full_mask_8_gpu_${MODEL}_0203_prior --max-virtual-nodes 5 --use_metadata_sampler \
   --training_data $DATA_PATH \
   --data_info_path $DATA_INFO_PATH \
-  --metadata_path $METADATA_PATH --num-workers 4
+  --metadata_path $METADATA_PATH --num-workers 4 \
+  --load-ckpt /flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFull_mask_8_gpu_UAAG_model_official_8_0203_prior/last-v1.ckpt
