@@ -50,13 +50,15 @@ get_current_job_count() {
 }
 
 wait_for_capacity() {
+    local slots_needed=$1
     while true; do
         CURRENT_JOBS=$(get_current_job_count)
-        if [ $CURRENT_JOBS -lt $MAX_JOBS_ALLOWED ]; then
-            log_message "Current jobs: ${CURRENT_JOBS}/${MAX_JOBS_ALLOWED} - capacity available"
+        AVAILABLE=$((MAX_JOBS_ALLOWED - CURRENT_JOBS))
+        if [ $AVAILABLE -ge $slots_needed ]; then
+            log_message "Current jobs: ${CURRENT_JOBS}/${MAX_JOBS_ALLOWED} - ${AVAILABLE} slots available (need ${slots_needed})"
             return 0
         else
-            log_message "Current jobs: ${CURRENT_JOBS}/${MAX_JOBS_ALLOWED} - waiting ${CHECK_INTERVAL}s..."
+            log_message "Current jobs: ${CURRENT_JOBS}/${MAX_JOBS_ALLOWED} - need ${slots_needed} slots, waiting ${CHECK_INTERVAL}s..."
             sleep ${CHECK_INTERVAL}
         fi
     done
@@ -102,9 +104,6 @@ declare -A SAMPLING_JOBS
 declare -A ANALYSIS_JOBS_SUBMITTED
 
 while true; do
-    # Wait for capacity
-    wait_for_capacity
-    
     SUBMITTED_THIS_ROUND=0
     
     # Check each iteration and batch
@@ -122,6 +121,8 @@ while true; do
             
             # Submit sampling if pending
             if [[ "$STAGE" == "sampling_pending" ]]; then
+                # Need 10 slots for array tasks
+                wait_for_capacity 10
                 log_message "Iteration ${i}, Batch ${batch} (proteins ${start_protein}-${end_protein}): Submitting sampling..."
                 
                 # Create sampling script
@@ -203,7 +204,7 @@ SAMPLING_EOF
                 sed -i "s|^${i},${batch},sampling_pending,,|${i},${batch},sampling_running,${SAMPLING_JOB},submitted|" ${STATE_FILE}
                 log_message "  ✓ Iteration ${i} Batch ${batch} sampling submitted: ${SAMPLING_JOB} (${array_range})"
                 SUBMITTED_THIS_ROUND=$((SUBMITTED_THIS_ROUND + 1))
-                sleep 2
+                sleep 20))  # 10 array tasks
             else
                 log_message "  ✗ Iteration ${i} Batch ${batch} sampling failed: ${SAMPLING_JOB}"
             fi
@@ -352,10 +353,13 @@ ANALYSIS_EOF
         CP2_STATUS=$(grep "^cp2," ${STATE_FILE} | cut -d',' -f3)
         if [[ "$CP2_STATUS" == "sampling_pending" ]]; then
             log_message "Submitting CP2 benchmark..."
+            wait_for_capacity 10  # CP2 has 10 array tasks
+            log_message "Submitting CP2 benchmark..."
             CP2_JOB=$(sbatch --parsable run_sampling_CP2_sbatch.sh 2>&1)
             if [[ $CP2_JOB =~ ^[0-9]+$ ]]; then
                 sed -i "s|^cp2,.*|cp2,0,running,${CP2_JOB},completed|" ${STATE_FILE}
                 log_message "  ✓ CP2 submitted: ${CP2_JOB}"
+                SUBMITTED_THIS_ROUND=$((SUBMITTED_THIS_ROUND + 10))
             fi
         fi
     fi
@@ -363,12 +367,13 @@ ANALYSIS_EOF
     if ! grep -q "^puma,.*,completed" ${STATE_FILE}; then
         PUMA_STATUS=$(grep "^puma," ${STATE_FILE} | cut -d',' -f3)
         if [[ "$PUMA_STATUS" == "sampling_pending" ]]; then
+            wait_for_capacity 10  # PUMA has 10 array tasks
             log_message "Submitting PUMA benchmark..."
             PUMA_JOB=$(sbatch --parsable run_sampling_PUMA_sbatch.sh 2>&1)
             if [[ $PUMA_JOB =~ ^[0-9]+$ ]]; then
                 sed -i "s|^puma,.*|puma,0,running,${PUMA_JOB},completed|" ${STATE_FILE}
                 log_message "  ✓ PUMA submitted: ${PUMA_JOB}"
-            fi
+                SUBMITTED_THIS_ROUND=$((SUBMITTED_THIS_ROUND + 10))
         fi
     fi
     
