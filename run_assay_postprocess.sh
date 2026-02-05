@@ -99,6 +99,28 @@ for ITERATION in {0..4}; do
 done
 
 # ============================================================================
+# CLEANUP: EVALUATE, COMPRESS, AND DELETE .mol FILES
+# ============================================================================
+echo ""
+echo "============================================================================"
+echo "Cleanup and Archival"
+echo "============================================================================"
+echo "[$(date)] Running cleanup script to:"
+echo "  1. Evaluate molecules with PoseBusters"
+echo "  2. Compress .mol files to archive"
+echo "  3. Delete .mol files (keep CSV/JSON)"
+echo ""
+
+# Run the cleanup script
+bash ${WORK_DIR}/cleanup_mol_files.sh ${PROTEIN_ID} ${MODEL} ${NUM_SAMPLES}
+
+if [ $? -eq 0 ]; then
+    echo "[$(date)] ✓ Cleanup completed successfully"
+else
+    echo "[$(date)] ⚠ Cleanup completed with some warnings"
+fi
+
+# ============================================================================
 # EVALUATION (Optional - combine results)
 # ============================================================================
 echo ""
