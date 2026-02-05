@@ -76,24 +76,24 @@ for ITERATION in {0..4}; do
     echo "[$(date)] Processing iteration ${ITERATION}..."
     
     # Process each split for this iteration
-    for SPLIT in {0..9}; do
-        RUN_ID="${MODEL}/${PROTEIN_ID}_${MODEL}_${NUM_SAMPLES}_iter${ITERATION}"
-        SAMPLES_DIR="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID}/Samples"
+    
+    RUN_ID="${MODEL}/${PROTEIN_ID}_${MODEL}_${NUM_SAMPLES}_iter${ITERATION}"
+    SAMPLES_DIR="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID}/Samples"
+    
+    if [ -d "${SAMPLES_DIR}" ]; then
+        echo "  Processing ${SAMPLES_DIR}"
+        python scripts/post_analysis.py --analysis_path ${SAMPLES_DIR}
         
-        if [ -d "${SAMPLES_DIR}" ]; then
-            echo "  Processing split ${SPLIT}: ${SAMPLES_DIR}"
-            python scripts/post_analysis.py --analysis_path ${SAMPLES_DIR}
-            
-            if [ $? -ne 0 ]; then
-                echo "  ✗ Post-processing failed for iteration ${ITERATION}, split ${SPLIT}"
-                # Continue processing other iterations even if one fails
-            else
-                echo "  ✓ Post-processing completed for iteration ${ITERATION}, split ${SPLIT}"
-            fi
+        if [ $? -ne 0 ]; then
+            echo "  ✗ Post-processing failed for iteration ${ITERATION}, split ${SPLIT}"
+            # Continue processing other iterations even if one fails
         else
-            echo "  ⚠ Samples directory not found: ${SAMPLES_DIR}"
+            echo "  ✓ Post-processing completed for iteration ${ITERATION}, split ${SPLIT}"
         fi
-    done
+    else
+        echo "  ⚠ Samples directory not found: ${SAMPLES_DIR}"
+    fi
+    
     
     echo "[$(date)] ✓ Completed iteration ${ITERATION}"
 done
