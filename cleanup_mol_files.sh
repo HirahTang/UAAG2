@@ -85,8 +85,7 @@ for ITERATION in {0..4}; do
     
     python scripts/evaluate_mol_samples.py \
         "${SAMPLES_DIR}" \
-        -o "${OUTPUT_CSV}" \
-        --no-keep-sdf
+        -o "${OUTPUT_CSV}"
     
     if [ $? -eq 0 ]; then
         echo "  ✓ Evaluation completed: ${OUTPUT_CSV}"
