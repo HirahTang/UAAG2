@@ -681,7 +681,10 @@ class Trainer(pl.LightningModule):
     
     
     def on_validation_epoch_end(self):
+        
+        pass
         torch.cuda.empty_cache()
+        
         if (self.current_epoch + 1) % self.hparams.test_interval == 0:
             if self.local_rank == 0:
                 print(f"Running evaluation in epoch {self.current_epoch + 1}")
