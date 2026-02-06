@@ -92,10 +92,10 @@ echo "[$(date)] Starting evaluation..."
 OUTPUT_CSV="${SAMPLES_DIR}/posebusters_evaluation.csv"
 
 python scripts/evaluate_mol_samples.py \
-    --input_dir "${SAMPLES_DIR}" \
-    -o "${OUTPUT_CSV}" \
+    --input-dir "${SAMPLES_DIR}" \
+    --output "${SAMPLES_DIR}" \
     --max-workers 6 \
-    --temp-dir "/scratch/project_465002574/temp_sdf_cleanup_${SLURM_ARRAY_JOB_ID}_${ITERATION}"
+    --temp-dir "/flash/project_465002574/temp_sdf_cleanup_${SLURM_ARRAY_JOB_ID}_${ITERATION}"
 
 if [ $? -eq 0 ]; then
     echo "✓ Evaluation completed: ${OUTPUT_CSV}"

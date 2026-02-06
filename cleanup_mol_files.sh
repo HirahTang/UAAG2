@@ -84,7 +84,7 @@ for ITERATION in {0..4}; do
     OUTPUT_CSV="${SAMPLES_DIR}/posebusters_evaluation.csv"
     
     python scripts/evaluate_mol_samples.py \
-        --input_dir "${SAMPLES_DIR}" \
+        --input-dir "${SAMPLES_DIR}" \
         -o "${OUTPUT_CSV}" \
         --max-workers 6 \
         --temp-dir "/scratch/project_465002574/temp_sdf_cleanup_iter${ITERATION}"
