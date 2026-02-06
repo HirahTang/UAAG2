@@ -115,10 +115,10 @@ def evaluate_with_bust(sdf_file, mol_file=None):
     
     try:
         # Initialize PoseBusters
-        buster = PoseBusters(config='mol')
+        buster = PoseBusters(config='mol', max_workers=4)
         
         # Run evaluation
-        results = buster.bust([str(sdf_file)])
+        results = buster.bust(mol_pred=sdf_file, mol_true=sdf_file, mol_cond=sdf_file)
         
         # Extract results (bust returns a dataframe)
         if results is not None and len(results) > 0:
@@ -257,18 +257,18 @@ def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbos
             result['sdf_created'] = False
         
         results.append(result)
-    
+        
     # Evaluate with PoseBusters
     if verbose:
         print("\n2. Evaluating molecules with PoseBusters...")
         iterator = tqdm(results, desc="Evaluating", unit="molecule")
     else:
         iterator = results
-    
+
     for result in iterator:
         if result['conversion_success'] and result['sdf_file']:
             sdf_path = Path(result['sdf_file'])
-            
+            # from IPython import embed; embed()
             if sdf_path.exists():
                 bust_results = evaluate_with_bust(sdf_path, Path(result['mol_full_path']))
                 result['bust_evaluated'] = True
@@ -423,7 +423,7 @@ Example:
         """
     )
     
-    parser.add_argument('input_dir', 
+    parser.add_argument('--input_dir', 
                        help='Root directory containing .mol files (will search recursively)')
     parser.add_argument('-o', '--output', default='evaluation_results.csv',
                        help='Output CSV file path (default: evaluation_results.csv)')

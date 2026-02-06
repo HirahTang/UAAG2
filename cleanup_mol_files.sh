@@ -84,7 +84,7 @@ for ITERATION in {0..4}; do
     OUTPUT_CSV="${SAMPLES_DIR}/posebusters_evaluation.csv"
     
     python scripts/evaluate_mol_samples.py \
-        "${SAMPLES_DIR}" \
+        --input_dir "${SAMPLES_DIR}" \
         -o "${OUTPUT_CSV}"
     
     if [ $? -eq 0 ]; then
