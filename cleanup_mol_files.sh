@@ -85,7 +85,9 @@ for ITERATION in {0..4}; do
     
     python scripts/evaluate_mol_samples.py \
         --input_dir "${SAMPLES_DIR}" \
-        -o "${OUTPUT_CSV}"
+        -o "${OUTPUT_CSV}" \
+        --max-workers 6 \
+        --temp-dir "/scratch/project_465002574/temp_sdf_cleanup_iter${ITERATION}"
     
     if [ $? -eq 0 ]; then
         echo "  ✓ Evaluation completed: ${OUTPUT_CSV}"

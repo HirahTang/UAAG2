@@ -96,7 +96,7 @@ def convert_mol_to_sdf(mol_file, output_dir, input_path):
         return (False, None, str(e))
 
 
-def evaluate_with_bust(sdf_file, mol_file=None):
+def evaluate_with_bust(sdf_file, mol_file=None, max_workers=4):
     """
     Evaluate a molecule using PoseBusters.
     
@@ -115,7 +115,7 @@ def evaluate_with_bust(sdf_file, mol_file=None):
     
     try:
         # Initialize PoseBusters
-        buster = PoseBusters(config='mol', max_workers=4)
+        buster = PoseBusters(config='mol', max_workers=max_workers)
         
         # Run evaluation
         results = buster.bust(mol_pred=sdf_file, mol_true=sdf_file, mol_cond=sdf_file)
@@ -158,7 +158,7 @@ def evaluate_with_bust(sdf_file, mol_file=None):
         }
 
 
-def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbose=True):
+def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbose=True, max_workers=4):
     """
     Process all .mol samples: convert, evaluate, and record results.
     
@@ -270,7 +270,7 @@ def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbos
             sdf_path = Path(result['sdf_file'])
             # from IPython import embed; embed()
             if sdf_path.exists():
-                bust_results = evaluate_with_bust(sdf_path, Path(result['mol_full_path']))
+                bust_results = evaluate_with_bust(sdf_path, Path(result['mol_full_path']), max_workers=max_workers)
                 result['bust_evaluated'] = True
                 
                 # Merge bust results into main result
@@ -423,7 +423,7 @@ Example:
         """
     )
     
-    parser.add_argument('--input_dir', 
+    parser.add_argument('--input-dir', 
                        help='Root directory containing .mol files (will search recursively)')
     parser.add_argument('-o', '--output', default='evaluation_results.csv',
                        help='Output CSV file path (default: evaluation_results.csv)')
@@ -433,6 +433,7 @@ Example:
                        help='Keep .sdf files after evaluation (default: remove)')
     parser.add_argument('-q', '--quiet', action='store_true',
                        help='Suppress detailed output')
+    parser.add_argument('--max-workers', default=4)
     
     args = parser.parse_args()
     
@@ -451,7 +452,8 @@ Example:
             output_csv=args.output,
             temp_dir=args.temp_dir,
             keep_sdf=args.keep_sdf,
-            verbose=verbose
+            verbose=verbose,
+            max_workers=args.max_workers,
         )
         
         # Exit with error code if no samples passed (using strict criteria)
