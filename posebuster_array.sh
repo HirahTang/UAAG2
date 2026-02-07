@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=3-4
+#SBATCH --array=0-4
 #SBATCH -o logs/posebuster_%j.log
 #SBATCH -e logs/posebuster_%j.log
 
@@ -26,6 +26,7 @@ echo ""
 echo "→ Switching to prior_condition branch..."
 git checkout main
 
+ASSAY_NAME=AICDA_HUMAN
 
 # ============================================================================
 # ENVIRONMENT SETUP
@@ -40,10 +41,10 @@ module load CrayEnv
 module load lumi-container-wrapper/0.4.2-cray-python-default
 export PATH="/flash/project_465002574/unaagi_env/bin:$PATH"
 cd ${SAVE_DIR}
-mkdir -p A0A247D711_LISMN_iter${SLURM_ARRAY_TASK_ID}_extracted && tar -xzf /scratch/project_465002574/UNAAGI_archives/UAAG_model/A0A247D711_LISMN_UAAG_model_1000_iter${SLURM_ARRAY_TASK_ID}_mol_files.tar.gz -C A0A247D711_LISMN_iter${SLURM_ARRAY_TASK_ID}_extracted
+mkdir -p ${ASSAY_NAME}_iter${SLURM_ARRAY_TASK_ID}_extracted && tar -xzf /scratch/project_465002574/UNAAGI_archives/UAAG_model/${ASSAY_NAME}_UAAG_model_1000_iter${SLURM_ARRAY_TASK_ID}_mol_files.tar.gz -C ${ASSAY_NAME}_iter${SLURM_ARRAY_TASK_ID}_extracted
 cd ${WORK_DIR}
 
 python scripts/evaluate_mol_samples.py \
-    --input-dir /scratch/project_465002574/UNAAGI_archives/UAAG_model/A0A247D711_LISMN_iter${SLURM_ARRAY_TASK_ID}_extracted \
-    --output /scratch/project_465002574/UNAAGI_archives/UAAG_model/A0A247D711_LISMN_iter${SLURM_ARRAY_TASK_ID}_extracted/PoseBusterResults \
+    --input-dir /scratch/project_465002574/UNAAGI_archives/UAAG_model/${ASSAY_NAME}_iter${SLURM_ARRAY_TASK_ID}_extracted \
+    --output /scratch/project_465002574/ProteinGymSampling/runUAAG_model/${ASSAY_NAME}_UAAG_model_1000_iter${SLURM_ARRAY_TASK_ID}/PoseBusterResults \
     --temp-dir /flash/project_465002574/temp_sdf_iter${SLURM_ARRAY_TASK_ID}

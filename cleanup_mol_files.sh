@@ -81,11 +81,12 @@ for ITERATION in {0..4}; do
     echo "  Directory: ${SAMPLES_DIR}"
     
     # Run PoseBusters evaluation
-    OUTPUT_CSV="${SAMPLES_DIR}/posebusters_evaluation.csv"
+    
+    OUTPUT_CSV="${BASE_PATH}/${RUN_DIR}/PoseBusterResults"
     
     python scripts/evaluate_mol_samples.py \
         --input-dir "${SAMPLES_DIR}" \
-        -o "${OUTPUT_CSV}" \
+        --output "${OUTPUT_CSV}" \
         --max-workers 6 \
         --temp-dir "/scratch/project_465002574/temp_sdf_cleanup_iter${ITERATION}"
     
