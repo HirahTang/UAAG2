@@ -23,27 +23,52 @@ submit_assay() {
     
     echo "Submitting jobs for: ${assay_name}"
     echo "  Config: ${config_file}"
-    echo "  Sampling tasks: 0-49 (5 iterations × 10 splits)"
+    echo "  Pipeline: Sampling → Post-analysis → PoseBusters → Compress → Delete"
+    echo ""
     
-    # Submit the sampling array job
+    # Step 1: Submit the sampling array job (50 tasks)
     SAMPLING_JOB=$(sbatch --parsable \
                           --job-name="UAAG_samp_${assay_name}" \
                           --export=ALL,CONFIG_FILE=${config_file} \
                           ${SCRIPT} ${config_file} 2>&1)
     
     if [[ ${SAMPLING_JOB} =~ ^[0-9]+$ ]]; then
-        echo "  ✓ Sampling job submitted: ${SAMPLING_JOB} (50 array tasks)"
+        echo "  ✓ Step 1: Sampling submitted: ${SAMPLING_JOB} (50 array tasks: 5 iter × 10 splits)"
         
-        # Submit post-processing job with dependency on sampling completion
+        # Step 2: Submit post-processing job (generates aa_distribution.csv)
         POSTPROC_JOB=$(sbatch --parsable \
                               --job-name="UAAG_post_${assay_name}" \
                               --dependency=afterok:${SAMPLING_JOB} \
                               run_assay_postprocess.sh ${config_file} 2>&1)
         
         if [[ ${POSTPROC_JOB} =~ ^[0-9]+$ ]]; then
-            echo "  ✓ Post-processing job submitted: ${POSTPROC_JOB} (runs after ${SAMPLING_JOB})"
+            echo "  ✓ Step 2: Post-analysis submitted: ${POSTPROC_JOB} (generates aa_distribution.csv)"
+            
+            # Step 3: Submit PoseBusters array job (5 tasks, one per iteration)
+            POSEBUSTER_JOB=$(sbatch --parsable \
+                                    --job-name="UAAG_pb_${assay_name}" \
+                                    --dependency=afterok:${POSTPROC_JOB} \
+                                    run_posebuster_array.sh ${config_file} 2>&1)
+            
+            if [[ ${POSEBUSTER_JOB} =~ ^[0-9]+$ ]]; then
+                echo "  ✓ Step 3: PoseBusters submitted: ${POSEBUSTER_JOB} (5 array tasks: evaluates .mol files)"
+                
+                # Step 4: Submit cleanup array job (compress & delete)
+                CLEANUP_JOB=$(sbatch --parsable \
+                                     --job-name="UAAG_clean_${assay_name}" \
+                                     --dependency=afterok:${POSEBUSTER_JOB} \
+                                     cleanup_mol_files_array.sh ${assay_name} UAAG_model 1000 2>&1)
+                
+                if [[ ${CLEANUP_JOB} =~ ^[0-9]+$ ]]; then
+                    echo "  ✓ Step 4: Cleanup submitted: ${CLEANUP_JOB} (5 array tasks: compress & delete)"
+                else
+                    echo "  ✗ Cleanup submission failed: ${CLEANUP_JOB}"
+                fi
+            else
+                echo "  ✗ PoseBusters submission failed: ${POSEBUSTER_JOB}"
+            fi
         else
-            echo "  ✗ Post-processing submission failed: ${POSTPROC_JOB}"
+            echo "  ✗ Post-analysis submission failed: ${POSTPROC_JOB}"
         fi
     else
         echo "  ✗ Sampling job submission failed: ${SAMPLING_JOB}"

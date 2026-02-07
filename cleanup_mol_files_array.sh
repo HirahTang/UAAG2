@@ -80,28 +80,23 @@ fi
 echo "Processing directory: ${SAMPLES_DIR}"
 
 # ============================================================================
-# STEP 1: EVALUATE WITH POSEBUSTERS
+# STEP 1: VERIFY POSEBUSTERS RESULTS
 # ============================================================================
 echo ""
 echo "============================================================================"
-echo "STEP 1: PoseBusters Evaluation (Iteration ${ITERATION})"
+echo "STEP 1: Verify PoseBusters Results (Iteration ${ITERATION})"
 echo "============================================================================"
-echo "[$(date)] Starting evaluation..."
 
-# Run PoseBusters evaluation
 OUTPUT_CSV="${SAMPLES_DIR}/posebusters_evaluation.csv"
 
-python scripts/evaluate_mol_samples.py \
-    --input-dir "${SAMPLES_DIR}" \
-    --output "${SAMPLES_DIR}" \
-    --max-workers 6 \
-    --temp-dir "/flash/project_465002574/temp_sdf_cleanup_${SLURM_ARRAY_JOB_ID}_${ITERATION}"
-
-if [ $? -eq 0 ]; then
-    echo "✓ Evaluation completed: ${OUTPUT_CSV}"
+if [ -f "${OUTPUT_CSV}" ]; then
+    echo "✓ PoseBusters results found: ${OUTPUT_CSV}"
+    LINES=$(wc -l < "${OUTPUT_CSV}")
+    echo "  Evaluated molecules: $((LINES - 1))"
 else
-    echo "✗ Evaluation failed for iteration ${ITERATION}"
-    echo "Continuing with compression anyway..."
+    echo "⚠ WARNING: PoseBusters results not found: ${OUTPUT_CSV}"
+    echo "  This might indicate PoseBusters job failed or hasn't completed yet"
+    echo "  Continuing with compression anyway..."
 fi
 
 # ============================================================================

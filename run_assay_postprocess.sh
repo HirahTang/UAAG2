@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=7
 #SBATCH --mem=60G
-#SBATCH --time=5:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH -o /scratch/project_465002574/UAAG_logs/postproc_%j.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/postproc_%j.log
 
@@ -99,26 +99,12 @@ for ITERATION in {0..4}; do
 done
 
 # ============================================================================
-# CLEANUP: EVALUATE, COMPRESS, AND DELETE .mol FILES
+# NOTE: PoseBusters and Cleanup are now handled by separate array jobs
 # ============================================================================
-echo ""
-echo "============================================================================"
-echo "Cleanup and Archival"
-echo "============================================================================"
-echo "[$(date)] Running cleanup script to:"
-echo "  1. Evaluate molecules with PoseBusters"
-echo "  2. Compress .mol files to archive"
-echo "  3. Delete .mol files (keep CSV/JSON)"
-echo ""
-
-# Run the cleanup script
-bash ${WORK_DIR}/cleanup_mol_files.sh ${PROTEIN_ID} ${MODEL} ${NUM_SAMPLES}
-
-if [ $? -eq 0 ]; then
-    echo "[$(date)] ✓ Cleanup completed successfully"
-else
-    echo "[$(date)] ⚠ Cleanup completed with some warnings"
-fi
+# The pipeline now submits separate array jobs for:
+#   - PoseBusters evaluation (run_posebuster_array.sh - 5 parallel tasks)
+#   - Cleanup/compression (cleanup_mol_files_array.sh - 5 parallel tasks)
+# These are submitted with dependencies in submit_assay_jobs.sh
 
 # ============================================================================
 # EVALUATION (Optional - combine results)
