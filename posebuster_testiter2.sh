@@ -29,11 +29,11 @@ module load LUMI
 module load CrayEnv
 module load lumi-container-wrapper/0.4.2-cray-python-default
 export PATH="/flash/project_465002574/unaagi_env/bin:$PATH"
-# cd ${SAVE_DIR}
-# mkdir -p A0A247D711_LISMN_iter1_extracted && tar -xzf /scratch/project_465002574/UNAAGI_archives/UAAG_model/A0A247D711_LISMN_UAAG_model_1000_iter1_mol_files.tar.gz -C A0A247D711_LISMN_iter1_extracted
+cd ${SAVE_DIR}
+mkdir -p A0A247D711_LISMN_iter2_extracted && tar -xzf /scratch/project_465002574/UNAAGI_archives/UAAG_model/A0A247D711_LISMN_UAAG_model_1000_iter2_mol_files.tar.gz -C A0A247D711_LISMN_iter2_extracted
 cd ${WORK_DIR}
 
 python scripts/evaluate_mol_samples.py \
-    --input-dir /scratch/project_465002574/UNAAGI_archives/UAAG_model/A0A247D711_LISMN_iter0_extracted \
-    --output /scratch/project_465002574/UNAAGI_archives/UAAG_model/A0A247D711_LISMN_iter0_extracted/PoseBusterResults \
-    --temp-dir /flash/project_465002574/temp_sdf_iter0
+    --input-dir /scratch/project_465002574/UNAAGI_archives/UAAG_model/A0A247D711_LISMN_iter2_extracted \
+    --output /scratch/project_465002574/UNAAGI_archives/UAAG_model/A0A247D711_LISMN_iter2_extracted/PoseBusterResults \
+    --temp-dir /flash/project_465002574/temp_sdf_iter2

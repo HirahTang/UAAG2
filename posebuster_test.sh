@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
-#SBATCH --time=2:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH -o logs/posebuster_%j.log
 #SBATCH -e logs/posebuster_%j.log
 
