@@ -1,10 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=UAAG_postproc
 #SBATCH --account=project_465002574
-#SBATCH --partition=standard-g
-#SBATCH --nodes=1
+#SBATCH --partition=small-g
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=7
+#SBATCH --cpus-per-task=4
 #SBATCH --mem=60G
 #SBATCH --time=2-00:00:00
 #SBATCH -o /scratch/project_465002574/UAAG_logs/postproc_%j.log

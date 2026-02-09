@@ -1,8 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=UAAG_array
 #SBATCH --account=project_465002574
-#SBATCH --partition=standard-g
-#SBATCH --nodes=1
+#SBATCH --partition=small-g
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=7
 #SBATCH --gpus-per-node=1

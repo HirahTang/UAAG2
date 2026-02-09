@@ -1,12 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=UAAG_cleanup
 #SBATCH --account=project_465002574
-#SBATCH --partition=standard-g
-#SBATCH --nodes=1
+#SBATCH --partition=small-g
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=7
+#SBATCH --cpus-per-task=4
 #SBATCH --mem=60G
-#SBATCH --time=5:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --array=0-4
 #SBATCH -o /scratch/project_465002574/UAAG_logs/cleanup_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/cleanup_%A_%a.log

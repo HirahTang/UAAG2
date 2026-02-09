@@ -1,8 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=posebuster_test
 #SBATCH --account=project_465002574
-#SBATCH --partition=standard-g
-#SBATCH --nodes=1
+#SBATCH --partition=small-g
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
