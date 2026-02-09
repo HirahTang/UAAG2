@@ -4,9 +4,9 @@
 #SBATCH --partition=standard-g
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=7
-#SBATCH --mem=60G
-#SBATCH --time=5:00:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=20G
+#SBATCH --time=2-00:00:00
 #SBATCH --array=0-4
 #SBATCH -o /scratch/project_465002574/UAAG_logs/posebuster_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/posebuster_%A_%a.log
@@ -81,7 +81,7 @@ mkdir -p /scratch/project_465002574/UAAG_logs
 # CHECK SAMPLES DIRECTORY
 # ============================================================================
 RUN_DIR="run${MODEL}/${PROTEIN_ID}_${MODEL}_${NUM_SAMPLES}_iter${ITERATION}"
-SAMPLES_DIR="${BASE_PATH}/${RUN_DIR}/Samples"
+SAMPLES_DIR="${BASE_PATH}/${RUN_DIR}"
 
 if [ ! -d "${SAMPLES_DIR}" ]; then
     echo "✗ ERROR: Samples directory not found - ${SAMPLES_DIR}"
@@ -108,7 +108,7 @@ echo "STEP 1: PoseBusters Evaluation (Iteration ${ITERATION})"
 echo "============================================================================"
 echo "[$(date)] Starting PoseBusters..."
 
-OUTPUT_CSV="${SAMPLES_DIR}/posebusters_evaluation.csv"
+OUTPUT_CSV="${SAMPLES_DIR}/PoseBusterResults"
 TEMP_DIR="/flash/project_465002574/temp_sdf_posebuster_${SLURM_ARRAY_JOB_ID}_iter${ITERATION}"
 
 echo "Input directory: ${SAMPLES_DIR}"
@@ -118,8 +118,7 @@ echo ""
 
 python scripts/evaluate_mol_samples.py \
     --input-dir "${SAMPLES_DIR}" \
-    --output "${SAMPLES_DIR}" \
-    --max-workers 6 \
+    --output "${OUTPUT_CSV}" \
     --temp-dir "${TEMP_DIR}"
 
 if [ $? -eq 0 ]; then
@@ -127,9 +126,9 @@ if [ $? -eq 0 ]; then
     echo "✓ PoseBusters evaluation completed: ${OUTPUT_CSV}"
     
     # Check if summary file was created
-    if [ -f "${SAMPLES_DIR}/posebusters_evaluation_summary.txt" ]; then
+    if [ -f "${OUTPUT_CSV}_summary.txt" ]; then
         echo "✓ Summary file created"
-        cat "${SAMPLES_DIR}/posebusters_evaluation_summary.txt"
+        cat "${OUTPUT_CSV}_summary.txt"
     fi
 else
     echo ""
@@ -137,19 +136,6 @@ else
     exit 1
 fi
 
-# ============================================================================
-# STEP 2: CLEANUP TEMPORARY FILES
-# ============================================================================
-echo ""
-echo "============================================================================"
-echo "STEP 2: Cleanup Temporary Files"
-echo "============================================================================"
-
-if [ -d "${TEMP_DIR}" ]; then
-    echo "[$(date)] Removing temporary SDF directory: ${TEMP_DIR}"
-    rm -rf ${TEMP_DIR}
-    echo "✓ Temp directory cleaned"
-fi
 
 # ============================================================================
 # SUMMARY

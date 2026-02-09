@@ -69,7 +69,7 @@ mkdir -p /scratch/project_465002574/UAAG_logs
 # CHECK IF DIRECTORY EXISTS
 # ============================================================================
 RUN_DIR="run${MODEL}/${PROTEIN_ID}_${MODEL}_${NUM_SAMPLES}_iter${ITERATION}"
-SAMPLES_DIR="${BASE_PATH}/${RUN_DIR}/Samples"
+SAMPLES_DIR="${BASE_PATH}/${RUN_DIR}"
 
 if [ ! -d "${SAMPLES_DIR}" ]; then
     echo "⚠ ERROR: Directory not found - ${SAMPLES_DIR}"
@@ -87,7 +87,7 @@ echo "==========================================================================
 echo "STEP 1: Verify PoseBusters Results (Iteration ${ITERATION})"
 echo "============================================================================"
 
-OUTPUT_CSV="${SAMPLES_DIR}/posebusters_evaluation.csv"
+OUTPUT_CSV="${SAMPLES_DIR}/PoseBusterResults"
 
 if [ -f "${OUTPUT_CSV}" ]; then
     echo "✓ PoseBusters results found: ${OUTPUT_CSV}"
@@ -155,8 +155,8 @@ echo "Files to KEEP:"
 echo "  - *_aa_table.csv"
 echo "  - results.json"
 echo "  - aa_distribution.csv"
-echo "  - posebusters_evaluation.csv"
-echo "  - posebusters_evaluation_summary.txt"
+echo "  - PoseBusterResults"
+echo "  - PoseBusterResults_summary.txt"
 echo ""
 
 echo "[$(date)] Starting cleanup..."
@@ -181,7 +181,7 @@ find . -type d -name "iter_*" -exec rm -rf {} + 2>/dev/null
 find . -type d -name "final" -exec rm -rf {} + 2>/dev/null
 
 # Verify important files are still there
-CSV_COUNT=$(find . -name "*_aa_table.csv" -o -name "aa_distribution.csv" -o -name "posebusters_evaluation.csv" | wc -l)
+CSV_COUNT=$(find . -name "*_aa_table.csv" -o -name "aa_distribution.csv" -o -name "PoseBusterResults" | wc -l)
 JSON_COUNT=$(find . -name "results.json" | wc -l)
 
 echo "✓ Cleanup complete"
@@ -202,11 +202,13 @@ REMAINING_MOL=$(find "${SAMPLES_DIR}" -name "*.mol" | wc -l)
 
 # Check for important files
 AA_DIST=$([ -f "${SAMPLES_DIR}/aa_distribution.csv" ] && echo "✓" || echo "✗")
-POSEBUST=$([ -f "${SAMPLES_DIR}/posebusters_evaluation.csv" ] && echo "✓" || echo "✗")
+POSEBUST=$([ -f "${SAMPLES_DIR}/PoseBusterResults" ] && echo "✓" || echo "✗")
+POSEBUST_SUMMARY=$([ -f "${SAMPLES_DIR}/PoseBusterResults_summary.txt" ] && echo "✓" || echo "✗")
 
 echo "Remaining .mol files: ${REMAINING_MOL} (should be 0)"
 echo "aa_distribution.csv: ${AA_DIST}"
-echo "posebusters_evaluation.csv: ${POSEBUST}"
+echo "PoseBusterResults: ${POSEBUST}"
+echo "PoseBusterResults_summary.txt: ${POSEBUST_SUMMARY}"
 
 # Disk usage
 DISK_USAGE=$(du -sh "${SAMPLES_DIR}" | cut -f1)
