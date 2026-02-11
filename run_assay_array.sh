@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=UAAG_array
 #SBATCH --account=project_465002574
-#SBATCH --partition=small-g
+#SBATCH --partition=standard-g
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=7
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=60G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=0-49
+#SBATCH --array=9,19,29,39,49
 #SBATCH -o /scratch/project_465002574/UAAG_logs/array_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/array_%A_%a.log
 
