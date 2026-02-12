@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=4
+#SBATCH --array=0-4
 #SBATCH -o /scratch/project_465002574/UAAG_logs/posebuster_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/posebuster_%A_%a.log
 
