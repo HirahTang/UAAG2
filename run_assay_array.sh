@@ -7,7 +7,7 @@
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=60G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=9,19,29,39,49
+#SBATCH --array=0-29
 #SBATCH -o /scratch/project_465002574/UAAG_logs/array_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/array_%A_%a.log
 

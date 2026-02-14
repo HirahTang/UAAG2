@@ -1,20 +1,20 @@
 #!/bin/bash
 #SBATCH --job-name=UAAG_posebuster
 #SBATCH --account=project_465002574
-#SBATCH --partition=small-g
+#SBATCH --partition=standard-g
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=0-4
+#SBATCH --array=0-2
 #SBATCH -o /scratch/project_465002574/UAAG_logs/posebuster_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/posebuster_%A_%a.log
 
 # ============================================================================
 # UAAG PoseBusters Array Job
 # ============================================================================
-# Parallel PoseBusters evaluation: Each array task handles ONE iteration (0-1)
+# Parallel PoseBusters evaluation: Each array task handles ONE iteration (0-2)
 # 
 # This script:
 # 1. Extracts archived .mol files for the iteration
