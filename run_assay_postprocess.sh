@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=UAAG_postproc
 #SBATCH --account=project_465002574
-#SBATCH --partition=small-g
+#SBATCH --partition=standard-g
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=60G
@@ -70,7 +70,7 @@ echo "==========================================================================
 echo "Running Post-Processing for All Iterations"
 echo "============================================================================"
 
-for ITERATION in {0..4}; do
+for ITERATION in {0..2}; do
     echo ""
     echo "[$(date)] Processing iteration ${ITERATION}..."
     
