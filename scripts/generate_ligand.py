@@ -65,7 +65,7 @@ def main(hparams):
     data_file = torch.load(hparams.benchmark_path, weights_only=False)
     
     # Split data into partitions based on split_index
-    NUM_PARTITIONS = 10
+    NUM_PARTITIONS = hparams.total_partition
     index = list(range(len(data_file)))
     part_size = len(index) // NUM_PARTITIONS
     
@@ -334,8 +334,7 @@ if __name__ == '__main__':
     parser.add_argument("--num-test-graphs", default=10000, type=int)
     parser.add_argument("--calculate-energy", default=False, action="store_true")
     parser.add_argument("--save-xyz", default=False, action="store_true")
-    parser.add_argument("--variational-sampling", default=False)
-    
+    parser.add_argument("--variational-sampling", default=False, action="store_true")
     parser.add_argument("--benchmark-path", default="/home/qcx679/hantang/UAAG2/data/full_graph/benchmarks/DN7A_SACS2.pt", type=str)
     
     parser.add_argument("--num-samples", default=500, type=int)
@@ -343,6 +342,7 @@ if __name__ == '__main__':
     parser.add_argument("--virtual_node_size", default=15, type=int)
 
     parser.add_argument("--split_index", default=0, type=int)
+    parser.add_argument("--total_partition", default=10, type=int)
     args = parser.parse_args()
     
     main(args)

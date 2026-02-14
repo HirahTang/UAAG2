@@ -11,7 +11,7 @@
 # All job logic is embedded in this file (no nested bash dependencies).
 #
 # Usage:
-#   ./submit_assay_job_swift.sh <assay_name|all> <checkpoint_path> [num_samples] [model_name]
+#   ./submit_assay_job_swift.sh <assay_name|all> <checkpoint_path> [num_samples] [model_name] [split_count]
 # ============================================================================
 
 ASSAY_DIR="slurm_config/assays"
@@ -19,12 +19,12 @@ WORK_DIR="/flash/project_465002574/UAAG2_main"
 LOG_DIR="/scratch/project_465002574/UAAG_logs"
 
 if [ $# -lt 2 ]; then
-    echo "Usage: $0 <assay_name|all> <checkpoint_path> [num_samples] [model_name]"
+    echo "Usage: $0 <assay_name|all> <checkpoint_path> [num_samples] [model_name] [split_count]"
     echo ""
     echo "Examples:"
     echo "  $0 ENVZ_ECOLI /flash/project_465002574/UAAG2_main/UAAG_model/last.ckpt"
     echo "  $0 all /flash/project_465002574/UAAG2_main/UAAG_model/last.ckpt"
-    echo "  $0 DN7A_SACS2 /path/to/last.ckpt 100 UAAG_model"
+    echo "  $0 DN7A_SACS2 /path/to/last.ckpt 100 UAAG_model 3"
     exit 1
 fi
 
@@ -32,6 +32,17 @@ ASSAY_NAME=$1
 CKPT_PATH=$2
 NUM_SAMPLES=${3:-100}
 MODEL_NAME=${4:-$(basename "$(dirname "${CKPT_PATH}")")}
+SPLIT_COUNT=${5:-3}
+
+if ! [[ ${SPLIT_COUNT} =~ ^[0-9]+$ ]]; then
+    echo "Error: split_count must be an integer (2 or 3), got: ${SPLIT_COUNT}"
+    exit 1
+fi
+
+if [ ${SPLIT_COUNT} -lt 2 ] || [ ${SPLIT_COUNT} -gt 3 ]; then
+    echo "Error: split_count must be 2 or 3, got: ${SPLIT_COUNT}"
+    exit 1
+fi
 
 if [ ! -f "${CKPT_PATH}" ]; then
     echo "Error: checkpoint path not found: ${CKPT_PATH}"
@@ -44,9 +55,25 @@ submit_assay() {
     assay_name=$(basename "${config_file}" .txt)
     local protein_id
     local baseline
+    local available_splits
+    local assay_split_count
+    local array_range
 
     protein_id=$(awk 'NR==2 {print $2}' "${config_file}")
     baseline=$(awk 'NR==2 {print $3}' "${config_file}")
+    available_splits=$(awk 'NR>1 && $5==0 {print $4}' "${config_file}" | sort -n | uniq | wc -l | tr -d ' ')
+
+    if [ -z "${available_splits}" ] || [ "${available_splits}" -eq 0 ]; then
+        echo "  ✗ No iteration-0 split rows found in ${config_file}"
+        return
+    fi
+
+    assay_split_count=${SPLIT_COUNT}
+    if [ ${available_splits} -lt ${assay_split_count} ]; then
+        assay_split_count=${available_splits}
+    fi
+
+    array_range="0-$((assay_split_count - 1))"
 
     if [ -z "${protein_id}" ]; then
         echo "  ✗ Failed to parse protein id from ${config_file}"
@@ -58,8 +85,9 @@ submit_assay() {
     echo "  Protein ID: ${protein_id}"
     echo "  Checkpoint: ${CKPT_PATH}"
     echo "  Model: ${MODEL_NAME}"
-    echo "  Pipeline: Sampling (1 iter × 10 splits) → Post-analysis/Eval → Cleanup"
+    echo "  Pipeline: Sampling (1 iter × ${assay_split_count} splits) → Post-analysis/Eval → Cleanup"
     echo "  Samples per split: ${NUM_SAMPLES}"
+    echo "  Split count: ${assay_split_count}"
     echo ""
 
     local sampling_wrap
@@ -76,19 +104,16 @@ CONFIG_FILE="${config_file}"
 CKPT_PATH="${CKPT_PATH}"
 MODEL="${MODEL_NAME}"
 NUM_SAMPLES="${NUM_SAMPLES}"
+SPLIT_COUNT="${assay_split_count}"
 
 ARRAY_ID=\${SLURM_ARRAY_TASK_ID}
-PROTEIN_ID=\$(awk -v ArrayID=\${ARRAY_ID} 'NR>1 && \$1==ArrayID {print \$2}' "\${CONFIG_FILE}")
-SPLIT_INDEX=\$(awk -v ArrayID=\${ARRAY_ID} 'NR>1 && \$1==ArrayID {print \$4}' "\${CONFIG_FILE}")
-ITERATION=\$(awk -v ArrayID=\${ARRAY_ID} 'NR>1 && \$1==ArrayID {print \$5}' "\${CONFIG_FILE}")
+PROTEIN_ID=\$(awk 'NR==2 {print \$2}' "\${CONFIG_FILE}")
+ITERATION=0
+SPLIT_LIST=\$(awk 'NR>1 && \$5==0 {print \$4}' "\${CONFIG_FILE}" | sort -n | uniq | head -n "\${SPLIT_COUNT}" | tr '\n' ' ')
+SPLIT_INDEX=\$(echo "\${SPLIT_LIST}" | awk -v i=\${ARRAY_ID} '{print \$(i+1)}')
 
-if [ -z "\${PROTEIN_ID}" ]; then
-    echo "Error: no row for ArrayID=\${ARRAY_ID} in \${CONFIG_FILE}"
-    exit 1
-fi
-
-if [ "\${ITERATION}" != "0" ]; then
-    echo "Error: swift mode requires iteration=0, got \${ITERATION}"
+if [ -z "\${PROTEIN_ID}" ] || [ -z "\${SPLIT_INDEX}" ]; then
+    echo "Error: failed to derive protein/split for task \${ARRAY_ID} from \${CONFIG_FILE}"
     exit 1
 fi
 
@@ -103,6 +128,7 @@ python scripts/generate_ligand.py \
     --num-samples "\${NUM_SAMPLES}" \
     --benchmark-path "\${BENCHMARK_PATH}" \
     --split_index "\${SPLIT_INDEX}" \
+    --total_partition "\${SPLIT_COUNT}" \
     --data_info_path /flash/project_465002574/UAAG2_main/data/statistic.pkl
 EOF
 )
@@ -115,7 +141,7 @@ EOF
         --gpus-per-node=1 \
         --mem=60G \
         --time=2-00:00:00 \
-        --array=0-9 \
+        --array=${array_range} \
         -o /scratch/project_465002574/UAAG_logs/array_swift_%A_%a.log \
         -e /scratch/project_465002574/UAAG_logs/array_swift_%A_%a.log \
         --job-name="UAAG_swift_samp_${assay_name}" \
@@ -123,7 +149,7 @@ EOF
         --wrap "${sampling_wrap}" 2>&1)
 
     if [[ ${SAMPLING_JOB} =~ ^[0-9]+$ ]]; then
-        echo "  ✓ Step 1: Sampling submitted: ${SAMPLING_JOB} (10 array tasks: iter0 × splits0-9)"
+        echo "  ✓ Step 1: Sampling submitted: ${SAMPLING_JOB} (${assay_split_count} array tasks: iter0 reduced splits)"
 
         local postproc_wrap
         postproc_wrap=$(cat <<EOF
@@ -261,6 +287,7 @@ if [ "${ASSAY_NAME}" == "all" ]; then
     echo "Submitting ALL assays in SWIFT mode"
     echo "Checkpoint: ${CKPT_PATH}"
     echo "Model: ${MODEL_NAME}"
+    echo "Split count per assay: ${SPLIT_COUNT}"
     echo "============================================================================"
     echo ""
 
@@ -276,6 +303,7 @@ if [ "${ASSAY_NAME}" == "all" ]; then
 elif [ -f "${ASSAY_DIR}/${ASSAY_NAME}.txt" ]; then
     echo "============================================================================"
     echo "Submitting single assay in SWIFT mode: ${ASSAY_NAME}"
+    echo "Split count: ${SPLIT_COUNT}"
     echo "============================================================================"
     echo ""
 
