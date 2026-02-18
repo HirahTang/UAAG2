@@ -35,7 +35,7 @@ The architecture is an **$E(3)$-equivariant Graph Neural Network** based on the 
        |                              |    |                            | pull       |
        v                              |    |                    +-------v-------+    |
  +-------------+   +--------------+   |    |      stream data   | Vertex AI     |    |
- | git push    +-->+ GitHub       |---------    +-------------->| (Training)    |    |
+ | git push    +-->+ GitHub       +--------+    +-------------->| (Training)    |    |
  | (Trigger)   |   | Actions (CI) |   |         |               +-------+-------+    |
  +-------------+   +--------------+   |         |                       |            |
                                       |         |                       | logs       |
@@ -147,49 +147,5 @@ files = {'file': open('data/benchmarks/ENVZ_ECOLI.pt', 'rb')}
 response = requests.post(url, files=files)
 print(response.json())
 ```
-
-## Project Architecture
-
-```
-                                      +--------------------------------------------------+
-                                      |              GOOGLE CLOUD PLATFORM               |
-                                      |                                                  |
- +-------------+   git push           |  +-------------+       +------------------+      |
- |  Developer  +------------------------>| Cloud Build +------>+ Artifact Registry|      |
- | (Local/uv)  |   (Trigger)          |  | (Build Img) | push  | (Docker Images)  |      |
- +-----+-------+                      |  +-------------+       +--------+---------+      |
-       |                              |                                 |                |
-       | pre-commit                   |                                 | pull           |
-       v                              |                         +-------v-------+        |
- +-------------+   +--------------+   |           stream data   | Compute Engine|        |
- | git commit  +-->+ GitHub       |   |         +-------------->| (Training VM) |        |
- | (Quality)   |   | Actions (CI) |   |         |               +-------+-------+        |
- +-------------+   +--------------+   |         |                       |                |
-                                      |         |                       | logs           |
- +-------------+                      |         |                       v                |
- | HuggingFace +--------------------------------+                       |                |
- | (Datasets)  |                      |                                 |                |
- +-------------+                      |                                 |                |
-                                      |                                 |                |
- +-------------+                      |                                 |                |
- |    WandB    |<-------------------------------------------------------+                |
- |(Experiments)|                      |                                                  |
- +-----+-------+                      |                                                  |
-       |                              |                                                  |
-       | register                     |                                                  |
-       v                              |                                                  |
- +-----+-------+                      |  +-----------------+     +--------------+        |
- | Model Reg   |    dev trigger       |  |  API Deploy WF  +---->+  Cloud Run   |        |
- |(Versioning) +------------------------>|  (Retag/Push)   |     | (Serverless) |        |
- +-------------+   (Tag: staging)     |  +-----------------+     +------+-------+        |
-                                      |                                 ^                |
-                                      +---------------------------------|----------------+
-                                                                        |
-                                                                 +------+-------+
-                                                                 |   End User   |
-                                                                 |  (Frontend)  |
-                                                                 +--------------+
-```
-
 
 *Project template created using [mlops_template](https://github.com/SkafteNicki/mlops_template), a [cookiecutter template](https://github.com/cookiecutter/cookiecutter) for getting started with Machine Learning Operations (MLOps).*
