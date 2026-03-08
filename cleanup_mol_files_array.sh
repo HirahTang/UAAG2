@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=60G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=0-2
+#SBATCH --array=2-4
 #SBATCH -o /scratch/project_465002574/UAAG_logs/cleanup_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/cleanup_%A_%a.log
 
@@ -113,16 +113,28 @@ ARCHIVE_NAME="${ARCHIVE_DIR}/${PROTEIN_ID}_${MODEL}_${NUM_SAMPLES}_iter${ITERATI
 cd "${SAMPLES_DIR}"
 
 # Count .mol files
-MOL_COUNT=$(find . -name "*.mol" -o -name "all_molecules.sdf" | wc -l)
+MOL_COUNT=$(find . \( -name "*.mol" -o -name "all_molecules.sdf" \) -type f | wc -l)
 
 if [ ${MOL_COUNT} -gt 0 ]; then
     echo "Found ${MOL_COUNT} molecule files"
-    
-    # Create tar archive with .mol and .sdf files
-    find . \( -name "*.mol" -o -name "all_molecules.sdf" \) -print0 | \
-        tar -czf "${ARCHIVE_NAME}" --null -T -
-    
-    if [ $? -eq 0 ]; then
+
+    # Create tar archive with progress output (no external dependency required)
+    TAR_EXIT_CODE=0
+    if tar --help 2>/dev/null | grep -q "--checkpoint-action"; then
+        echo "Using tar checkpoint progress updates during compression..."
+        find . \( -name "*.mol" -o -name "all_molecules.sdf" \) -type f -print0 | \
+            tar --null -T - -czf "${ARCHIVE_NAME}" \
+                --checkpoint=2000 \
+                --checkpoint-action=echo='[tar] checkpoints processed: %u'
+        TAR_EXIT_CODE=$?
+    else
+        echo "Checkpoint progress not supported by tar; using standard compression..."
+        find . \( -name "*.mol" -o -name "all_molecules.sdf" \) -type f -print0 | \
+            tar -czf "${ARCHIVE_NAME}" --null -T -
+        TAR_EXIT_CODE=$?
+    fi
+
+    if [ ${TAR_EXIT_CODE} -eq 0 ]; then
         ARCHIVE_SIZE=$(du -h "${ARCHIVE_NAME}" | cut -f1)
         echo "✓ Archive created: ${ARCHIVE_NAME} (${ARCHIVE_SIZE})"
     else

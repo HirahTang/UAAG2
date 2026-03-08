@@ -7,14 +7,14 @@
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=60G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=0-29
+#SBATCH --array=20-49
 #SBATCH -o /scratch/project_465002574/UAAG_logs/array_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/array_%A_%a.log
 
 # ============================================================================
 # UAAG Assay Array Job Script
 # ============================================================================
-# Runs all 50 tasks (5 iterations × 10 splits) for a single assay
+# Runs all 30 tasks (3 iterations × 10 splits) for a single assay
 # Usage: sbatch run_assay_array.sh <config_file>
 # Example: sbatch run_assay_array.sh slurm_config/assays/ENVZ_ECOLI.txt
 # ============================================================================

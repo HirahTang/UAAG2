@@ -8,14 +8,14 @@
 #SBATCH --cpus-per-task=7            # 56 available cores / 8 tasks per node [4]
 #SBATCH --mem=480G                   # Standard memory for a full LUMI-G node [2]
 #SBATCH --time=2-00:00:00
-#SBATCH -o logs/train_%j_8GPUs0208EXCLUDEILE.log
+#SBATCH -o logs/train_%j_8GPUs0208EXCLUDESER.log
 #SBATCH -e logs/train_%j.log
 
 
-DATA_PATH=/scratch/project_465002574/unaagi_exclude_ILE.lmdb
+DATA_PATH=/scratch/project_465002574/unaagi_exclude_SER.lmdb
 MODEL=UAAG_model_official_8
 DATA_INFO_PATH=/flash/project_465002574/UAAG2_main/data/statistic.pkl
-METADATA_PATH=/scratch/project_465002574/unaagi_exclude_ILE.metadata.pkl
+METADATA_PATH=/scratch/project_465002574/unaagi_exclude_SER.metadata.pkl
 
 # ============================================================================
 # ENVIRONMENT SETUP
@@ -71,8 +71,8 @@ python scripts/run_train.py \
   --batch-size 8 --test-interval 5 \
   --gpus 8 --mask-rate 0 --test-size 32 --train-size 0.99 \
   --num_nodes 1 \
-  --id Full_mask_8_gpu_${MODEL}_EXCLUDE_ILE_0212 --max-virtual-nodes 5 --use_metadata_sampler \
+  --id Full_mask_8_gpu_${MODEL}_EXCLUDE_SER_0215 --max-virtual-nodes 5 --use_metadata_sampler \
   --training_data $DATA_PATH \
   --data_info_path $DATA_INFO_PATH \
-  --metadata_path $METADATA_PATH --num-workers 6 --num-epochs 600 \
-  --load-ckpt /flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFull_mask_8_gpu_UAAG_model_official_8_EXCLUDE_ILE_0212/last.ckpt
+  --metadata_path $METADATA_PATH --num-workers 4 \
+  --load-ckpt /flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFull_mask_8_gpu_UAAG_model_official_8_EXCLUDE_SER_0215/last.ckpt
