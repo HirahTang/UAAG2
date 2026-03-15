@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=0-59
+#SBATCH --array=0-119%60
 #SBATCH -o /scratch/project_465002574/UAAG_logs/eqgat_lmdb_shard_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/eqgat_lmdb_shard_%A_%a.log
 
@@ -35,7 +35,7 @@ LATENT_ROOT_20=${LATENT_ROOT_20:-/scratch/project_465002574/PDB/PDB_20}
 
 OUTPUT_DIR=${OUTPUT_DIR:-/scratch/project_465002574/PDB/uaag2_eqgat_lmdb_shards}
 OUTPUT_PREFIX_BASE=${OUTPUT_PREFIX_BASE:-uaag2_eqgat_duallat_shard}
-NUM_SHARDS=${NUM_SHARDS:-60}
+NUM_SHARDS=${NUM_SHARDS:-120}
 SHARD_INDEX=${SLURM_ARRAY_TASK_ID}
 
 POCKET_RADIUS=${POCKET_RADIUS:-10.0}
