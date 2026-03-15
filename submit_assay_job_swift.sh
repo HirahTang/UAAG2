@@ -5,7 +5,7 @@
 # ============================================================================
 # Submits swift-mode jobs for UAAG assays:
 #   Sampling (1 iteration × 10 splits, 100 samples/split)
-#   -> Post-analysis + evaluation
+#   -> Post-analysis + evaluation (ProteinGym + PUMA + CP2)
 #   -> Cleanup (compress + delete .mol/.sdf)
 # PoseBusters is skipped in this mode.
 # All job logic is embedded in this file (no nested bash dependencies).
@@ -33,6 +33,9 @@ CKPT_PATH=$2
 NUM_SAMPLES=${3:-100}
 MODEL_NAME=${4:-$(basename "$(dirname "${CKPT_PATH}")")}
 SPLIT_COUNT=${5:-3}
+RUN_UAA_BENCHMARKS=${RUN_UAA_BENCHMARKS:-1}
+UAA_SPLIT_COUNT=${UAA_SPLIT_COUNT:-10}
+UAA_NUM_SAMPLES=${UAA_NUM_SAMPLES:-${NUM_SAMPLES}}
 
 if ! [[ ${SPLIT_COUNT} =~ ^[0-9]+$ ]]; then
     echo "Error: split_count must be an integer (2 or 3), got: ${SPLIT_COUNT}"
@@ -48,6 +51,112 @@ if [ ! -f "${CKPT_PATH}" ]; then
     echo "Error: checkpoint path not found: ${CKPT_PATH}"
     exit 1
 fi
+
+submit_uaa_benchmark_job() {
+    local uaa_name=$1
+    local benchmark_pt=$2
+    local benchmark_csv=$3
+    local uaa_array_range
+
+    if ! [[ ${UAA_SPLIT_COUNT} =~ ^[0-9]+$ ]] || [ "${UAA_SPLIT_COUNT}" -lt 1 ]; then
+        echo "Error: UAA_SPLIT_COUNT must be a positive integer, got: ${UAA_SPLIT_COUNT}"
+        return 1
+    fi
+
+    uaa_array_range="0-$((UAA_SPLIT_COUNT - 1))"
+
+    local uaa_wrap
+    uaa_wrap=$(cat <<EOF
+set -e
+module load LUMI
+module load CrayEnv
+module load lumi-container-wrapper/0.4.2-cray-python-default
+export PATH="/flash/project_465002574/unaagi_env/bin:\$PATH"
+mkdir -p "${LOG_DIR}"
+cd "${WORK_DIR}"
+
+MODEL="${MODEL_NAME}"
+CKPT_PATH="${CKPT_PATH}"
+UAA_NAME="${uaa_name}"
+NUM_SAMPLES="${UAA_NUM_SAMPLES}"
+BENCHMARK_PATH="${benchmark_pt}"
+BENCHMARK_CSV="${benchmark_csv}"
+SPLIT_INDEX=\${SLURM_ARRAY_TASK_ID}
+
+RUN_ID="\${MODEL}/\${UAA_NAME}_\${MODEL}_variational_sampling_\${NUM_SAMPLES}_split\${SPLIT_INDEX}"
+
+python scripts/generate_ligand.py \
+    --load-ckpt "\${CKPT_PATH}" \
+    --id "\${RUN_ID}" \
+    --batch-size 8 \
+    --virtual_node_size 15 \
+    --num-samples "\${NUM_SAMPLES}" \
+    --benchmark-path "\${BENCHMARK_PATH}" \
+    --split_index "\${SPLIT_INDEX}" \
+    --data_info_path /flash/project_465002574/UAAG2_main/data/statistic.pkl
+
+SAMPLES_PATH="/scratch/project_465002574/ProteinGymSampling/run\${RUN_ID}/Samples"
+OUTPUT_DIR="/scratch/project_465002574/UNAAGI_result/results/\${MODEL}/\${UAA_NAME}_\${MODEL}_variational_sampling_\${NUM_SAMPLES}_split\${SPLIT_INDEX}"
+
+python scripts/post_analysis.py --analysis_path "\${SAMPLES_PATH}"
+
+python scripts/result_eval_uniform_uaa.py \
+    --benchmark "\${BENCHMARK_CSV}" \
+    --aa_output "\${SAMPLES_PATH}/aa_distribution.csv" \
+    --output_dir "\${OUTPUT_DIR}" \
+    --total_num "\${NUM_SAMPLES}"
+EOF
+)
+
+    local uaa_job
+    uaa_job=$(sbatch --parsable \
+        --account=project_465002574 \
+        --partition=standard-g \
+        --ntasks=1 \
+        --cpus-per-task=7 \
+        --gpus-per-node=1 \
+        --mem=60G \
+        --time=2-00:00:00 \
+        --array=${uaa_array_range} \
+        -o /scratch/project_465002574/UAAG_logs/${uaa_name}_swift_%A_%a.log \
+        -e /scratch/project_465002574/UAAG_logs/${uaa_name}_swift_%A_%a.log \
+        --job-name="UAAG_swift_${uaa_name}_${MODEL_NAME}" \
+        --export=ALL \
+        --wrap "${uaa_wrap}" 2>&1)
+
+    if [[ ${uaa_job} =~ ^[0-9]+$ ]]; then
+        echo "  ✓ ${uaa_name} sampling+eval submitted: ${uaa_job} (${UAA_SPLIT_COUNT} array tasks)"
+    else
+        echo "  ✗ ${uaa_name} sampling+eval submission failed: ${uaa_job}"
+    fi
+}
+
+submit_uaa_benchmark_jobs() {
+    if [ "${RUN_UAA_BENCHMARKS}" != "1" ]; then
+        echo "Skipping CP2/PUMA benchmark sampling (RUN_UAA_BENCHMARKS=${RUN_UAA_BENCHMARKS})"
+        return
+    fi
+
+    echo "============================================================================"
+    echo "Submitting dedicated CP2/PUMA sampling+evaluation jobs"
+    echo "Checkpoint: ${CKPT_PATH}"
+    echo "Model: ${MODEL_NAME}"
+    echo "UAA samples per split: ${UAA_NUM_SAMPLES}"
+    echo "UAA split count: ${UAA_SPLIT_COUNT}"
+    echo "============================================================================"
+
+    submit_uaa_benchmark_job \
+        PUMA \
+        /scratch/project_465002574/UNAAGI_benchmarks/2roc_puma.pt \
+        /scratch/project_465002574/UNAAGI_benchmark_values/uaa_benchmark_csv/PUMA_reframe.csv
+
+    submit_uaa_benchmark_job \
+        CP2 \
+        /scratch/project_465002574/UNAAGI_benchmarks/5ly1_cp2.pt \
+        /scratch/project_465002574/UNAAGI_benchmark_values/uaa_benchmark_csv/CP2_reframe.csv
+
+    echo ""
+}
 
 submit_assay() {
     local config_file=$1
@@ -191,6 +300,25 @@ if [ -n "\${AA_DIST}" ] && [ -f "\${AA_DIST}" ]; then
         --baselines "/scratch/project_465002574/UNAAGI_benchmark_values/baselines/\${BASELINE}" \
         --total_num "\${NUM_SAMPLES}" \
         --output_dir "\${OUTPUT_DIR}"
+
+    # Also run NCAA-style UAA evaluations used by dedicated PUMA/CP2 pipelines.
+    UAA_BENCHMARK_DIR="/scratch/project_465002574/UNAAGI_benchmark_values/uaa_benchmark_csv"
+
+    for UAA_NAME in PUMA CP2; do
+        UAA_BENCHMARK="\${UAA_BENCHMARK_DIR}/\${UAA_NAME}_reframe.csv"
+        if [ -f "\${UAA_BENCHMARK}" ]; then
+            UAA_OUTPUT_DIR="\${OUTPUT_DIR}/\${UAA_NAME}"
+            mkdir -p "\${UAA_OUTPUT_DIR}"
+
+            python scripts/result_eval_uniform_uaa.py \
+                --benchmark "\${UAA_BENCHMARK}" \
+                --aa_output "\${AA_DIST}" \
+                --output_dir "\${UAA_OUTPUT_DIR}" \
+                --total_num "\${NUM_SAMPLES}"
+        else
+            echo "Warning: Missing UAA benchmark file, skipping \${UAA_NAME}: \${UAA_BENCHMARK}"
+        fi
+    done
 fi
 EOF
 )
@@ -291,6 +419,8 @@ if [ "${ASSAY_NAME}" == "all" ]; then
     echo "============================================================================"
     echo ""
 
+    submit_uaa_benchmark_jobs
+
     for config_file in ${ASSAY_DIR}/*.txt; do
         submit_assay ${config_file}
         sleep 1
@@ -306,6 +436,8 @@ elif [ -f "${ASSAY_DIR}/${ASSAY_NAME}.txt" ]; then
     echo "Split count: ${SPLIT_COUNT}"
     echo "============================================================================"
     echo ""
+
+    submit_uaa_benchmark_jobs
 
     submit_assay "${ASSAY_DIR}/${ASSAY_NAME}.txt"
 
