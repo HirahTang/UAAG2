@@ -16,7 +16,7 @@ set -euo pipefail
 #   OUTPUT_DIR=/scratch/project_465002574/PDB/uaag2_eqgat_lmdb_shards
 #   DEMO_ROOT=/scratch/project_465002574/PDB/demo_subsets
 #   FILE_GLOB="*.pdb"          # file pattern inside source dir
-#   PYTHON_SUBSET_BIN=python3    # python used on login node for random subset prep
+#   PREP_PYTHON_BIN=/flash/project_465002574/unaagi_env/bin/python
 #   PYTHON_BIN=/flash/project_465002574/unaagi_env/bin/python
 #   REPO_DIR=/flash/project_465002574/UAAG2_main
 #   LATENT_ROOT_128=/scratch/project_465002574/PDB/PDB_128
@@ -47,10 +47,10 @@ MAX_CONCURRENT_SHARDS="${MAX_CONCURRENT_SHARDS:-5}"
 OUTPUT_DIR="${OUTPUT_DIR:-/scratch/project_465002574/PDB/uaag2_eqgat_lmdb_shards}"
 DEMO_ROOT="${DEMO_ROOT:-/scratch/project_465002574/PDB/demo_subsets}"
 FILE_GLOB="${FILE_GLOB:-*.pdb}"
-PYTHON_SUBSET_BIN="${PYTHON_SUBSET_BIN:-python3}"
 
 # Runtime env consumed by run_build_eqgat_lmdb_array_sbatch.sh
 PYTHON_BIN="${PYTHON_BIN:-/flash/project_465002574/unaagi_env/bin/python}"
+PREP_PYTHON_BIN="${PREP_PYTHON_BIN:-$PYTHON_BIN}"
 REPO_DIR="${REPO_DIR:-/flash/project_465002574/UAAG2_main}"
 LATENT_ROOT_128="${LATENT_ROOT_128:-/scratch/project_465002574/PDB/PDB_128}"
 LATENT_ROOT_20="${LATENT_ROOT_20:-/scratch/project_465002574/PDB/PDB_20}"
@@ -69,29 +69,38 @@ if [[ ! -d "$SOURCE_PDB_DIR" ]]; then
   echo "Error: source folder not found: $SOURCE_PDB_DIR" >&2
   exit 1
 fi
-if ! command -v "$PYTHON_SUBSET_BIN" >/dev/null 2>&1; then
-  echo "Error: subset prep python not found: $PYTHON_SUBSET_BIN" >&2
-  exit 1
-fi
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 DEMO_INPUT_DIR="${DEMO_ROOT}/pdb_subset_${SAMPLE_SIZE}_${TIMESTAMP}"
 OUTPUT_PREFIX_BASE="${OUTPUT_LMDB_NAME}_shard"
 ARRAY_SPEC="0-$((NUM_SHARDS - 1))%${MAX_CONCURRENT_SHARDS}"
 
-mkdir -p "$DEMO_INPUT_DIR"
-
-echo "Preparing random subset..."
+echo "Submitting subset prep job..."
 echo "  SOURCE_PDB_DIR: $SOURCE_PDB_DIR"
 echo "  DEMO_INPUT_DIR: $DEMO_INPUT_DIR"
 echo "  SAMPLE_SIZE: $SAMPLE_SIZE"
 echo "  FILE_GLOB: $FILE_GLOB"
 echo "  PYTHON_BIN (job runtime): $PYTHON_BIN"
+echo "  PREP_PYTHON_BIN (prep job): $PREP_PYTHON_BIN"
 echo "  REPO_DIR (job runtime): $REPO_DIR"
 echo "  LATENT_ROOT_128: $LATENT_ROOT_128"
 echo "  LATENT_ROOT_20: $LATENT_ROOT_20"
 
-"$PYTHON_SUBSET_BIN" - "$SOURCE_PDB_DIR" "$DEMO_INPUT_DIR" "$SAMPLE_SIZE" "$FILE_GLOB" <<'PY'
+PREP_JOB_ID=$(sbatch --parsable \
+  --account=project_465002574 \
+  --partition=standard \
+  --ntasks=1 \
+  --cpus-per-task=1 \
+  --mem=4G \
+  --time=00:30:00 \
+  --job-name="eqgat_demo_prep" \
+  --output=/scratch/project_465002574/UAAG_logs/eqgat_demo_prep_%j.log \
+  --error=/scratch/project_465002574/UAAG_logs/eqgat_demo_prep_%j.log \
+  --export=ALL,SOURCE_PDB_DIR="$SOURCE_PDB_DIR",DEMO_INPUT_DIR="$DEMO_INPUT_DIR",SAMPLE_SIZE="$SAMPLE_SIZE",FILE_GLOB="$FILE_GLOB",PREP_PYTHON_BIN="$PREP_PYTHON_BIN" \
+  --wrap '
+set -euo pipefail
+mkdir -p "$DEMO_INPUT_DIR"
+"$PREP_PYTHON_BIN" - "$SOURCE_PDB_DIR" "$DEMO_INPUT_DIR" "$SAMPLE_SIZE" "$FILE_GLOB" <<"PY"
 import random
 import shutil
 import sys
@@ -104,27 +113,34 @@ file_glob = sys.argv[4]
 
 candidates = sorted([p for p in source.glob(file_glob) if p.is_file()])
 if not candidates:
-    candidates = sorted([p for p in source.iterdir() if p.is_file() and not p.name.startswith('.')])
+  candidates = sorted([p for p in source.iterdir() if p.is_file() and not p.name.startswith(".")])
 
 if not candidates:
-    raise SystemExit(f"No input files found under {source}")
+  raise SystemExit(f"No input files found under {source}")
 
 k = min(sample_size, len(candidates))
 selected = random.sample(candidates, k)
 
 for src in selected:
-    dst = target / src.name
-    try:
-        dst.symlink_to(src)
-    except Exception:
-        shutil.copy2(src, dst)
+  dst = target / src.name
+  try:
+    dst.symlink_to(src)
+  except Exception:
+    shutil.copy2(src, dst)
 
 print(f"Selected {k} files out of {len(candidates)}")
 print(f"Subset directory: {target}")
 PY
+')
+if [[ -z "${PREP_JOB_ID}" || ! "${PREP_JOB_ID}" =~ ^[0-9]+$ ]]; then
+  echo "Error: failed to submit subset prep job. sbatch returned: ${PREP_JOB_ID}" >&2
+  exit 1
+fi
+echo "Submitted subset prep job: ${PREP_JOB_ID}"
 
 echo "Submitting demo shard array..."
 ARRAY_JOB_ID=$(sbatch --parsable \
+  --dependency=afterok:${PREP_JOB_ID} \
   --array="$ARRAY_SPEC" \
   --export=ALL,PDB_DIR="$DEMO_INPUT_DIR",OUTPUT_DIR="$OUTPUT_DIR",OUTPUT_PREFIX_BASE="$OUTPUT_PREFIX_BASE",FINAL_PREFIX="$OUTPUT_LMDB_NAME",NUM_SHARDS="$NUM_SHARDS",PYTHON_BIN="$PYTHON_BIN",REPO_DIR="$REPO_DIR",LATENT_ROOT_128="$LATENT_ROOT_128",LATENT_ROOT_20="$LATENT_ROOT_20" \
   run_build_eqgat_lmdb_array_sbatch.sh)
@@ -133,7 +149,7 @@ if [[ -z "${ARRAY_JOB_ID}" || ! "${ARRAY_JOB_ID}" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-echo "Submitted shard array job: ${ARRAY_JOB_ID} (array=${ARRAY_SPEC})"
+echo "Submitted shard array job: ${ARRAY_JOB_ID} (array=${ARRAY_SPEC}, afterok:${PREP_JOB_ID})"
 
 echo "Submitting merge job..."
 MERGE_JOB_ID=$(sbatch --parsable \
