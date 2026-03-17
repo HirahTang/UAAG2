@@ -16,6 +16,11 @@ set -euo pipefail
 #   OUTPUT_DIR=/scratch/project_465002574/PDB/uaag2_eqgat_lmdb_shards
 #   DEMO_ROOT=/scratch/project_465002574/PDB/demo_subsets
 #   FILE_GLOB="*.pdb"          # file pattern inside source dir
+#   PYTHON_SUBSET_BIN=python3    # python used on login node for random subset prep
+#   PYTHON_BIN=/flash/project_465002574/unaagi_env/bin/python
+#   REPO_DIR=/flash/project_465002574/UAAG2_main
+#   LATENT_ROOT_128=/scratch/project_465002574/PDB/PDB_128
+#   LATENT_ROOT_20=/scratch/project_465002574/PDB/PDB_20
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   sed -n '1,40p' "$0"
@@ -42,6 +47,13 @@ MAX_CONCURRENT_SHARDS="${MAX_CONCURRENT_SHARDS:-5}"
 OUTPUT_DIR="${OUTPUT_DIR:-/scratch/project_465002574/PDB/uaag2_eqgat_lmdb_shards}"
 DEMO_ROOT="${DEMO_ROOT:-/scratch/project_465002574/PDB/demo_subsets}"
 FILE_GLOB="${FILE_GLOB:-*.pdb}"
+PYTHON_SUBSET_BIN="${PYTHON_SUBSET_BIN:-python3}"
+
+# Runtime env consumed by run_build_eqgat_lmdb_array_sbatch.sh
+PYTHON_BIN="${PYTHON_BIN:-/flash/project_465002574/unaagi_env/bin/python}"
+REPO_DIR="${REPO_DIR:-/flash/project_465002574/UAAG2_main}"
+LATENT_ROOT_128="${LATENT_ROOT_128:-/scratch/project_465002574/PDB/PDB_128}"
+LATENT_ROOT_20="${LATENT_ROOT_20:-/scratch/project_465002574/PDB/PDB_20}"
 
 if ! [[ "$NUM_SHARDS" =~ ^[0-9]+$ ]] || [[ "$NUM_SHARDS" -lt 1 ]]; then
   echo "Error: NUM_SHARDS must be a positive integer, got: $NUM_SHARDS" >&2
@@ -57,6 +69,10 @@ if [[ ! -d "$SOURCE_PDB_DIR" ]]; then
   echo "Error: source folder not found: $SOURCE_PDB_DIR" >&2
   exit 1
 fi
+if ! command -v "$PYTHON_SUBSET_BIN" >/dev/null 2>&1; then
+  echo "Error: subset prep python not found: $PYTHON_SUBSET_BIN" >&2
+  exit 1
+fi
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 DEMO_INPUT_DIR="${DEMO_ROOT}/pdb_subset_${SAMPLE_SIZE}_${TIMESTAMP}"
@@ -70,8 +86,12 @@ echo "  SOURCE_PDB_DIR: $SOURCE_PDB_DIR"
 echo "  DEMO_INPUT_DIR: $DEMO_INPUT_DIR"
 echo "  SAMPLE_SIZE: $SAMPLE_SIZE"
 echo "  FILE_GLOB: $FILE_GLOB"
+echo "  PYTHON_BIN (job runtime): $PYTHON_BIN"
+echo "  REPO_DIR (job runtime): $REPO_DIR"
+echo "  LATENT_ROOT_128: $LATENT_ROOT_128"
+echo "  LATENT_ROOT_20: $LATENT_ROOT_20"
 
-python - "$SOURCE_PDB_DIR" "$DEMO_INPUT_DIR" "$SAMPLE_SIZE" "$FILE_GLOB" <<'PY'
+"$PYTHON_SUBSET_BIN" - "$SOURCE_PDB_DIR" "$DEMO_INPUT_DIR" "$SAMPLE_SIZE" "$FILE_GLOB" <<'PY'
 import random
 import shutil
 import sys
@@ -104,18 +124,26 @@ print(f"Subset directory: {target}")
 PY
 
 echo "Submitting demo shard array..."
-ARRAY_JOB_ID=$(sbatch \
+ARRAY_JOB_ID=$(sbatch --parsable \
   --array="$ARRAY_SPEC" \
-  --export=ALL,PDB_DIR="$DEMO_INPUT_DIR",OUTPUT_DIR="$OUTPUT_DIR",OUTPUT_PREFIX_BASE="$OUTPUT_PREFIX_BASE",FINAL_PREFIX="$OUTPUT_LMDB_NAME",NUM_SHARDS="$NUM_SHARDS" \
-  run_build_eqgat_lmdb_array_sbatch.sh | awk '{print $4}')
+  --export=ALL,PDB_DIR="$DEMO_INPUT_DIR",OUTPUT_DIR="$OUTPUT_DIR",OUTPUT_PREFIX_BASE="$OUTPUT_PREFIX_BASE",FINAL_PREFIX="$OUTPUT_LMDB_NAME",NUM_SHARDS="$NUM_SHARDS",PYTHON_BIN="$PYTHON_BIN",REPO_DIR="$REPO_DIR",LATENT_ROOT_128="$LATENT_ROOT_128",LATENT_ROOT_20="$LATENT_ROOT_20" \
+  run_build_eqgat_lmdb_array_sbatch.sh)
+if [[ -z "${ARRAY_JOB_ID}" || ! "${ARRAY_JOB_ID}" =~ ^[0-9]+$ ]]; then
+  echo "Error: failed to submit shard array job. sbatch returned: ${ARRAY_JOB_ID}" >&2
+  exit 1
+fi
 
 echo "Submitted shard array job: ${ARRAY_JOB_ID} (array=${ARRAY_SPEC})"
 
 echo "Submitting merge job..."
-MERGE_JOB_ID=$(sbatch \
+MERGE_JOB_ID=$(sbatch --parsable \
   --dependency=afterok:${ARRAY_JOB_ID} \
-  --export=ALL,PDB_DIR="$DEMO_INPUT_DIR",OUTPUT_DIR="$OUTPUT_DIR",OUTPUT_PREFIX_BASE="$OUTPUT_PREFIX_BASE",FINAL_PREFIX="$OUTPUT_LMDB_NAME",NUM_SHARDS="$NUM_SHARDS" \
-  run_merge_eqgat_lmdb_sbatch.sh | awk '{print $4}')
+  --export=ALL,PDB_DIR="$DEMO_INPUT_DIR",OUTPUT_DIR="$OUTPUT_DIR",OUTPUT_PREFIX_BASE="$OUTPUT_PREFIX_BASE",FINAL_PREFIX="$OUTPUT_LMDB_NAME",NUM_SHARDS="$NUM_SHARDS",PYTHON_BIN="$PYTHON_BIN",REPO_DIR="$REPO_DIR",LATENT_ROOT_128="$LATENT_ROOT_128",LATENT_ROOT_20="$LATENT_ROOT_20" \
+  run_merge_eqgat_lmdb_sbatch.sh)
+if [[ -z "${MERGE_JOB_ID}" || ! "${MERGE_JOB_ID}" =~ ^[0-9]+$ ]]; then
+  echo "Error: failed to submit merge job. sbatch returned: ${MERGE_JOB_ID}" >&2
+  exit 1
+fi
 
 echo "Submitted merge job: ${MERGE_JOB_ID} (afterok:${ARRAY_JOB_ID})"
 echo "Final LMDB target: ${OUTPUT_DIR}/${OUTPUT_LMDB_NAME}.lmdb"
