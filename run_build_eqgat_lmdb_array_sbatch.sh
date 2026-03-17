@@ -2,7 +2,6 @@
 #SBATCH --job-name=eqgat_lmdb_shard
 #SBATCH --account=project_465002574
 #SBATCH --partition=standard
-#SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
