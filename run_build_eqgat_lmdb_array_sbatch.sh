@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=eqgat_lmdb_shard
 #SBATCH --account=project_465002574
-#SBATCH --partition=standard
+#SBATCH --partition=standard-g
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=0-119%60
+#SBATCH --array=0-119%40
 #SBATCH -o /scratch/project_465002574/UAAG_logs/eqgat_lmdb_shard_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/eqgat_lmdb_shard_%A_%a.log
 

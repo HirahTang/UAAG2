@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=eqgat_lmdb_merge
 #SBATCH --account=project_465002574
-#SBATCH --partition=standard
+#SBATCH --partition=standard-g
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
