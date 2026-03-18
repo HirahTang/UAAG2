@@ -14,7 +14,12 @@ def read_lmdb_length(env: lmdb.Environment) -> int:
         return int(pickle.loads(raw))
 
 
-def merge_lmdb_shards(shard_glob: str, output_lmdb: str, output_metadata: str):
+def merge_lmdb_shards(
+    shard_glob: str,
+    output_lmdb: str,
+    output_metadata: str,
+    write_metadata: bool = True,
+):
     shard_paths = sorted(glob.glob(shard_glob))
     if not shard_paths:
         raise FileNotFoundError(f"No shard LMDB found for glob: {shard_glob}")
@@ -30,16 +35,17 @@ def merge_lmdb_shards(shard_glob: str, output_lmdb: str, output_metadata: str):
         map_async=True,
     )
 
-    out_meta: Dict[bytes, str] = {}
+    out_meta: Dict[bytes, str] = {} if write_metadata else {}
     out_txn = out_env.begin(write=True)
 
     total = 0
     for shard_path in shard_paths:
-        shard_meta_path = shard_path.replace(".lmdb", ".metadata.pkl")
         shard_meta = {}
-        if os.path.exists(shard_meta_path):
-            with open(shard_meta_path, "rb") as handle:
-                shard_meta = pickle.load(handle)
+        if write_metadata:
+            shard_meta_path = shard_path.replace(".lmdb", ".metadata.pkl")
+            if os.path.exists(shard_meta_path):
+                with open(shard_meta_path, "rb") as handle:
+                    shard_meta = pickle.load(handle)
 
         in_env = lmdb.open(shard_path, subdir=False, readonly=True, lock=False, readahead=False)
         shard_len = read_lmdb_length(in_env)
@@ -54,9 +60,10 @@ def merge_lmdb_shards(shard_glob: str, output_lmdb: str, output_metadata: str):
                 out_key = f"{total:08}".encode("ascii")
                 out_txn.put(out_key, payload)
 
-                src = shard_meta.get(in_key)
-                if src is not None:
-                    out_meta[out_key] = src
+                if write_metadata:
+                    src = shard_meta.get(in_key)
+                    if src is not None:
+                        out_meta[out_key] = src
 
                 total += 1
                 if total % 10000 == 0:
@@ -95,10 +102,16 @@ if __name__ == "__main__":
         required=True,
         help="Final merged metadata pickle path",
     )
+    parser.add_argument(
+        "--skip_metadata",
+        action="store_true",
+        help="Skip metadata merge to reduce memory usage; writes an empty metadata pickle.",
+    )
     args = parser.parse_args()
 
     merge_lmdb_shards(
         shard_glob=args.shard_glob,
         output_lmdb=args.output_lmdb,
         output_metadata=args.output_metadata,
+        write_metadata=not args.skip_metadata,
     )

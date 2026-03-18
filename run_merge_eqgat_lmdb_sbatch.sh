@@ -32,6 +32,16 @@ FINAL_PREFIX=${FINAL_PREFIX:-uaag2_eqgat_duallat_all}
 SHARD_GLOB="${OUTPUT_DIR}/${OUTPUT_PREFIX_BASE}_*.lmdb"
 FINAL_LMDB="${OUTPUT_DIR}/${FINAL_PREFIX}.lmdb"
 FINAL_META="${OUTPUT_DIR}/${FINAL_PREFIX}.metadata.pkl"
+SKIP_METADATA="${SKIP_METADATA:-0}"
+
+MERGE_ARGS=(
+  --shard_glob "$SHARD_GLOB"
+  --output_lmdb "$FINAL_LMDB"
+  --output_metadata "$FINAL_META"
+)
+if [[ "$SKIP_METADATA" == "1" ]]; then
+  MERGE_ARGS+=(--skip_metadata)
+fi
 
 cd "$REPO_DIR"
 
@@ -39,10 +49,7 @@ echo "Python: $PYTHON_BIN"
 echo "Merging shards: $SHARD_GLOB"
 echo "Final LMDB: $FINAL_LMDB"
 
-time "$PYTHON_BIN" scripts/merge_lmdb_shards.py \
-  --shard_glob "$SHARD_GLOB" \
-  --output_lmdb "$FINAL_LMDB" \
-  --output_metadata "$FINAL_META"
+time "$PYTHON_BIN" scripts/merge_lmdb_shards.py "${MERGE_ARGS[@]}"
 
 echo "End time: $(date)"
 echo "Merge completed"

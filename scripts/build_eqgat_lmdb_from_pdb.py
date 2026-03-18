@@ -12,6 +12,7 @@ import torch
 from Bio.PDB import PDBParser
 from Bio.PDB.Polypeptide import is_aa
 from rdkit import Chem
+from rdkit import RDLogger
 from rdkit.Chem.rdchem import GetPeriodicTable
 from torch_geometric.data import Data
 from tqdm import tqdm
@@ -71,6 +72,12 @@ AA_DICT = {
 
 SUPPORTED_LATENT_EXT = (".pt", ".pth", ".pkl", ".pickle", ".npy", ".npz", ".json")
 PERIODIC_TABLE = GetPeriodicTable()
+
+# RDKit can emit massive warning spam for malformed PDBs (unknown elements/valence),
+# which slows down shard processing and bloats Slurm logs. We handle failures in code,
+# so keep logs quiet here.
+RDLogger.DisableLog("rdApp.warning")
+RDLogger.DisableLog("rdApp.error")
 
 
 @dataclass
@@ -721,34 +728,45 @@ def build_graphs_from_pdb(
     return graphs, counters
 
 
-def write_lmdb(graphs: List[Data], lmdb_path: str, metadata_path: str):
-    os.makedirs(os.path.dirname(lmdb_path), exist_ok=True)
-    env = lmdb.open(
-        lmdb_path,
-        map_size=1 << 40,
-        subdir=False,
-        readonly=False,
-        meminit=False,
-        map_async=True,
-    )
+class LmdbShardWriter:
+    def __init__(self, lmdb_path: str, metadata_path: str, commit_interval: int = 10000):
+        os.makedirs(os.path.dirname(lmdb_path), exist_ok=True)
+        self.lmdb_path = lmdb_path
+        self.metadata_path = metadata_path
+        self.commit_interval = max(1, int(commit_interval))
 
-    metadata = {}
-    txn = env.begin(write=True)
-    for i, sample in enumerate(graphs):
-        key = f"{i:08}".encode("ascii")
-        metadata[key] = getattr(sample, "source_name", "unknown")
-        txn.put(key, pickle.dumps(sample, protocol=pickle.HIGHEST_PROTOCOL))
-        if (i + 1) % 10000 == 0:
-            txn.commit()
-            txn = env.begin(write=True)
+        self.env = lmdb.open(
+            lmdb_path,
+            map_size=1 << 40,
+            subdir=False,
+            readonly=False,
+            meminit=False,
+            map_async=True,
+        )
+        self.txn = self.env.begin(write=True)
+        self.count = 0
+        self.metadata: Dict[bytes, str] = {}
 
-    txn.put(b"__len__", pickle.dumps(len(graphs)))
-    txn.commit()
-    env.sync()
-    env.close()
+    def add(self, sample: Data, source_name: str):
+        key = f"{self.count:08}".encode("ascii")
+        self.metadata[key] = source_name
+        self.txn.put(key, pickle.dumps(sample, protocol=pickle.HIGHEST_PROTOCOL))
+        self.count += 1
 
-    with open(metadata_path, "wb") as handle:
-        pickle.dump(metadata, handle)
+        if self.count % self.commit_interval == 0:
+            self.txn.commit()
+            self.txn = self.env.begin(write=True)
+
+    def close(self) -> int:
+        self.txn.put(b"__len__", pickle.dumps(self.count))
+        self.txn.commit()
+        self.env.sync()
+        self.env.close()
+
+        with open(self.metadata_path, "wb") as handle:
+            pickle.dump(self.metadata, handle)
+
+        return self.count
 
 
 def run_pipeline(
@@ -782,7 +800,6 @@ def run_pipeline(
     if num_shards > 1:
         pdb_files = [name for i, name in enumerate(pdb_files) if i % num_shards == shard_index]
 
-    all_graphs = []
     summary = {
         "pdb_total": len(pdb_files),
         "pdb_ok": 0,
@@ -793,6 +810,10 @@ def run_pipeline(
         "too_small": 0,
         "ok": 0,
     }
+
+    lmdb_path = os.path.join(output_dir, f"{output_prefix}.lmdb")
+    metadata_path = os.path.join(output_dir, f"{output_prefix}.metadata.pkl")
+    writer = LmdbShardWriter(lmdb_path=lmdb_path, metadata_path=metadata_path)
 
     for pdb_name in tqdm(pdb_files, desc="Building (lat20+lat128)"):
         pdb_path = os.path.join(pdb_dir, pdb_name)
@@ -810,7 +831,8 @@ def run_pipeline(
 
         if graphs:
             summary["pdb_ok"] += 1
-            all_graphs.extend(graphs)
+            for graph in graphs:
+                writer.add(graph, getattr(graph, "source_name", "unknown"))
 
         for key in (
             "total_aa",
@@ -822,14 +844,12 @@ def run_pipeline(
         ):
             summary[key] += counters[key]
 
-    lmdb_path = os.path.join(output_dir, f"{output_prefix}.lmdb")
-    metadata_path = os.path.join(output_dir, f"{output_prefix}.metadata.pkl")
-    write_lmdb(all_graphs, lmdb_path, metadata_path)
+    total_graphs = writer.close()
 
     print(f"\nDone {output_prefix}")
     print(f"  LMDB: {lmdb_path}")
     print(f"  Metadata: {metadata_path}")
-    print(f"  Graphs: {len(all_graphs)}")
+    print(f"  Graphs: {total_graphs}")
     print(f"  Processed PDBs: {summary['pdb_ok']}/{summary['pdb_total']}")
     print(f"  Candidate AA positions: {summary['total_aa']}")
     print(f"  Missing latent_128: {summary['missing_latent_128']}")
