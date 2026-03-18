@@ -1,8 +1,11 @@
 import argparse
+from collections import OrderedDict
+import gc
 import json
 import lmdb
 import os
 import pickle
+import resource
 import tempfile
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -196,29 +199,29 @@ def _needs_pdb_repair(pdb_path: str) -> bool:
 
 def read_structure_and_mol(pdb_path: str):
     parse_path = _repair_pdb_element_columns(pdb_path) if _needs_pdb_repair(pdb_path) else pdb_path
-    rdkit_mol = Chem.MolFromPDBFile(parse_path, removeHs=True, sanitize=False)
-    if rdkit_mol is None and parse_path == pdb_path:
-        repaired = _repair_pdb_element_columns(pdb_path)
-        parse_path = repaired
-        rdkit_mol = Chem.MolFromPDBFile(parse_path, removeHs=True, sanitize=False)
-    if rdkit_mol is None:
-        raise ValueError(f"RDKit failed to parse {pdb_path}")
     try:
-        Chem.SanitizeMol(rdkit_mol)
-        Chem.AssignStereochemistry(rdkit_mol)
-    except Exception as exc:
-        raise ValueError(f"RDKit sanitize/stereo failed: {exc}") from exc
-
-    parser = PDBParser(QUIET=True)
-    structure = parser.get_structure("molecule", parse_path)
-
-    if parse_path != pdb_path and os.path.exists(parse_path):
+        rdkit_mol = Chem.MolFromPDBFile(parse_path, removeHs=True, sanitize=False)
+        if rdkit_mol is None and parse_path == pdb_path:
+            repaired = _repair_pdb_element_columns(pdb_path)
+            parse_path = repaired
+            rdkit_mol = Chem.MolFromPDBFile(parse_path, removeHs=True, sanitize=False)
+        if rdkit_mol is None:
+            raise ValueError(f"RDKit failed to parse {pdb_path}")
         try:
-            os.remove(parse_path)
-        except OSError:
-            pass
+            Chem.SanitizeMol(rdkit_mol)
+            Chem.AssignStereochemistry(rdkit_mol)
+        except Exception as exc:
+            raise ValueError(f"RDKit sanitize/stereo failed: {exc}") from exc
 
-    return rdkit_mol, structure
+        parser = PDBParser(QUIET=True)
+        structure = parser.get_structure("molecule", parse_path)
+        return rdkit_mol, structure
+    finally:
+        if parse_path != pdb_path and os.path.exists(parse_path):
+            try:
+                os.remove(parse_path)
+            except OSError:
+                pass
 
 
 def loop_over_atoms(rdkit_mol, structure):
@@ -552,11 +555,12 @@ def dictionary_to_data(
 
 
 class LatentStore:
-    def __init__(self, root: str, latent_dim: int):
+    def __init__(self, root: str, latent_dim: int, max_cache_files: int = 16):
         self.root = root
         self.latent_dim = latent_dim
+        self.max_cache_files = max(1, int(max_cache_files))
         self.path_index = self._index_paths()
-        self.cache = {}
+        self.cache: OrderedDict[str, object] = OrderedDict()
 
     def _index_paths(self) -> Dict[str, str]:
         index = {}
@@ -594,12 +598,16 @@ class LatentStore:
 
     def _to_residue_map(self, payload):
         if isinstance(payload, np.lib.npyio.NpzFile):
-            if "latents" in payload and "keys" in payload:
-                lat = payload["latents"]
-                keys = payload["keys"]
-                return {str(k): lat[i] for i, k in enumerate(keys)}
-            first_key = list(payload.keys())[0]
-            return payload[first_key]
+            try:
+                if "latents" in payload and "keys" in payload:
+                    lat = payload["latents"]
+                    keys = payload["keys"]
+                    return {str(k): np.asarray(lat[i]) for i, k in enumerate(keys)}
+                first_key = list(payload.keys())[0]
+                # Materialize while handle is open, then close below.
+                return np.asarray(payload[first_key])
+            finally:
+                payload.close()
 
         if isinstance(payload, dict):
             if "latents" in payload and "keys" in payload:
@@ -639,9 +647,14 @@ class LatentStore:
             if not path:
                 continue
 
-            if path not in self.cache:
-                self.cache[path] = self._to_residue_map(self._load_file(path))
-            payload = self.cache[path]
+            payload = self.cache.get(path)
+            if payload is None:
+                payload = self._to_residue_map(self._load_file(path))
+                self.cache[path] = payload
+                if len(self.cache) > self.max_cache_files:
+                    self.cache.popitem(last=False)
+            else:
+                self.cache.move_to_end(path)
 
             if isinstance(payload, dict):
                 latent = self._lookup_in_map(payload, residue)
@@ -656,19 +669,20 @@ class LatentStore:
         return None
 
 
-def build_graphs_from_pdb(
+def process_pdb_to_writer(
     pdb_path: str,
     pocket_radius: float,
     edge_radius: float,
     latent_store_128: LatentStore,
     latent_store_20: LatentStore,
+    writer,
 ):
     pdb_name = os.path.basename(pdb_path)
     rdkit_mol, structure = read_structure_and_mol(pdb_path)
     atom_features, bond_features = loop_over_atoms(rdkit_mol, structure)
     residues = build_residue_records(atom_features)
 
-    graphs = []
+    written = 0
     counters = {
         "total_aa": 0,
         "missing_latent_128": 0,
@@ -723,17 +737,25 @@ def build_graphs_from_pdb(
         graph.center_residue = f"{residue.res_name}_{residue.resseq}_{residue.chain_id}"
         graph.residue_name = residue.res_name
         counters["ok"] += 1
-        graphs.append(graph)
+        writer.add(graph, pdb_name)
+        written += 1
 
-    return graphs, counters
+    return written, counters
 
 
 class LmdbShardWriter:
-    def __init__(self, lmdb_path: str, metadata_path: str, commit_interval: int = 10000):
+    def __init__(
+        self,
+        lmdb_path: str,
+        metadata_path: str,
+        commit_interval: int = 10000,
+        write_metadata: bool = False,
+    ):
         os.makedirs(os.path.dirname(lmdb_path), exist_ok=True)
         self.lmdb_path = lmdb_path
         self.metadata_path = metadata_path
         self.commit_interval = max(1, int(commit_interval))
+        self.write_metadata = write_metadata
 
         self.env = lmdb.open(
             lmdb_path,
@@ -745,11 +767,12 @@ class LmdbShardWriter:
         )
         self.txn = self.env.begin(write=True)
         self.count = 0
-        self.metadata: Dict[bytes, str] = {}
+        self.metadata: Dict[bytes, str] = {} if self.write_metadata else {}
 
     def add(self, sample: Data, source_name: str):
         key = f"{self.count:08}".encode("ascii")
-        self.metadata[key] = source_name
+        if self.write_metadata:
+            self.metadata[key] = source_name
         self.txn.put(key, pickle.dumps(sample, protocol=pickle.HIGHEST_PROTOCOL))
         self.count += 1
 
@@ -769,6 +792,14 @@ class LmdbShardWriter:
         return self.count
 
 
+def get_rss_mb() -> float:
+    # On Linux ru_maxrss is KB, on macOS it is bytes.
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if rss > 10_000_000:
+        return rss / (1024.0 * 1024.0)
+    return rss / 1024.0
+
+
 def run_pipeline(
     pdb_dir: str,
     output_dir: str,
@@ -777,11 +808,15 @@ def run_pipeline(
     edge_radius: float,
     latent_root_128: str,
     latent_root_20: str,
+    latent_cache_files: int = 16,
+    write_metadata: bool = False,
+    log_memory_every: int = 25,
+    gc_every: int = 50,
     num_shards: int = 1,
     shard_index: int = 0,
 ):
-    latent_store_128 = LatentStore(latent_root_128, 128)
-    latent_store_20 = LatentStore(latent_root_20, 20)
+    latent_store_128 = LatentStore(latent_root_128, 128, max_cache_files=latent_cache_files)
+    latent_store_20 = LatentStore(latent_root_20, 20, max_cache_files=latent_cache_files)
 
     pdb_files = sorted(
         name
@@ -813,26 +848,29 @@ def run_pipeline(
 
     lmdb_path = os.path.join(output_dir, f"{output_prefix}.lmdb")
     metadata_path = os.path.join(output_dir, f"{output_prefix}.metadata.pkl")
-    writer = LmdbShardWriter(lmdb_path=lmdb_path, metadata_path=metadata_path)
+    writer = LmdbShardWriter(
+        lmdb_path=lmdb_path,
+        metadata_path=metadata_path,
+        write_metadata=write_metadata,
+    )
 
-    for pdb_name in tqdm(pdb_files, desc="Building (lat20+lat128)"):
+    for i, pdb_name in enumerate(tqdm(pdb_files, desc="Building (lat20+lat128)"), start=1):
         pdb_path = os.path.join(pdb_dir, pdb_name)
         try:
-            graphs, counters = build_graphs_from_pdb(
+            written, counters = process_pdb_to_writer(
                 pdb_path=pdb_path,
                 pocket_radius=pocket_radius,
                 edge_radius=edge_radius,
                 latent_store_128=latent_store_128,
                 latent_store_20=latent_store_20,
+                writer=writer,
             )
         except Exception as exc:
             print(f"[WARN] Failed {pdb_name}: {exc}")
             continue
 
-        if graphs:
+        if written > 0:
             summary["pdb_ok"] += 1
-            for graph in graphs:
-                writer.add(graph, getattr(graph, "source_name", "unknown"))
 
         for key in (
             "total_aa",
@@ -843,6 +881,14 @@ def run_pipeline(
             "ok",
         ):
             summary[key] += counters[key]
+
+        if log_memory_every > 0 and (i % log_memory_every == 0):
+            print(
+                f"[MEM] processed={i}/{summary['pdb_total']} rss_max_mb={get_rss_mb():.1f} "
+                f"cache128={len(latent_store_128.cache)} cache20={len(latent_store_20.cache)}"
+            )
+        if gc_every > 0 and (i % gc_every == 0):
+            gc.collect()
 
     total_graphs = writer.close()
 
@@ -882,6 +928,29 @@ if __name__ == "__main__":
         help="ProteinMPNN latent root (dim=20)",
     )
     parser.add_argument(
+        "--latent_cache_files",
+        type=int,
+        default=16,
+        help="Max number of latent files cached in RAM per latent store",
+    )
+    parser.add_argument(
+        "--write_metadata",
+        action="store_true",
+        help="Write per-entry metadata mapping (uses extra memory); default is disabled",
+    )
+    parser.add_argument(
+        "--log_memory_every",
+        type=int,
+        default=25,
+        help="Print memory/cache stats every N processed PDBs (0 disables)",
+    )
+    parser.add_argument(
+        "--gc_every",
+        type=int,
+        default=50,
+        help="Run gc.collect() every N processed PDBs (0 disables)",
+    )
+    parser.add_argument(
         "--num_shards",
         type=int,
         default=1,
@@ -903,6 +972,10 @@ if __name__ == "__main__":
         edge_radius=args.edge_radius,
         latent_root_128=args.latent_root_128,
         latent_root_20=args.latent_root_20,
+        latent_cache_files=args.latent_cache_files,
+        write_metadata=args.write_metadata,
+        log_memory_every=args.log_memory_every,
+        gc_every=args.gc_every,
         num_shards=args.num_shards,
         shard_index=args.shard_index,
     )

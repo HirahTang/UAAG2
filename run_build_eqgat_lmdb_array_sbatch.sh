@@ -39,6 +39,28 @@ SHARD_INDEX=${SLURM_ARRAY_TASK_ID}
 
 POCKET_RADIUS=${POCKET_RADIUS:-10.0}
 EDGE_RADIUS=${EDGE_RADIUS:-8.0}
+LATENT_CACHE_FILES=${LATENT_CACHE_FILES:-16}
+WRITE_METADATA=${WRITE_METADATA:-0}
+LOG_MEMORY_EVERY=${LOG_MEMORY_EVERY:-25}
+GC_EVERY=${GC_EVERY:-50}
+
+BUILD_ARGS=(
+  --pdb_dir "$PDB_DIR"
+  --output_dir "$OUTPUT_DIR"
+  --output_prefix "${OUTPUT_PREFIX_BASE}_${SHARD_INDEX}"
+  --pocket_radius "$POCKET_RADIUS"
+  --edge_radius "$EDGE_RADIUS"
+  --latent_root_128 "$LATENT_ROOT_128"
+  --latent_root_20 "$LATENT_ROOT_20"
+  --latent_cache_files "$LATENT_CACHE_FILES"
+  --log_memory_every "$LOG_MEMORY_EVERY"
+  --gc_every "$GC_EVERY"
+  --num_shards "$NUM_SHARDS"
+  --shard_index "$SHARD_INDEX"
+)
+if [[ "$WRITE_METADATA" == "1" ]]; then
+  BUILD_ARGS+=(--write_metadata)
+fi
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -52,17 +74,12 @@ echo "LATENT_ROOT_20: $LATENT_ROOT_20"
 echo "OUTPUT_DIR: $OUTPUT_DIR"
 echo "NUM_SHARDS: $NUM_SHARDS"
 echo "SHARD_INDEX: $SHARD_INDEX"
+echo "LATENT_CACHE_FILES: $LATENT_CACHE_FILES"
+echo "WRITE_METADATA: $WRITE_METADATA"
+echo "LOG_MEMORY_EVERY: $LOG_MEMORY_EVERY"
+echo "GC_EVERY: $GC_EVERY"
 
-time "$PYTHON_BIN" scripts/build_eqgat_lmdb_from_pdb.py \
-  --pdb_dir "$PDB_DIR" \
-  --output_dir "$OUTPUT_DIR" \
-  --output_prefix "${OUTPUT_PREFIX_BASE}_${SHARD_INDEX}" \
-  --pocket_radius "$POCKET_RADIUS" \
-  --edge_radius "$EDGE_RADIUS" \
-  --latent_root_128 "$LATENT_ROOT_128" \
-  --latent_root_20 "$LATENT_ROOT_20" \
-  --num_shards "$NUM_SHARDS" \
-  --shard_index "$SHARD_INDEX"
+time "$PYTHON_BIN" scripts/build_eqgat_lmdb_from_pdb.py "${BUILD_ARGS[@]}"
 
 echo "End time: $(date)"
 echo "Finished shard ${SHARD_INDEX}/${NUM_SHARDS}"

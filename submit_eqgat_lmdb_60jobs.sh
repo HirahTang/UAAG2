@@ -25,6 +25,10 @@ NUM_SHARDS="${NUM_SHARDS:-120}"
 MAX_CONCURRENT_SHARDS="${MAX_CONCURRENT_SHARDS:-40}"
 SHARD_MEM="${SHARD_MEM:-64G}"
 SHARD_CPUS="${SHARD_CPUS:-4}"
+LATENT_CACHE_FILES="${LATENT_CACHE_FILES:-16}"
+WRITE_METADATA="${WRITE_METADATA:-0}"
+LOG_MEMORY_EVERY="${LOG_MEMORY_EVERY:-25}"
+GC_EVERY="${GC_EVERY:-50}"
 MERGE_MEM="${MERGE_MEM:-96G}"
 MERGE_SKIP_METADATA="${MERGE_SKIP_METADATA:-1}"
 
@@ -34,6 +38,18 @@ if ! [[ "$NUM_SHARDS" =~ ^[0-9]+$ ]] || [[ "$NUM_SHARDS" -lt 1 ]]; then
 fi
 if ! [[ "$MAX_CONCURRENT_SHARDS" =~ ^[0-9]+$ ]] || [[ "$MAX_CONCURRENT_SHARDS" -lt 1 ]]; then
 	echo "Error: MAX_CONCURRENT_SHARDS must be a positive integer." >&2
+	exit 1
+fi
+if ! [[ "$LATENT_CACHE_FILES" =~ ^[0-9]+$ ]] || [[ "$LATENT_CACHE_FILES" -lt 1 ]]; then
+	echo "Error: LATENT_CACHE_FILES must be a positive integer." >&2
+	exit 1
+fi
+if ! [[ "$LOG_MEMORY_EVERY" =~ ^[0-9]+$ ]]; then
+	echo "Error: LOG_MEMORY_EVERY must be a non-negative integer." >&2
+	exit 1
+fi
+if ! [[ "$GC_EVERY" =~ ^[0-9]+$ ]]; then
+	echo "Error: GC_EVERY must be a non-negative integer." >&2
 	exit 1
 fi
 
@@ -55,6 +71,10 @@ echo "Using OUTPUT_PREFIX_BASE: ${OUTPUT_PREFIX_BASE}"
 echo "Using NUM_SHARDS: ${NUM_SHARDS}"
 echo "Using array spec: ${ARRAY_SPEC}"
 echo "Using SHARD_MEM: ${SHARD_MEM}, SHARD_CPUS: ${SHARD_CPUS}"
+echo "Using LATENT_CACHE_FILES: ${LATENT_CACHE_FILES}"
+echo "Using WRITE_METADATA: ${WRITE_METADATA}"
+echo "Using LOG_MEMORY_EVERY: ${LOG_MEMORY_EVERY}"
+echo "Using GC_EVERY: ${GC_EVERY}"
 echo "Using MERGE_MEM: ${MERGE_MEM}"
 echo "Using MERGE_SKIP_METADATA: ${MERGE_SKIP_METADATA}"
 
@@ -62,7 +82,7 @@ ARRAY_JOB_ID=$(sbatch \
 	--array="${ARRAY_SPEC}" \
 	--mem="${SHARD_MEM}" \
 	--cpus-per-task="${SHARD_CPUS}" \
-	--export=ALL,PDB_DIR="${INPUT_PDB_DIR}",OUTPUT_PREFIX_BASE="${OUTPUT_PREFIX_BASE}",FINAL_PREFIX="${OUTPUT_LMDB_NAME}",NUM_SHARDS="${NUM_SHARDS}" \
+	--export=ALL,PDB_DIR="${INPUT_PDB_DIR}",OUTPUT_PREFIX_BASE="${OUTPUT_PREFIX_BASE}",FINAL_PREFIX="${OUTPUT_LMDB_NAME}",NUM_SHARDS="${NUM_SHARDS}",LATENT_CACHE_FILES="${LATENT_CACHE_FILES}",WRITE_METADATA="${WRITE_METADATA}",LOG_MEMORY_EVERY="${LOG_MEMORY_EVERY}",GC_EVERY="${GC_EVERY}" \
 	run_build_eqgat_lmdb_array_sbatch.sh | awk '{print $4}')
 echo "Submitted shard array job: ${ARRAY_JOB_ID}"
 
