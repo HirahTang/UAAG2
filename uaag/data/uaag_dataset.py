@@ -563,11 +563,11 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         # graph_data = self.data[idx]
         pos = batch.pos
         if batch.is_ligand.sum() == len(batch.is_ligand):
-            pocket_mean = pos.mean(dim=0)
+            center_mean = pos.mean(dim=0)
         else:
             ligand_pos = batch.pos[batch.is_ligand==1]
-            ligand_mean = ligand_pos.mean(dim=0)
-        pos = pos - ligand_mean
+            center_mean = ligand_pos.mean(dim=0)
+        pos = pos - center_mean
         batch.pos = pos
         return batch
     

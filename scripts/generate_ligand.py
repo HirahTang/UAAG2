@@ -1,5 +1,6 @@
 import argparse
 import os
+import random
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -24,7 +25,13 @@ from pytorch_lightning.callbacks import (
 import pytorch_lightning as pl
 import torch.nn.functional as F
 
-from uaag.data.uaag_dataset import UAAG2DataModule, UAAG2Dataset, UAAG2Dataset_sampling, Dataset_Info
+from uaag.data.uaag_dataset import (
+    UAAG2DataModule,
+    UAAG2Dataset,
+    UAAG2Dataset_sampling,
+    UAAG2Dataset_sampling_prior,
+    Dataset_Info,
+)
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from argparse import ArgumentParser
 from uaag.callbacks.ema import ExponentialMovingAverage
@@ -63,6 +70,10 @@ def main(hparams):
     
     print("Loading data from: ", hparams.benchmark_path)
     data_file = torch.load(hparams.benchmark_path, weights_only=False)
+
+    if hparams.prior_sampling and hparams.num_samples == 500:
+        # Prior mode targets heavy sampling from one residue unless user overrides.
+        hparams.num_samples = 1000
     
     # Split data into partitions based on split_index
     NUM_PARTITIONS = hparams.total_partition
@@ -84,23 +95,69 @@ def main(hparams):
     print(f"Processing partition {hparams.split_index}/{NUM_PARTITIONS - 1} with {len(index)} residues")
         
     dataset_info = Dataset_Info(hparams, hparams.data_info_path)
-    
-    print("Number of Residues: ", len(index))
-    
-    for graph_num in index:
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Loading model from checkpoint: ", hparams.load_ckpt)
+    model = Trainer.load_from_checkpoint(
+        hparams.load_ckpt,
+        hparams=hparams,
+        dataset_info=dataset_info,
+    ).to(device)
+    model = model.eval()
+
+    if hparams.prior_sampling:
+        rng = random.Random(hparams.prior_seed)
+        if hparams.prior_graph_index is not None:
+            if hparams.prior_graph_index < 0 or hparams.prior_graph_index >= len(data_file):
+                raise ValueError(
+                    f"prior_graph_index must be between 0 and {len(data_file) - 1}, "
+                    f"got {hparams.prior_graph_index}"
+                )
+            selected_graph = hparams.prior_graph_index
+        else:
+            selected_graph = rng.choice(index)
+        graph_indices = [selected_graph]
+        print(
+            f"Prior sampling enabled: selected graph {selected_graph} from partition "
+            f"{hparams.split_index} (seed={hparams.prior_seed})"
+        )
+    else:
+        graph_indices = index
+
+    print("Number of Residues to process:", len(graph_indices))
+
+    for graph_num in graph_indices:
         seq_position = int(data_file[graph_num].compound_id.split("_")[-3])
         seq_res = data_file[graph_num].compound_id.split("_")[-4]
         graph = data_file[graph_num]
-        print("Sampling for: ", seq_res, seq_position)
+        mode_name = "PRIOR(backbone-only)" if hparams.prior_sampling else "CONDITIONAL"
+        print(f"Sampling mode={mode_name} for: {seq_res} {seq_position}")
         # from IPython import embed; embed()
-            
-        save_path = os.path.join('Samples', f"{seq_res}_{seq_position}")
-        
-        dataset = UAAG2Dataset_sampling(graph, hparams, save_path, dataset_info, sample_size=hparams.virtual_node_size, sample_length=hparams.num_samples)
+
+        save_root = "Samples_prior" if hparams.prior_sampling else "Samples"
+        save_path = os.path.join(save_root, f"{seq_res}_{seq_position}")
+
+        if hparams.prior_sampling:
+            dataset = UAAG2Dataset_sampling_prior(
+                graph,
+                hparams,
+                save_path,
+                dataset_info,
+                sample_size=hparams.virtual_node_size,
+                sample_length=hparams.num_samples,
+            )
+        else:
+            dataset = UAAG2Dataset_sampling(
+                graph,
+                hparams,
+                save_path,
+                dataset_info,
+                sample_size=hparams.virtual_node_size,
+                sample_length=hparams.num_samples,
+            )
 
         # from IPython import embed; embed()
         # continue
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         dataloader = DataLoader(
             dataset=dataset, 
             batch_size=hparams.batch_size,
@@ -108,14 +165,6 @@ def main(hparams):
             pin_memory=True,
             shuffle=False)
 
-# Load the model and checkpoint
-        print("Loading model from checkpoint: ", hparams.load_ckpt)
-        model = Trainer.load_from_checkpoint(
-            hparams.load_ckpt,
-            hparams=hparams,
-            dataset_info=dataset_info,
-            ).to(device)
-        model = model.eval()
         # from IPython import embed; embed()
         model.generate_ligand(dataloader, save_path=save_path, verbose=True)
     # Save the configuration
@@ -340,6 +389,25 @@ if __name__ == '__main__':
     parser.add_argument("--num-samples", default=500, type=int)
     parser.add_argument("--virtual_node", default=1, type=int)
     parser.add_argument("--virtual_node_size", default=15, type=int)
+
+    parser.add_argument(
+        "--prior-sampling",
+        default=False,
+        action="store_true",
+        help="Randomly pick one residue from the test partition and sample with backbone-only context.",
+    )
+    parser.add_argument(
+        "--prior-seed",
+        default=42,
+        type=int,
+        help="Random seed used to select the residue in prior sampling mode.",
+    )
+    parser.add_argument(
+        "--prior-graph-index",
+        default=None,
+        type=int,
+        help="Optional absolute graph index override for prior sampling.",
+    )
 
     parser.add_argument("--split_index", default=0, type=int)
     parser.add_argument("--total_partition", default=10, type=int)
