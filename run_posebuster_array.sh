@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=UAAG_posebuster
 #SBATCH --account=project_465002574
-#SBATCH --partition=standard-g
+#SBATCH --partition=standard
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=0-2
+#SBATCH --array=3,4
 #SBATCH -o /scratch/project_465002574/UAAG_logs/posebuster_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/posebuster_%A_%a.log
 

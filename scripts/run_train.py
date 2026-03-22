@@ -103,7 +103,8 @@ def main(hparams):
     )
     
     
-    strategy = "ddp" if hparams.gpus > 1 else "auto"
+    strategy = "ddp" 
+    # if hparams.gpus > 1 else "auto"
     # strategy = 'ddp_find_unused_parameters_true'
     callbacks = [
         ema_callback,
@@ -371,7 +372,7 @@ if __name__ == "__main__":
 
     # GENERAL
     parser.add_argument("-i", "--id", type=str, default=0)
-    parser.add_argument("--num_nodes", default=1, type=int)
+    parser.add_argument("--num_nodes", default=40, type=int)
     parser.add_argument("-g", "--gpus", default=1, type=int)
     parser.add_argument("-e", "--num-epochs", default=300, type=int)
     parser.add_argument("--eval-freq", default=1.0, type=float)
