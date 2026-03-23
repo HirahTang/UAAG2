@@ -2,7 +2,6 @@
 #SBATCH --job-name=prior_sampling
 #SBATCH --account=project_465002574
 #SBATCH --partition=standard-g
-#SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=7
 #SBATCH --gpus-per-node=1
@@ -34,9 +33,8 @@ git checkout main
 echo "Running on branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "Commit hash:       $(git rev-parse HEAD)"
 
-MODEL=UAAG_model
-CKPT_PATH=/flash/project_465002574/UAAG2_main/${MODEL}/last.ckpt
-
+MODEL=runFull_mask_8_gpu_UAAG_model_official_8_0203_prior
+CKPT_PATH=/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/${MODEL}/last-v1.ckpt
 # Benchmark source is arbitrary for prior mode; keep a valid test graph .pt path.
 BENCHMARK_PATH=/scratch/project_465002574/UNAAGI_benchmarks/5ly1_cp2.pt
 
