@@ -76,6 +76,9 @@ fi
 # Post-processing and analysis
 SAMPLES_PATH="/scratch/project_465002574/ProteinGymSampling/run${RUN_ID}/Samples_prior"
 OUTPUT_DIR="/scratch/project_465002574/UNAAGI_result/results/${MODEL}/PRIOR_FREE_${MODEL}_${NUM_SAMPLES}_split${SPLIT_INDEX}"
+ARCHIVE_DIR="/scratch/project_465002574/UNAAGI_archives/${MODEL}"
+
+mkdir -p ${ARCHIVE_DIR}
 
 echo ""
 echo "============================================================================"
@@ -105,10 +108,103 @@ else
     exit 1
 fi
 
+# PoseBusters evaluation
+POSEBUSTER_OUTPUT="${SAMPLES_PATH}/PoseBusterResults"
+POSEBUSTER_TEMP_DIR="/flash/project_465002574/temp_sdf_prior_split${SPLIT_INDEX}"
+
+echo ""
+echo "============================================================================"
+echo "Starting PoseBusters Evaluation"
+echo "============================================================================"
+echo "[$(date)] Evaluating generated structures with PoseBusters..."
+
+python scripts/evaluate_mol_samples.py \
+    --input-dir ${SAMPLES_PATH} \
+    --output ${POSEBUSTER_OUTPUT} \
+    --max-workers 6 \
+    --temp-dir ${POSEBUSTER_TEMP_DIR}
+
+if [ $? -eq 0 ]; then
+    if [ -f "${POSEBUSTER_OUTPUT}" ]; then
+        EVAL_LINES=$(wc -l < "${POSEBUSTER_OUTPUT}")
+        echo "[$(date)] PoseBusters completed: $((EVAL_LINES - 1)) molecules evaluated"
+    else
+        echo "[$(date)] PoseBusters completed, output file not found at ${POSEBUSTER_OUTPUT}"
+    fi
+else
+    echo "[$(date)] PoseBusters evaluation failed with exit code $?"
+    exit 1
+fi
+
+# Compress molecule files
+ARCHIVE_PATH="${ARCHIVE_DIR}/PRIOR_FREE_${MODEL}_${NUM_SAMPLES}_split${SPLIT_INDEX}_mol_files.tar.gz"
+
+echo ""
+echo "============================================================================"
+echo "Compressing Molecule Files"
+echo "============================================================================"
+echo "[$(date)] Creating archive: ${ARCHIVE_PATH}"
+
+cd ${SAMPLES_PATH}
+MOL_COUNT=$(find . \( -name "*.mol" -o -name "all_molecules.sdf" \) -type f | wc -l)
+
+if [ ${MOL_COUNT} -gt 0 ]; then
+    TAR_EXIT_CODE=0
+    if tar --help 2>/dev/null | grep -q -- "--checkpoint-action"; then
+        find . \( -name "*.mol" -o -name "all_molecules.sdf" \) -type f -print0 | \
+            tar --null -T - -czf "${ARCHIVE_PATH}" \
+                --checkpoint=2000 \
+                --checkpoint-action=echo='[tar] checkpoints processed: %u'
+        TAR_EXIT_CODE=$?
+    else
+        find . \( -name "*.mol" -o -name "all_molecules.sdf" \) -type f -print0 | \
+            tar -czf "${ARCHIVE_PATH}" --null -T -
+        TAR_EXIT_CODE=$?
+    fi
+
+    if [ ${TAR_EXIT_CODE} -eq 0 ]; then
+        ARCHIVE_SIZE=$(du -h "${ARCHIVE_PATH}" | cut -f1)
+        echo "[$(date)] Archive created successfully (${ARCHIVE_SIZE})"
+    else
+        echo "[$(date)] Failed to create archive, skipping cleanup for safety"
+        exit 1
+    fi
+else
+    echo "[$(date)] No .mol or all_molecules.sdf files found to archive"
+fi
+
+# Cleanup molecule files while keeping analysis outputs
+echo ""
+echo "============================================================================"
+echo "Cleaning Up Raw Molecule Files"
+echo "============================================================================"
+
+MOL_BEFORE=$(find . -name "*.mol" -type f | wc -l)
+SDF_BEFORE=$(find . -name "all_molecules.sdf" -type f | wc -l)
+echo "[$(date)] Deleting $((MOL_BEFORE + SDF_BEFORE)) molecule files (${MOL_BEFORE} .mol + ${SDF_BEFORE} .sdf)"
+
+find . -name "*.mol" -type f -delete
+find . -name "all_molecules.sdf" -type f -delete
+find . -type d -name "batch_*" -exec rm -rf {} + 2>/dev/null
+find . -type d -name "iter_*" -exec rm -rf {} + 2>/dev/null
+find . -type d -name "final" -exec rm -rf {} + 2>/dev/null
+
+REMAINING_MOL=$(find . -name "*.mol" -type f | wc -l)
+REMAINING_SDF=$(find . -name "all_molecules.sdf" -type f | wc -l)
+DISK_USAGE=$(du -sh ${SAMPLES_PATH} | cut -f1)
+
+echo "[$(date)] Cleanup complete"
+echo "Remaining molecule files: $((REMAINING_MOL + REMAINING_SDF))"
+echo "Samples directory size: ${DISK_USAGE}"
+
+cd - >/dev/null
+
 echo ""
 echo "============================================================================"
 echo "Prior Sampling + Analysis Completed Successfully"
 echo "============================================================================"
 echo "End time: $(date)"
 echo "Results saved to: ${OUTPUT_DIR}"
+echo "PoseBusters output: ${POSEBUSTER_OUTPUT}"
+echo "Archive saved to: ${ARCHIVE_PATH}"
 echo "============================================================================"
