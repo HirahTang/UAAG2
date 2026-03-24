@@ -277,8 +277,9 @@ class DenoisingEdgeNetwork(nn.Module):
 
         self.context_mapping = context_mapping
         if self.context_mapping:
-            self.context_mapping = DenseLayer(num_context_features, hn_dim[0])
-            self.atom_context_mapping = DenseLayer(hn_dim[0], hn_dim[0])
+            context_latent_dim = max(1, hn_dim[0] // 2)
+            self.context_mapping = DenseLayer(num_context_features, context_latent_dim)
+            self.atom_context_mapping = DenseLayer(context_latent_dim, hn_dim[0])
 
         assert fully_connected or local_global_model
 
@@ -409,7 +410,8 @@ class DenoisingEdgeNetwork(nn.Module):
         cemb = None
         if context is not None and self.context_mapping:
             cemb = self.context_mapping(context)
-            s = self.atom_context_mapping(s + cemb)
+            cemb = self.atom_context_mapping(cemb)
+            s = s + cemb
         s = self.atom_time_mapping(s + tnode)
 
         if self.bond_prediction:

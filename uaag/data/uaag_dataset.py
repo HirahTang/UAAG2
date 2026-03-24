@@ -225,15 +225,17 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
 
-        protein_mpnn_latent_128 = None
-        if hasattr(graph_data, "protein_mpnn_latent_128"):
-            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent_128
+        protein_mpnn_latent_node_128 = None
+        if hasattr(graph_data, "protein_mpnn_latent_node_128"):
+            protein_mpnn_latent_node_128 = graph_data.protein_mpnn_latent_node_128
+        elif hasattr(graph_data, "protein_mpnn_latent_128"):
+            protein_mpnn_latent_node_128 = graph_data.protein_mpnn_latent_128
         elif hasattr(graph_data, "protein_mpnn_latent"):
-            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent
-        if protein_mpnn_latent_128 is not None:
-            protein_mpnn_latent_128 = protein_mpnn_latent_128.float()
-            if protein_mpnn_latent_128.dim() == 1:
-                protein_mpnn_latent_128 = protein_mpnn_latent_128.unsqueeze(0)
+            protein_mpnn_latent_node_128 = graph_data.protein_mpnn_latent
+        if protein_mpnn_latent_node_128 is not None:
+            protein_mpnn_latent_node_128 = protein_mpnn_latent_node_128.float()
+            if protein_mpnn_latent_node_128.dim() == 1:
+                protein_mpnn_latent_node_128 = protein_mpnn_latent_node_128.unsqueeze(0)
         graph_data.charges = charges.float()
         reconstruct_mask = graph_data.is_ligand - graph_data.is_backbone
         new_backbone = graph_data.is_backbone[reconstruct_mask==1]
@@ -343,8 +345,8 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             ligand_size=torch.tensor(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
             id=graph_data.compound_id,
         )
-        if protein_mpnn_latent_128 is not None:
-            data_kwargs["protein_mpnn_latent_128"] = protein_mpnn_latent_128
+        if protein_mpnn_latent_node_128 is not None:
+            data_kwargs["protein_mpnn_latent_node_128"] = protein_mpnn_latent_node_128
         batch_graph_data = Data(**data_kwargs)
         
         return batch_graph_data
@@ -441,13 +443,15 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
 
-        protein_mpnn_latent_128 = None
-        if hasattr(graph_data, "protein_mpnn_latent_128"):
-            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent_128.float()
+        protein_mpnn_latent_node_128 = None
+        if hasattr(graph_data, "protein_mpnn_latent_node_128"):
+            protein_mpnn_latent_node_128 = graph_data.protein_mpnn_latent_node_128.float()
+        elif hasattr(graph_data, "protein_mpnn_latent_128"):
+            protein_mpnn_latent_node_128 = graph_data.protein_mpnn_latent_128.float()
         elif hasattr(graph_data, "protein_mpnn_latent"):
-            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent.float()
-        if protein_mpnn_latent_128 is not None and protein_mpnn_latent_128.dim() == 1:
-            protein_mpnn_latent_128 = protein_mpnn_latent_128.unsqueeze(0)
+            protein_mpnn_latent_node_128 = graph_data.protein_mpnn_latent.float()
+        if protein_mpnn_latent_node_128 is not None and protein_mpnn_latent_node_128.dim() == 1:
+            protein_mpnn_latent_node_128 = protein_mpnn_latent_node_128.unsqueeze(0)
         
         data_kwargs = dict(
             x=graph_data.x,
@@ -466,8 +470,8 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             id=graph_data.compound_id,
             ids=torch.tensor(range(len(graph_data.x))),
         )
-        if protein_mpnn_latent_128 is not None:
-            data_kwargs["protein_mpnn_latent_128"] = protein_mpnn_latent_128
+        if protein_mpnn_latent_node_128 is not None:
+            data_kwargs["protein_mpnn_latent_node_128"] = protein_mpnn_latent_node_128
         batch_graph_data = Data(**data_kwargs)
         
         return batch_graph_data
@@ -604,8 +608,10 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             ids=ids_new,
             id=self.data.id,
         )
-        if hasattr(self.data, "protein_mpnn_latent_128"):
-            data_kwargs["protein_mpnn_latent_128"] = self.data.protein_mpnn_latent_128
+        if hasattr(self.data, "protein_mpnn_latent_node_128"):
+            data_kwargs["protein_mpnn_latent_node_128"] = self.data.protein_mpnn_latent_node_128
+        elif hasattr(self.data, "protein_mpnn_latent_128"):
+            data_kwargs["protein_mpnn_latent_node_128"] = self.data.protein_mpnn_latent_128
         output_graph = Data(**data_kwargs)
         
         return output_graph
@@ -699,13 +705,15 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
 
-        protein_mpnn_latent_128 = None
-        if hasattr(graph_data, "protein_mpnn_latent_128"):
-            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent_128.float()
+        protein_mpnn_latent_node_128 = None
+        if hasattr(graph_data, "protein_mpnn_latent_node_128"):
+            protein_mpnn_latent_node_128 = graph_data.protein_mpnn_latent_node_128.float()
+        elif hasattr(graph_data, "protein_mpnn_latent_128"):
+            protein_mpnn_latent_node_128 = graph_data.protein_mpnn_latent_128.float()
         elif hasattr(graph_data, "protein_mpnn_latent"):
-            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent.float()
-        if protein_mpnn_latent_128 is not None and protein_mpnn_latent_128.dim() == 1:
-            protein_mpnn_latent_128 = protein_mpnn_latent_128.unsqueeze(0)
+            protein_mpnn_latent_node_128 = graph_data.protein_mpnn_latent.float()
+        if protein_mpnn_latent_node_128 is not None and protein_mpnn_latent_node_128.dim() == 1:
+            protein_mpnn_latent_node_128 = protein_mpnn_latent_node_128.unsqueeze(0)
         
         data_kwargs = dict(
             x=graph_data.x,
@@ -724,8 +732,8 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
             id=graph_data.compound_id,
             ids=torch.tensor(range(len(graph_data.x))),
         )
-        if protein_mpnn_latent_128 is not None:
-            data_kwargs["protein_mpnn_latent_128"] = protein_mpnn_latent_128
+        if protein_mpnn_latent_node_128 is not None:
+            data_kwargs["protein_mpnn_latent_node_128"] = protein_mpnn_latent_node_128
         batch_graph_data = Data(**data_kwargs)
         
         return batch_graph_data
@@ -825,8 +833,10 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
             ids=ids_new,
             id=self.data.id,
         )
-        if hasattr(self.data, "protein_mpnn_latent_128"):
-            data_kwargs["protein_mpnn_latent_128"] = self.data.protein_mpnn_latent_128
+        if hasattr(self.data, "protein_mpnn_latent_node_128"):
+            data_kwargs["protein_mpnn_latent_node_128"] = self.data.protein_mpnn_latent_node_128
+        elif hasattr(self.data, "protein_mpnn_latent_128"):
+            data_kwargs["protein_mpnn_latent_node_128"] = self.data.protein_mpnn_latent_128
         output_graph = Data(**data_kwargs)
         
         return output_graph

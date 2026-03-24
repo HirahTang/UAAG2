@@ -491,10 +491,8 @@ class Trainer(pl.LightningModule):
             return None
 
         context = None
-        if hasattr(batch, "protein_mpnn_latent_128"):
-            context = batch.protein_mpnn_latent_128
-        elif hasattr(batch, "protein_mpnn_latent"):
-            context = batch.protein_mpnn_latent
+        if hasattr(batch, "protein_mpnn_latent_node_128"):
+            context = batch.protein_mpnn_latent_node_128
 
         if context is None:
             return None
@@ -502,6 +500,15 @@ class Trainer(pl.LightningModule):
         context = context.float().to(self.device)
         if context.dim() == 1:
             context = context.unsqueeze(0)
+
+        # Accept both node-level (num_nodes, C) and graph-level (num_graphs, C) context.
+        # Graph-level context is expanded per node using batch indices.
+        if context.dim() == 2:
+            num_nodes = int(batch.num_nodes)
+            num_graphs = int(batch.batch.max().item()) + 1
+            if context.size(0) == num_graphs and context.size(0) != num_nodes:
+                context = context[batch.batch]
+
         return context
     
     def forward(self, batch: Batch, t: Tensor):
