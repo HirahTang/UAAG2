@@ -328,6 +328,11 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
+
+        if protein_mpnn_latent_node_128 is not None:
+            num_nodes = graph_data.x.size(0)
+            if protein_mpnn_latent_node_128.size(0) != num_nodes:
+                protein_mpnn_latent_node_128 = protein_mpnn_latent_node_128[0].unsqueeze(0).repeat(num_nodes, 1)
         
         data_kwargs = dict(
             x=graph_data.x,
