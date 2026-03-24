@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=60G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=2-4
+#SBATCH --array=3-4
 #SBATCH -o /scratch/project_465002574/UAAG_logs/cleanup_%A_%a.log
 #SBATCH -e /scratch/project_465002574/UAAG_logs/cleanup_%A_%a.log
 
