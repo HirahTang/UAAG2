@@ -1,45 +1,39 @@
 #!/bin/bash
-#SBATCH --job-name=UAAG_train_8gpu
+#SBATCH --job-name=UAAG_demo_4gpu
 #SBATCH --account=project_465002574
 #SBATCH --partition=standard-g
 #SBATCH --nodes=1
-#SBATCH --gpus-per-node=8
-#SBATCH --ntasks-per-node=8
+#SBATCH --gpus-per-node=4
+#SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=7
-#SBATCH --mem=480G
-#SBATCH --time=2-00:00:00
-#SBATCH -o logs/train_8gpu_%j.log
-#SBATCH -e logs/train_8gpu_%j.log
+#SBATCH --mem=240G
+#SBATCH --time=04:00:00
+#SBATCH -o logs/train_demo_4gpu_%j.log
+#SBATCH -e logs/train_demo_4gpu_%j.log
 
 set -euo pipefail
 
 # 1. DIRECTORY / RUN CONFIG
-OUTPUT_DIR=/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFull_mask_8_gpu_UAAG_model_official_8_0202
-TRAINING_DATA_PATH=/scratch/project_465002574/unaagi_whole_v1.lmdb
+OUTPUT_DIR=/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runDemo_4_gpu_UAAG_model
+TRAINING_DATA_PATH=/scratch/project_465002574/PDB/uaag2_eqgat_lmdb_shards
 DATA_INFO_PATH=/flash/project_465002574/UAAG2_main/data/statistic.pkl
-METADATA_PATH=/scratch/project_465002574/unaagi_whole_v1.metadata.pkl
-RUN_ID=Full_mask_8_gpu_UAAG_model_official_8_0202
-LOAD_CKPT=/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFull_mask_8_gpu_UAAG_model_official_8_0202/last.ckpt
+RUN_ID=Demo_4_gpu_UAAG_model
 
 mkdir -p "$OUTPUT_DIR"
 mkdir -p logs
 
 # 2. RENDEZVOUS
 export MASTER_ADDR=$(scontrol show hostname "$SLURM_NODELIST" | head -n 1)
-export MASTER_PORT=29523
+export MASTER_PORT=29524
 
-# 3. CPU BINDING (Green Ring topology)
+# 3. CPU BINDING (first 4 masks used)
 c=fe
-MYMASKS="0x${c}000000000000,0x${c}00000000000000,0x${c}0000,0x${c}000000,0x${c},0x${c}00,0x${c}00000000,0x${c}0000000000"
+MYMASKS="0x${c}000000000000,0x${c}00000000000000,0x${c}0000,0x${c}000000"
 
 # 4. ENVIRONMENT
-echo "→ Setting up environment..."
 module load LUMI CrayEnv
 module load lumi-container-wrapper/0.4.2-cray-python-default
 export PATH="/flash/project_465002574/unaagi_env/bin:$PATH"
-
-export WORK_DIR=/flash/project_465002574/UAAG2_main
-cd "$WORK_DIR"
 
 export HSA_ENABLE_SDMA=0
 export AMD_DIRECT_DISPATCH=0
@@ -49,16 +43,15 @@ export MIOPEN_USER_DB_PATH="/tmp/$(whoami)-miopen-cache-$SLURM_JOB_ID"
 export MIOPEN_CUSTOM_CACHE_DIR=$MIOPEN_USER_DB_PATH
 srun mkdir -p "$MIOPEN_USER_DB_PATH"
 
-echo ""
-echo "→ Checking GPU availability..."
-rocm-smi || echo "Warning: rocm-smi not available"
+export WORK_DIR=/flash/project_465002574/UAAG2_main
+cd "$WORK_DIR"
 
-echo "Running training on 1 node / 8 GPUs"
+echo "Running demo training on 1 node / 4 GPUs"
 echo "TRAINING_DATA_PATH=$TRAINING_DATA_PATH"
 echo "RUN_ID=$RUN_ID"
 
 # 5. EXECUTION
-# One task controls one GPU; treat tasks as virtual nodes (8 total).
+# One task controls one GPU; treat tasks as virtual nodes (4 total).
 srun --cpu-bind=mask_cpu:$MYMASKS bash -c "
     export ROCR_VISIBLE_DEVICES=\$SLURM_LOCALID
     export RANK=\$SLURM_PROCID
@@ -68,16 +61,20 @@ srun --cpu-bind=mask_cpu:$MYMASKS bash -c "
 
     python scripts/run_train.py \
       --gpus 1 \
-      --num_nodes 8 \
+      --num_nodes 4 \
       --batch-size 8 \
+      --num-epochs 10 \
       --logger-type wandb \
       --id $RUN_ID \
       --training_data $TRAINING_DATA_PATH \
-      --use_protein_mpnn_context_128 \
       --data_info_path $DATA_INFO_PATH \
       --metadata_path $METADATA_PATH \
       --num-workers 4 \
-      --load-ckpt $LOAD_CKPT
+      --test-size 32 \
+      --train-size 0.99 \
+      --mask-rate 0 \
+      --max-virtual-nodes 5 \
+      --use_protein_mpnn_context_128
 "
 
 srun rm -rf "$MIOPEN_USER_DB_PATH"

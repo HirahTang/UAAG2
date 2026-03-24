@@ -13,6 +13,10 @@
 
 # 1. DIRECTORY SETUP
 OUTPUT_DIR=/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFull_mask_40_gpu_UAAG_model_official_8_0202
+TRAINING_DATA_PATH=/scratch/project_465002574/unaagi_whole_v1.lmdb
+# TRAINING_DATA_PATH can point to:
+# - a single LMDB file, or
+# - a directory that contains many *.lmdb shard files
 mkdir -p "$OUTPUT_DIR"
 mkdir -p logs
 
@@ -53,9 +57,9 @@ srun --cpu-bind=mask_cpu:$MYMASKS bash -c "
       --batch-size 8 \
       --logger-type wandb \
       --id Full_mask_40_gpu_UAAG_model_official_8_0202 \
-      --training_data /scratch/project_465002574/unaagi_whole_v1.lmdb \
+      --training_data $TRAINING_DATA_PATH \
+      --use_protein_mpnn_context_128 \
       --data_info_path /flash/project_465002574/UAAG2_main/data/statistic.pkl \
-      --metadata_path /scratch/project_465002574/unaagi_whole_v1.metadata.pkl \
       --num-workers 4 \
       --load-ckpt /flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFull_mask_8_gpu_UAAG_model_official_8_0202/last.ckpt
 "

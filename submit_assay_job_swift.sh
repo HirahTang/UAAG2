@@ -6,8 +6,8 @@
 # Submits swift-mode jobs for UAAG assays:
 #   Sampling (1 iteration × 10 splits, 100 samples/split)
 #   -> Post-analysis + evaluation (ProteinGym + PUMA + CP2)
+#   -> PoseBusters evaluation
 #   -> Cleanup (compress + delete .mol/.sdf)
-# PoseBusters is skipped in this mode.
 # All job logic is embedded in this file (no nested bash dependencies).
 #
 # Usage:
@@ -194,7 +194,7 @@ submit_assay() {
     echo "  Protein ID: ${protein_id}"
     echo "  Checkpoint: ${CKPT_PATH}"
     echo "  Model: ${MODEL_NAME}"
-    echo "  Pipeline: Sampling (1 iter × ${assay_split_count} splits) → Post-analysis/Eval → Cleanup"
+    echo "  Pipeline: Sampling (1 iter × ${assay_split_count} splits) → Post-analysis/Eval → PoseBusters → Cleanup"
     echo "  Samples per split: ${NUM_SAMPLES}"
     echo "  Split count: ${assay_split_count}"
     echo ""
@@ -340,8 +340,65 @@ EOF
         if [[ ${POSTPROC_JOB} =~ ^[0-9]+$ ]]; then
             echo "  ✓ Step 2: Post-analysis submitted: ${POSTPROC_JOB}"
 
-            local cleanup_wrap
-            cleanup_wrap=$(cat <<EOF
+            local posebuster_wrap
+            posebuster_wrap=$(cat <<EOF
+set -e
+module load LUMI
+module load CrayEnv
+module load lumi-container-wrapper/0.4.2-cray-python-default
+export PATH="/flash/project_465002574/unaagi_env/bin:\$PATH"
+mkdir -p "${LOG_DIR}"
+cd "${WORK_DIR}"
+
+MODEL="${MODEL_NAME}"
+NUM_SAMPLES="${NUM_SAMPLES}"
+PROTEIN_ID="${protein_id}"
+ITERATION=0
+
+RUN_DIR="run\${MODEL}/\${PROTEIN_ID}_\${MODEL}_\${NUM_SAMPLES}_iter\${ITERATION}"
+SAMPLES_DIR="/scratch/project_465002574/ProteinGymSampling/\${RUN_DIR}/Samples"
+OUTPUT_CSV="\${SAMPLES_DIR}/PoseBusterResults"
+TEMP_DIR="/flash/project_465002574/temp_sdf_posebuster_swift_${assay_name}_\${SLURM_JOB_ID}"
+
+if [ ! -d "\${SAMPLES_DIR}" ]; then
+    echo "Error: samples directory not found: \${SAMPLES_DIR}"
+    exit 1
+fi
+
+if [ ! -f "\${SAMPLES_DIR}/aa_distribution.csv" ]; then
+    echo "Warning: aa_distribution.csv not found in \${SAMPLES_DIR}"
+fi
+
+python scripts/evaluate_mol_samples.py \
+    --input-dir "\${SAMPLES_DIR}" \
+    --output "\${OUTPUT_CSV}" \
+    --temp-dir "\${TEMP_DIR}"
+
+if [ -f "\${OUTPUT_CSV}_summary.txt" ]; then
+    cat "\${OUTPUT_CSV}_summary.txt"
+fi
+EOF
+)
+
+            POSEBUSTER_JOB=$(sbatch --parsable \
+                --account=project_465002574 \
+                --partition=small-g \
+                --ntasks=1 \
+                --cpus-per-task=4 \
+                --mem=60G \
+                --time=2-00:00:00 \
+                -o /scratch/project_465002574/UAAG_logs/posebuster_swift_%j.log \
+                -e /scratch/project_465002574/UAAG_logs/posebuster_swift_%j.log \
+                --job-name="UAAG_swift_pb_${assay_name}" \
+                --dependency=afterok:${POSTPROC_JOB} \
+                --export=ALL \
+                --wrap "${posebuster_wrap}" 2>&1)
+
+            if [[ ${POSEBUSTER_JOB} =~ ^[0-9]+$ ]]; then
+                echo "  ✓ Step 3: PoseBusters submitted: ${POSEBUSTER_JOB}"
+
+                local cleanup_wrap
+                cleanup_wrap=$(cat <<EOF
 set -e
 module load LUMI
 module load CrayEnv
@@ -391,14 +448,17 @@ EOF
                 -o /scratch/project_465002574/UAAG_logs/cleanup_swift_%j.log \
                 -e /scratch/project_465002574/UAAG_logs/cleanup_swift_%j.log \
                 --job-name="UAAG_swift_clean_${assay_name}" \
-                --dependency=afterok:${POSTPROC_JOB} \
+                --dependency=afterok:${POSEBUSTER_JOB} \
                 --export=ALL \
                 --wrap "${cleanup_wrap}" 2>&1)
 
-            if [[ ${CLEANUP_JOB} =~ ^[0-9]+$ ]]; then
-                echo "  ✓ Step 3: Cleanup submitted: ${CLEANUP_JOB} (PoseBusters skipped)"
+                if [[ ${CLEANUP_JOB} =~ ^[0-9]+$ ]]; then
+                    echo "  ✓ Step 4: Cleanup submitted: ${CLEANUP_JOB}"
+                else
+                    echo "  ✗ Cleanup submission failed: ${CLEANUP_JOB}"
+                fi
             else
-                echo "  ✗ Cleanup submission failed: ${CLEANUP_JOB}"
+                echo "  ✗ PoseBusters submission failed: ${POSEBUSTER_JOB}"
             fi
         else
             echo "  ✗ Post-analysis submission failed: ${POSTPROC_JOB}"

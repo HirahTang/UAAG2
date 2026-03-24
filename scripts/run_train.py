@@ -35,6 +35,13 @@ warnings.filterwarnings(
 # from eqgat_diff.experiments.hparams import add_arguments
 
 def main(hparams):
+    if hparams.use_protein_mpnn_context_128:
+        hparams.context_mapping = True
+        if hparams.num_context_features in (0, None):
+            hparams.num_context_features = 128
+
+    if hparams.context_mapping and hparams.num_context_features <= 0:
+        raise ValueError("When --context-mapping is enabled, --num-context-features must be > 0")
     
     ema_callback = ExponentialMovingAverage(decay=hparams.ema_decay)
     checkpoint_callback = ModelCheckpoint(
@@ -68,6 +75,8 @@ def main(hparams):
     print("pocket noise scale: ", hparams.pocket_noise_scale)
     lmdb_data_path = hparams.training_data
     all_data = UAAG2Dataset(lmdb_data_path,  mask_rate=hparams.mask_rate, pocket_noise=hparams.pocket_noise, noise_scale=hparams.pocket_noise_scale, params=hparams)
+    print(f"Loaded training dataset from {lmdb_data_path}")
+    print(f"Resolved {len(all_data.lmdb_paths)} LMDB file(s), total graphs: {len(all_data)}")
     test_data_setup = UAAG2Dataset(lmdb_data_path, params=hparams)
     # split all_data into train, val, test from all_data
     # from IPython import embed; embed()
@@ -80,9 +89,9 @@ def main(hparams):
         with open(hparams.metadata_path, "rb") as f:
             metadata = pickle.load(f)
         weights = []
-        for i in range(len(train_data)):
-            key = f"{i:08}".encode("ascii")
-            source_name = metadata[key]
+        for dataset_idx in train_data.indices:
+            key = f"{dataset_idx:08}".encode("ascii")
+            source_name = metadata.get(key, None)
             if source_name in ["pdbbind_data.pt", "AACLBR.pt", "L_sidechain_data.pt"]:
                 weights.append(hparams.pdbbind_weight)
             else:
@@ -191,7 +200,12 @@ if __name__ == "__main__":
     parser.add_argument('--dataset', type=str, default='drugs')
     
     parser.add_argument('--data_info_path', type=str, default="/home/qcx679/hantang/UAAG2/data/full_graph/statistic.pkl")
-    parser.add_argument('--training_data', type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.lmdb")
+    parser.add_argument(
+        '--training_data',
+        type=str,
+        default="/datasets/biochem/unaagi/unaagi_whole_v1.lmdb",
+        help="Path to a single .lmdb file or a directory containing multiple .lmdb shard files",
+    )
     parser.add_argument("--use_metadata_sampler", default=False, action="store_true")
     parser.add_argument('--metadata_path', type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl")
     # parser.add_argument(
@@ -354,6 +368,12 @@ if __name__ == "__main__":
     # CONTEXT
     parser.add_argument("--context-mapping", default=False, action="store_true")
     parser.add_argument("--num-context-features", default=0, type=int)
+    parser.add_argument(
+        "--use_protein_mpnn_context_128",
+        default=False,
+        action="store_true",
+        help="Enable context conditioning and use per-graph protein_mpnn_latent_128 vectors",
+    )
     parser.add_argument("--properties-list", default=[], nargs="+", type=str)
 
     # PROPERTY PREDICTION

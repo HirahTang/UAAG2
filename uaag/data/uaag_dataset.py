@@ -1,6 +1,7 @@
 from operator import is_
 from os.path import join
 import os
+from bisect import bisect_right
 from typing import Optional
 import sys
 import numpy as np
@@ -48,6 +49,12 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         if self.pocket_noise:
             self.noise_scale = noise_scale
         self.data_path = data_path
+        self.lmdb_paths = self._collect_lmdb_paths(data_path)
+        self._lmdb_lengths = []
+        self._lmdb_cumulative_lengths = []
+        self._envs = {}
+        self.length = 0
+        self._build_global_index()
         
         
         
@@ -59,6 +66,89 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             2: 3,
         }
         self.mask_rate = mask_rate
+
+    @staticmethod
+    def _collect_lmdb_paths(data_path):
+        if os.path.isdir(data_path):
+            lmdb_paths = sorted(
+                [
+                    os.path.join(data_path, fname)
+                    for fname in os.listdir(data_path)
+                    if fname.endswith(".lmdb") and os.path.isfile(os.path.join(data_path, fname))
+                ]
+            )
+            if len(lmdb_paths) == 0:
+                raise ValueError(f"No .lmdb files found under directory: {data_path}")
+            return lmdb_paths
+
+        if os.path.isfile(data_path):
+            return [data_path]
+
+        raise ValueError(f"training_data path does not exist: {data_path}")
+
+    def _open_env(self, lmdb_path):
+        env = self._envs.get(lmdb_path)
+        if env is None:
+            env = lmdb.open(
+                lmdb_path,
+                readonly=True,
+                lock=False,
+                subdir=False,
+                readahead=False,
+                meminit=False,
+            )
+            self._envs[lmdb_path] = env
+        return env
+
+    def _read_lmdb_length(self, lmdb_path):
+        env = lmdb.open(
+            lmdb_path,
+            readonly=True,
+            lock=False,
+            subdir=False,
+            readahead=False,
+            meminit=False,
+        )
+        try:
+            with env.begin() as txn:
+                value = txn.get(b"__len__")
+                if value is None:
+                    raise ValueError(f"Missing __len__ key in LMDB: {lmdb_path}")
+                return int(pickle.loads(value))
+        finally:
+            env.close()
+
+    def _build_global_index(self):
+        running = 0
+        for lmdb_path in self.lmdb_paths:
+            shard_len = self._read_lmdb_length(lmdb_path)
+            self._lmdb_lengths.append(shard_len)
+            running += shard_len
+            self._lmdb_cumulative_lengths.append(running)
+        self.length = running
+
+    def _resolve_global_index(self, idx):
+        if idx < 0:
+            idx += self.length
+        if idx < 0 or idx >= self.length:
+            raise IndexError(f"Index out of range: {idx} (dataset length: {self.length})")
+
+        shard_idx = bisect_right(self._lmdb_cumulative_lengths, idx)
+        shard_start = 0 if shard_idx == 0 else self._lmdb_cumulative_lengths[shard_idx - 1]
+        local_idx = idx - shard_start
+        return shard_idx, local_idx
+
+    def get_shard_path(self, idx):
+        shard_idx, _ = self._resolve_global_index(idx)
+        return self.lmdb_paths[shard_idx]
+
+    def close_envs(self):
+        for env in self._envs.values():
+            env.close()
+        self._envs.clear()
+
+    def __del__(self):
+        self.close_envs()
     # def load_dataset(self):
     #     for file in tqdm(self.root):
     #         print(f"Loading {file} \n")
@@ -67,17 +157,6 @@ class UAAG2Dataset(torch.utils.data.Dataset):
     #     self.data
         
     def __len__(self):
-        env = lmdb.open(
-            self.data_path,
-            readonly=True,
-            lock=False,
-            subdir=False,
-            readahead=False,
-            meminit=False,
-        )
-        with env.begin() as txn:
-            self.length = pickle.loads(txn.get(b"__len__"))
-        env.close()
         return self.length
     
     def pocket_centering(self, batch):
@@ -93,22 +172,19 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         return batch
     
     def __getitem__(self, idx):
-        
-        env = lmdb.open(
-            self.data_path,
-            readonly=True,
-            lock=False,
-            subdir=False,
-            readahead=False,
-            meminit=False,
-        )
-        
+        shard_idx, local_idx = self._resolve_global_index(idx)
+        lmdb_path = self.lmdb_paths[shard_idx]
+        env = self._open_env(lmdb_path)
+
         with env.begin() as txn:
-            key = f"{idx:08}".encode("ascii")
+            key = f"{local_idx:08}".encode("ascii")
             byteflow = txn.get(key)
+            if byteflow is None:
+                raise KeyError(
+                    f"Missing key {key.decode('ascii')} in LMDB shard {lmdb_path}"
+                )
         graph_data = pickle.loads(byteflow)
-        assert isinstance(graph_data, Data), f"Expected torch_geometric.data.Data, got {type(graph)}"
-        env.close()
+        assert isinstance(graph_data, Data), f"Expected torch_geometric.data.Data, got {type(graph_data)}"
         # TODO zero center the positions by the mean of the pocket atoms
         
         # graph_data = self.data[idx]
@@ -148,6 +224,16 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
+
+        protein_mpnn_latent_128 = None
+        if hasattr(graph_data, "protein_mpnn_latent_128"):
+            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent_128
+        elif hasattr(graph_data, "protein_mpnn_latent"):
+            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent
+        if protein_mpnn_latent_128 is not None:
+            protein_mpnn_latent_128 = protein_mpnn_latent_128.float()
+            if protein_mpnn_latent_128.dim() == 1:
+                protein_mpnn_latent_128 = protein_mpnn_latent_128.unsqueeze(0)
         graph_data.charges = charges.float()
         reconstruct_mask = graph_data.is_ligand - graph_data.is_backbone
         new_backbone = graph_data.is_backbone[reconstruct_mask==1]
@@ -241,7 +327,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
         
-        batch_graph_data = Data(
+        data_kwargs = dict(
             x=graph_data.x,
             pos=graph_data.pos,
             edge_index=graph_data.edge_index,
@@ -257,6 +343,9 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             ligand_size=torch.tensor(graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).long(),
             id=graph_data.compound_id,
         )
+        if protein_mpnn_latent_128 is not None:
+            data_kwargs["protein_mpnn_latent_128"] = protein_mpnn_latent_128
+        batch_graph_data = Data(**data_kwargs)
         
         return batch_graph_data
 
@@ -351,8 +440,16 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
+
+        protein_mpnn_latent_128 = None
+        if hasattr(graph_data, "protein_mpnn_latent_128"):
+            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent_128.float()
+        elif hasattr(graph_data, "protein_mpnn_latent"):
+            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent.float()
+        if protein_mpnn_latent_128 is not None and protein_mpnn_latent_128.dim() == 1:
+            protein_mpnn_latent_128 = protein_mpnn_latent_128.unsqueeze(0)
         
-        batch_graph_data = Data(
+        data_kwargs = dict(
             x=graph_data.x,
             pos=graph_data.pos,
             edge_index=graph_data.edge_index,
@@ -369,6 +466,9 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             id=graph_data.compound_id,
             ids=torch.tensor(range(len(graph_data.x))),
         )
+        if protein_mpnn_latent_128 is not None:
+            data_kwargs["protein_mpnn_latent_128"] = protein_mpnn_latent_128
+        batch_graph_data = Data(**data_kwargs)
         
         return batch_graph_data
     
@@ -488,7 +588,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
 
         # from IPython import embed; embed()
         
-        output_graph = Data(
+        data_kwargs = dict(
             x=x_new,
             pos=pos_new,
             edge_index=edge_index_new,
@@ -504,6 +604,9 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             ids=ids_new,
             id=self.data.id,
         )
+        if hasattr(self.data, "protein_mpnn_latent_128"):
+            data_kwargs["protein_mpnn_latent_128"] = self.data.protein_mpnn_latent_128
+        output_graph = Data(**data_kwargs)
         
         return output_graph
 
@@ -595,8 +698,16 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
+
+        protein_mpnn_latent_128 = None
+        if hasattr(graph_data, "protein_mpnn_latent_128"):
+            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent_128.float()
+        elif hasattr(graph_data, "protein_mpnn_latent"):
+            protein_mpnn_latent_128 = graph_data.protein_mpnn_latent.float()
+        if protein_mpnn_latent_128 is not None and protein_mpnn_latent_128.dim() == 1:
+            protein_mpnn_latent_128 = protein_mpnn_latent_128.unsqueeze(0)
         
-        batch_graph_data = Data(
+        data_kwargs = dict(
             x=graph_data.x,
             pos=graph_data.pos,
             edge_index=graph_data.edge_index,
@@ -613,6 +724,9 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
             id=graph_data.compound_id,
             ids=torch.tensor(range(len(graph_data.x))),
         )
+        if protein_mpnn_latent_128 is not None:
+            data_kwargs["protein_mpnn_latent_128"] = protein_mpnn_latent_128
+        batch_graph_data = Data(**data_kwargs)
         
         return batch_graph_data
     
@@ -695,7 +809,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         edge_attr_new = torch.cat([edge_attr_new, torch.zeros(new_ligand_edge_index.size(1))])
         edge_ligand_new = torch.cat([edge_ligand_new, torch.ones(new_ligand_edge_index.size(1))]).float()
         
-        output_graph = Data(
+        data_kwargs = dict(
             x=x_new,
             pos=pos_new,
             edge_index=edge_index_new,
@@ -711,6 +825,9 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
             ids=ids_new,
             id=self.data.id,
         )
+        if hasattr(self.data, "protein_mpnn_latent_128"):
+            data_kwargs["protein_mpnn_latent_128"] = self.data.protein_mpnn_latent_128
+        output_graph = Data(**data_kwargs)
         
         return output_graph
 

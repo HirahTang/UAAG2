@@ -485,6 +485,24 @@ class Trainer(pl.LightningModule):
         )
         
         return final_loss
+
+    def _get_context_from_batch(self, batch: Batch):
+        if not getattr(self.hparams, "context_mapping", False):
+            return None
+
+        context = None
+        if hasattr(batch, "protein_mpnn_latent_128"):
+            context = batch.protein_mpnn_latent_128
+        elif hasattr(batch, "protein_mpnn_latent"):
+            context = batch.protein_mpnn_latent
+
+        if context is None:
+            return None
+
+        context = context.float().to(self.device)
+        if context.dim() == 1:
+            context = context.unsqueeze(0)
+        return context
     
     def forward(self, batch: Batch, t: Tensor):
         atom_types: Tensor = batch.x
@@ -493,6 +511,7 @@ class Trainer(pl.LightningModule):
         data_batch: Tensor = batch.batch
         bond_edge_index = batch.edge_index
         bond_edge_attr = batch.edge_attr
+        context = self._get_context_from_batch(batch)
         
         n = batch.num_nodes
         bs = batch.batch.max() + 1
@@ -639,7 +658,7 @@ class Trainer(pl.LightningModule):
                 edge_attr_global=edge_attr_global_perturbed,
                 batch=data_batch,
                 batch_edge_global=batch.edge_ligand.long(),
-                context=None,
+                context=context,
                 pocket_mask=pocket_mask.unsqueeze(1),
                 edge_mask=batch.edge_ligand.long(),
                 batch_lig=batch.batch[pocket_mask==0],
@@ -1038,6 +1057,7 @@ class Trainer(pl.LightningModule):
             tqdm(reversed(chain), total=len(chain)) if verbose else reversed(chain)
         )
         batch_lig = batch.batch[pocket_mask==0]
+        context = self._get_context_from_batch(batch)
         for i, timestep in enumerate(iterator):
             s = torch.full(
                 size=(n,), fill_value=timestep, dtype=torch.long, device=compound_pos.device
@@ -1056,7 +1076,7 @@ class Trainer(pl.LightningModule):
                 edge_attr_global=edge_attr_full,
                 batch=batch.batch,
                 batch_edge_global=batch.edge_ligand.long(),
-                context=None,
+                context=context,
                 pocket_mask=pocket_mask.unsqueeze(1),
                 edge_mask=batch.edge_ligand.long(),
                 batch_lig=batch.batch[pocket_mask==0],
