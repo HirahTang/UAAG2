@@ -1,14 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=UAAG_train_16gpu
 #SBATCH --account=project_465002574
-#SBATCH --partition=standard-g
-#SBATCH --nodes=1                    # Request 1 node for 8 GPUs total [1]
-#SBATCH --gpus-per-node=8            # 8 GPU GCDs per node [1]
+#SBATCH --partition=standard-g                   # Request 1 node for 8 GPUs total [1]
+#SBATCH --gpus-per-node=1            # 8 GPU GCDs per node [1]
 #SBATCH --ntasks-per-node=8          # 1 task per GPU GCD [2]
 #SBATCH --cpus-per-task=7            # 56 available cores / 8 tasks per node [4]
 #SBATCH --mem=480G                   # Standard memory for a full LUMI-G node [2]
 #SBATCH --time=2-00:00:00
-#SBATCH -o logs/train_%j_8GPUs_demo.log
+#SBATCH -o logs/train_%j_single_demo.log
 #SBATCH -e logs/train_%j.log
 
 
@@ -67,7 +66,7 @@ mkdir -p logs
 mkdir -p $MIOPEN_USER_DB_PATH
 
 python scripts/run_train.py \
-      --gpus 8 \
+      --gpus 1 \
       --num_nodes 1 \
       --batch-size 8 \
       --num-epochs 10 \

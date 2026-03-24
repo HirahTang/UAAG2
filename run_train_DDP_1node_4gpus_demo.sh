@@ -2,7 +2,6 @@
 #SBATCH --job-name=UAAG_demo_4gpu
 #SBATCH --account=project_465002574
 #SBATCH --partition=standard-g
-#SBATCH --nodes=1
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=7
@@ -68,7 +67,6 @@ srun --cpu-bind=mask_cpu:$MYMASKS bash -c "
       --id $RUN_ID \
       --training_data $TRAINING_DATA_PATH \
       --data_info_path $DATA_INFO_PATH \
-      --metadata_path $METADATA_PATH \
       --num-workers 4 \
       --test-size 32 \
       --train-size 0.99 \
