@@ -143,7 +143,7 @@ def main(hparams):
         num_sanity_val_steps=2,
         max_epochs=hparams.num_epochs,
         detect_anomaly=hparams.detect_anomaly,
-        limit_train_batches=30000,
+        limit_train_batches=3000000,
     )
     
     pl.seed_everything(seed=hparams.seed, workers=hparams.gpus > 1)
