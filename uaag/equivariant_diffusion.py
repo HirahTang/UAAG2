@@ -490,12 +490,18 @@ class Trainer(pl.LightningModule):
         if not getattr(self.hparams, "context_mapping", False):
             return None
 
+        num_nodes = int(batch.num_nodes)
+        num_context_features = int(getattr(self.hparams, "num_context_features", 0))
         context = None
         if hasattr(batch, "protein_mpnn_latent_node_128"):
             context = batch.protein_mpnn_latent_node_128
 
         if context is None:
-            return None
+            return torch.zeros(
+                (num_nodes, num_context_features),
+                device=self.device,
+                dtype=torch.float32,
+            )
 
         context = context.float().to(self.device)
         if context.dim() == 1:
@@ -504,10 +510,11 @@ class Trainer(pl.LightningModule):
         # Accept both node-level (num_nodes, C) and graph-level (num_graphs, C) context.
         # Graph-level context is expanded per node using batch indices.
         if context.dim() == 2:
-            num_nodes = int(batch.num_nodes)
             num_graphs = int(batch.batch.max().item()) + 1
             if context.size(0) == num_graphs and context.size(0) != num_nodes:
                 context = context[batch.batch]
+            elif context.size(0) != num_nodes:
+                context = context[0].unsqueeze(0).repeat(num_nodes, 1)
 
         return context
     

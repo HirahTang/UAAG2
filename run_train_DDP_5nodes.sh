@@ -13,7 +13,7 @@
 
 # 1. DIRECTORY SETUP
 OUTPUT_DIR=/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/Full_mask_gpu_UAAG_model_condition_ProteinMPNN_128_0324
-TRAINING_DATA_PATH=/scratch/project_465002574/unaagi_whole_v1.lmdb
+TRAINING_DATA_PATH=/scratch/project_465002574/PDB/uaag2_eqgat_lmdb_shards
 # TRAINING_DATA_PATH can point to:
 # - a single LMDB file, or
 # - a directory that contains many *.lmdb shard files
