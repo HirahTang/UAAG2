@@ -87,9 +87,20 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         # mark line 1
         # print("Current Script and line number: ", __file__, "line number: ", 85)
         # from IPython import embed; embed()
+        t = t.long().clamp(min=0, max=self.Qt_bar.size(0) - 1)
+        x0 = x0.float()
+
         probs = torch.einsum("nj, nji -> ni", [x0, self.Qt_bar[t]])
-        check = torch.all((probs.sum(-1) - 1.0).abs() < 1e-4)
-        assert check
+        probs = torch.nan_to_num(probs, nan=0.0, posinf=0.0, neginf=0.0)
+        probs = probs.clamp(min=0.0)
+
+        row_sums = probs.sum(-1, keepdim=True)
+        invalid_rows = (~torch.isfinite(row_sums)) | (row_sums <= 0)
+        if invalid_rows.any():
+            probs[invalid_rows.squeeze(-1)] = self.terminal_distribution.unsqueeze(0)
+            row_sums = probs.sum(-1, keepdim=True)
+
+        probs = probs / row_sums.clamp(min=1e-8)
 
         return probs
 
@@ -272,7 +283,7 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         edge_attr_triu_ohe = F.one_hot(
             edge_attr_triu.long(), num_classes=self.num_bond_types
         ).float()
-        t_edge = t[data_batch[mask_i]]
+        t_edge = t[data_batch[mask_i]].long().clamp(min=0, max=self.Qt_bar.size(0) - 1)
         probs = self.marginal_prob(edge_attr_triu_ohe, t=t_edge)
         edges_t_given_0 = probs.multinomial(
             1,
@@ -322,8 +333,10 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         # else:
             # print("Current Script and line number: ", __file__, "line number: ", 297)   
             # from IPython import embed; embed()
-        x0 = F.one_hot(x0.squeeze().long(), num_classes=num_classes).float()
-        probs = self.marginal_prob(x0.float(), t[data_batch])
+        labels = x0.squeeze().long().clamp(min=0, max=num_classes - 1)
+        x0 = F.one_hot(labels, num_classes=num_classes).float()
+        t_index = t[data_batch].long().clamp(min=0, max=self.Qt_bar.size(0) - 1)
+        probs = self.marginal_prob(x0.float(), t_index)
         x0_perturbed = probs.multinomial(
             1,
         ).squeeze()

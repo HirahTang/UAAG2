@@ -356,7 +356,7 @@ class Trainer(pl.LightningModule):
         
         t = torch.randint(
             low=1,
-            high=self.hparams.timesteps + 1,
+            high=self.hparams.timesteps,
             size=(batch_size,),
             dtype=torch.long,
             device=batch.x.device,
