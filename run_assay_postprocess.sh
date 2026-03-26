@@ -70,7 +70,7 @@ echo "==========================================================================
 echo "Running Post-Processing for All Iterations"
 echo "============================================================================"
 
-for ITERATION in {3..4}; do
+for ITERATION in {0..2}; do
     echo ""
     echo "[$(date)] Processing iteration ${ITERATION}..."
     
