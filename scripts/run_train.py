@@ -50,6 +50,16 @@ def main(hparams):
         monitor="val/loss",
         save_last=True,
     )
+    epoch_checkpoint_callback = None
+    if hparams.save_every_epoch:
+        epoch_checkpoint_callback = ModelCheckpoint(
+            dirpath=hparams.save_dir + f"/run{hparams.id}/",
+            filename="epoch{epoch:03d}",
+            save_top_k=-1,
+            every_n_epochs=1,
+            save_last=False,
+            monitor=None,
+        )
     lr_logger = LearningRateMonitor()
     wandb_logger = WandbLogger(
         log_model="all",
@@ -122,6 +132,8 @@ def main(hparams):
         TQDMProgressBar(refresh_rate=5),
         ModelSummary(max_depth=2),
     ]
+    if epoch_checkpoint_callback is not None:
+        callbacks.append(epoch_checkpoint_callback)
 
     if hparams.ema_decay == 1.0:
         callbacks = callbacks[1:]
@@ -208,6 +220,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--use_metadata_sampler", default=False, action="store_true")
     parser.add_argument('--metadata_path', type=str, default="/datasets/biochem/unaagi/unaagi_whole_v1.metadata.pkl")
+    parser.add_argument("--save-every-epoch", default=False, action="store_true")
     # parser.add_argument(
     #     "--conf", "-c", type=open, action=LoadFromFile, help="Configuration yaml file"
     # )  # keep first

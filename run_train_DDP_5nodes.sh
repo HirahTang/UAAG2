@@ -58,6 +58,7 @@ srun --cpu-bind=mask_cpu:$MYMASKS bash -c "
       --logger-type wandb \
       --id Full_mask_gpu_UAAG_model_condition_ProteinMPNN_128_0324 \
       --training_data $TRAINING_DATA_PATH \
+      --save-every-epoch \
       --use_protein_mpnn_context_128 \
       --data_info_path /flash/project_465002574/UAAG2_main/data/statistic.pkl \
       --num-workers 4
