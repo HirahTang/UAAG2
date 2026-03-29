@@ -40,7 +40,7 @@ jobs:
 
       - name: Auth with GCP
         if: ${{ github.event.inputs.api_url == '' }}
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
