@@ -924,7 +924,7 @@ class Trainer(pl.LightningModule):
             
     
     def reverse_sampling(
-        self, 
+        self,
         batch,
         device: torch.device,
         verbose: bool = False,
@@ -934,6 +934,7 @@ class Trainer(pl.LightningModule):
         every_k_step: int = 1,
         iteration: int = 0,
         show_pocket: bool = False,
+        dpm_solver_pp: bool = False,
         ):
         # implement empirical_distribution_num_nodes of ligand node (randomly initiated)
         # back to the graph, with fully connected edges
@@ -1059,24 +1060,40 @@ class Trainer(pl.LightningModule):
         atom_type_traj = []
         charge_type_traj = []
         edge_type_traj = []
-        
+
         if self.hparams.continuous_param == "data":
             chain = range(0, self.hparams.timesteps)
         elif self.hparams.continuous_param == "noise":
             chain = range(0, self.hparams.timesteps - 1)
 
         chain = chain[::every_k_step]
-        
+
+        # For DPM-Solver++: build the reversed chain as a list so we can look ahead
+        chain_list = list(reversed(chain))
+
+        # State for DPM-Solver++ 2nd-order multistep correction
+        _dpm_x0_prev = None  # x0 prediction from previous sparse step
+        _dpm_h_prev = None   # lambda-step size from previous sparse step
+
         iterator = (
-            tqdm(reversed(chain), total=len(chain)) if verbose else reversed(chain)
+            tqdm(enumerate(chain_list), total=len(chain_list)) if verbose
+            else enumerate(chain_list)
         )
         batch_lig = batch.batch[pocket_mask==0]
         context = self._get_context_from_batch(batch)
-        for i, timestep in enumerate(iterator):
+        for i, timestep in iterator:
+            # t = current diffusion time (1-indexed), s = previous (higher-noise) index
             s = torch.full(
                 size=(n,), fill_value=timestep, dtype=torch.long, device=compound_pos.device
             )
             t = s + 1
+
+            # For DPM-Solver++: target timestep is the NEXT sparse step (bigger jump)
+            if dpm_solver_pp:
+                s_next_val = chain_list[i + 1] if i + 1 < len(chain_list) else 0
+                s_next = torch.full(
+                    size=(n,), fill_value=s_next_val, dtype=torch.long, device=compound_pos.device
+                )
 
             temb = t / self.hparams.timesteps
             temb = temb.unsqueeze(dim=1)
@@ -1129,84 +1146,152 @@ class Trainer(pl.LightningModule):
             hybridization_pred = hybridization_pred.softmax(dim=-1)
             degree_pred = degree_pred.softmax(dim=-1)
             
-            if ddpm:
+            if dpm_solver_pp:
+                # DPM-Solver++ 2nd-order multistep for continuous coordinates
+                pos, _dpm_h_prev = self.sde_pos.sample_dpm_solver_pp(
+                    t=t,
+                    s=s_next,
+                    xt=pos,
+                    x0_pred=coords_pred,
+                    x0_pred_prev=_dpm_x0_prev,
+                    h_prev=_dpm_h_prev,
+                    batch=batch_lig,
+                    cog_proj=False,
+                )
+                _dpm_x0_prev = coords_pred
+
+                # Categorical variables: jump reverse posterior from t to s_next
+                atom_types = self.cat_atoms.sample_reverse_categorical_jump(
+                    xt=atom_types, x0=atoms_pred,
+                    t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_atom_types,
+                )
+                charge_types = self.cat_charges.sample_reverse_categorical_jump(
+                    xt=charge_types, x0=charges_pred,
+                    t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_charge_classes,
+                )
+                ring_feat = self.cat_ring.sample_reverse_categorical_jump(
+                    xt=ring_feat, x0=ring_pred,
+                    t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_is_in_ring,
+                )
+                aromatic_feat = self.cat_aromatic.sample_reverse_categorical_jump(
+                    xt=aromatic_feat, x0=aromatic_pred,
+                    t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_is_aromatic,
+                )
+                hybridization_feat = self.cat_hybridization.sample_reverse_categorical_jump(
+                    xt=hybridization_feat, x0=hybridization_pred,
+                    t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_hybridization,
+                )
+                degree_feat = self.cat_degree.sample_reverse_categorical_jump(
+                    xt=degree_feat, x0=degree_pred,
+                    t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_degree,
+                )
+                (
+                    edge_attr_global_lig,
+                    edge_index_global_lig,
+                    mask,
+                    mask_i,
+                ) = self.cat_bonds.sample_reverse_edges_categorical_jump(
+                    edge_attr_global_lig,
+                    edges_pred,
+                    t,
+                    s_next,
+                    mask,
+                    mask_i,
+                    batch=batch.batch[edge_index_ligand[0]],
+                    edge_index_global=edge_index_global_lig,
+                    num_classes=self.num_bond_classes,
+                )
+            elif ddpm:
                 if self.hparams.noise_scheduler == "adaptive":
-                    # positions
                     pos = self.sde_pos.sample_reverse_adaptive(
                         s, t, pos, coords_pred, batch_lig, cog_proj=False, eta_ddim=eta_ddim
-                    )  # here is cog_proj false as it will be downprojected later
+                    )
                 else:
-                    # positions
                     pos = self.sde_pos.sample_reverse(
                         t, pos, coords_pred, batch_lig, cog_proj=False, eta_ddim=eta_ddim
-                    )  # here is cog_proj false as it will be downprojected later
+                    )
+
+                atom_types = self.cat_atoms.sample_reverse_categorical(
+                    xt=atom_types, x0=atoms_pred,
+                    t=t[batch_lig], num_classes=self.num_atom_types,
+                )
+                charge_types = self.cat_charges.sample_reverse_categorical(
+                    xt=charge_types, x0=charges_pred,
+                    t=t[batch_lig], num_classes=self.num_charge_classes,
+                )
+                ring_feat = self.cat_ring.sample_reverse_categorical(
+                    xt=ring_feat, x0=ring_pred,
+                    t=t[batch_lig], num_classes=self.num_is_in_ring,
+                )
+                aromatic_feat = self.cat_aromatic.sample_reverse_categorical(
+                    xt=aromatic_feat, x0=aromatic_pred,
+                    t=t[batch_lig], num_classes=self.num_is_aromatic,
+                )
+                hybridization_feat = self.cat_hybridization.sample_reverse_categorical(
+                    xt=hybridization_feat, x0=hybridization_pred,
+                    t=t[batch_lig], num_classes=self.num_hybridization,
+                )
+                degree_feat = self.cat_degree.sample_reverse_categorical(
+                    xt=degree_feat, x0=degree_pred,
+                    t=t[batch_lig], num_classes=self.num_degree,
+                )
+                (
+                    edge_attr_global_lig,
+                    edge_index_global_lig,
+                    mask,
+                    mask_i,
+                ) = self.cat_bonds.sample_reverse_edges_categorical(
+                    edge_attr_global_lig, edges_pred, t, mask, mask_i,
+                    batch=batch.batch[edge_index_ligand[0]],
+                    edge_index_global=edge_index_global_lig,
+                    num_classes=self.num_bond_classes,
+                )
             else:
                 pos = self.sde_pos.sample_reverse_ddim(
                     t, pos, coords_pred, batch_lig, cog_proj=False, eta_ddim=eta_ddim
-                )  # here is cog_proj false as it will be downprojected later
+                )
 
-            # atoms
-            
-            atom_types = self.cat_atoms.sample_reverse_categorical(
-                xt=atom_types,
-                x0=atoms_pred,
-                t=t[batch_lig],
-                num_classes=self.num_atom_types,
-            )
-            
-           
-            
-            # charges
-            charge_types = self.cat_charges.sample_reverse_categorical(
-                xt=charge_types,
-                x0=charges_pred,
-                t=t[batch_lig],
-                num_classes=self.num_charge_classes,
-            )
-
-            # additional feats
-            ring_feat = self.cat_ring.sample_reverse_categorical(
-                xt=ring_feat,
-                x0=ring_pred,
-                t=t[batch_lig],
-                num_classes=self.num_is_in_ring,
-            )
-
-            aromatic_feat = self.cat_aromatic.sample_reverse_categorical(
-                xt=aromatic_feat,
-                x0=aromatic_pred,
-                t=t[batch_lig],
-                num_classes=self.num_is_aromatic,
-            )
-            hybridization_feat = self.cat_hybridization.sample_reverse_categorical(
-                xt=hybridization_feat,
-                x0=hybridization_pred,
-                t=t[batch_lig],
-                num_classes=self.num_hybridization,
-            )
-            
-            degree_feat = self.cat_degree.sample_reverse_categorical(
-                xt=degree_feat,
-                x0=degree_pred,
-                t=t[batch_lig],
-                num_classes=self.num_degree,
-            )
-            
-            (
-                edge_attr_global_lig,
-                edge_index_global_lig,
-                mask,
-                mask_i,
-            ) = self.cat_bonds.sample_reverse_edges_categorical(
-                edge_attr_global_lig,
-                edges_pred,
-                t,
-                mask,
-                mask_i,
-                batch=batch.batch[edge_index_ligand[0]],
-                edge_index_global=edge_index_global_lig,
-                num_classes=self.num_bond_classes,
-            )
+                atom_types = self.cat_atoms.sample_reverse_categorical(
+                    xt=atom_types, x0=atoms_pred,
+                    t=t[batch_lig], num_classes=self.num_atom_types,
+                )
+                charge_types = self.cat_charges.sample_reverse_categorical(
+                    xt=charge_types, x0=charges_pred,
+                    t=t[batch_lig], num_classes=self.num_charge_classes,
+                )
+                ring_feat = self.cat_ring.sample_reverse_categorical(
+                    xt=ring_feat, x0=ring_pred,
+                    t=t[batch_lig], num_classes=self.num_is_in_ring,
+                )
+                aromatic_feat = self.cat_aromatic.sample_reverse_categorical(
+                    xt=aromatic_feat, x0=aromatic_pred,
+                    t=t[batch_lig], num_classes=self.num_is_aromatic,
+                )
+                hybridization_feat = self.cat_hybridization.sample_reverse_categorical(
+                    xt=hybridization_feat, x0=hybridization_pred,
+                    t=t[batch_lig], num_classes=self.num_hybridization,
+                )
+                degree_feat = self.cat_degree.sample_reverse_categorical(
+                    xt=degree_feat, x0=degree_pred,
+                    t=t[batch_lig], num_classes=self.num_degree,
+                )
+                (
+                    edge_attr_global_lig,
+                    edge_index_global_lig,
+                    mask,
+                    mask_i,
+                ) = self.cat_bonds.sample_reverse_edges_categorical(
+                    edge_attr_global_lig, edges_pred, t, mask, mask_i,
+                    batch=batch.batch[edge_index_ligand[0]],
+                    edge_index_global=edge_index_global_lig,
+                    num_classes=self.num_bond_classes,
+                )
             
             # combine the denoised features with the pocket features
             

@@ -266,6 +266,111 @@ class CategoricalDiffusionKernel(torch.nn.Module):
 
         return edge_attr_global, edge_index_global, mask, mask_i
 
+    def reverse_posterior_jump(self, xt, t, s):
+        """q(x_s | x_t, x0) for all x0, for arbitrary jump from t to s (s < t).
+
+        Uses the closed-form DDPM-absorbing posterior adapted for non-unit jumps.
+        Q_{s->t}_{ij} = alpha_{s->t} * delta_{ij} + (1 - alpha_{s->t}) * m_j
+        where alpha_{s->t} = alphas_bar[t] / alphas_bar[s].
+
+        Args:
+            xt: (n, k) one-hot noisy vectors at time t
+            t: (n,) current timestep, valid index into Qt_bar (0..T)
+            s: (n,) target timestep, valid index into Qt_bar (0..T), s < t
+        Returns:
+            (n, k0, k) posterior tensor q(x_s=k | x_t, x0=k0)
+        """
+        t = t.long().clamp(min=0, max=self.Qt_bar.size(0) - 1)
+        s = s.long().clamp(min=0, max=self.Qt_bar.size(0) - 1)
+
+        # alpha_{s->t} = alphabar_t / alphabar_s
+        abar_t = self.alphas_bar[t]  # (n,)
+        abar_s = self.alphas_bar[s]  # (n,)
+        alpha_st = (abar_t / abar_s.clamp_min(1e-8)).clamp(max=1.0)  # (n,)
+
+        # (Q_{s->t}^T @ x_t)_k = alpha_st * x_t_k + (1 - alpha_st) * m_k
+        alpha_col = alpha_st.unsqueeze(-1)  # (n, 1)
+        a = alpha_col * xt + (1.0 - alpha_col) * self.terminal_distribution.unsqueeze(0)
+        # a: (n, k) — likelihood of x_t given x_s for each class
+        a = a.unsqueeze(1)  # (n, 1, k)
+
+        # Qt_bar[s] gives q(x_s | x0) for each x0 class: shape (n, k0, k)
+        b = self.Qt_bar[s]  # (n, k0, k)
+
+        p0 = a * b  # (n, k0, k)
+
+        # denominator: q(x_t | x0) @ x_t for each x0 class
+        p1 = self.Qt_bar[t]  # (n, k0, k)
+        p1 = torch.einsum("nij, nj -> ni", [p1, xt])  # (n, k0)
+        p1 = p1.unsqueeze(-1)  # (n, k0, 1)
+
+        probs = p0 / p1.clamp_min(1e-5)  # (n, k0, k)
+        return probs
+
+    def sample_reverse_categorical_jump(self, xt, x0, t, s, num_classes, eps=1e-5):
+        """Reverse categorical step from t to s (arbitrary jump, s < t).
+
+        Args:
+            xt: (n, k) current one-hot noisy vectors at time t
+            x0: (n, k) x0 prediction (soft probabilities from model)
+            t: (n,) current timestep index
+            s: (n,) target timestep index (s < t)
+            num_classes: number of classes k
+            eps: small value for numerical stability
+        Returns:
+            x_s: (n, k) one-hot sample at time s
+        """
+        reverse = self.reverse_posterior_jump(xt=xt, t=t, s=s)
+        unweighted_probs = (reverse * x0.unsqueeze(-1)).sum(1)
+        unweighted_probs[unweighted_probs.sum(dim=-1) == 0] = 1e-5
+        probs = unweighted_probs / (unweighted_probs.sum(-1, keepdims=True) + eps)
+        probs[torch.isnan(probs)] = 1e-5
+        x_s = F.one_hot(probs.multinomial(1).squeeze(), num_classes=num_classes).float()
+        return x_s
+
+    def sample_reverse_edges_categorical_jump(
+        self,
+        edge_attr_global,
+        edges_pred,
+        t,
+        s,
+        mask,
+        mask_i,
+        batch,
+        edge_index_global,
+        num_classes,
+    ):
+        """Reverse edge categorical step from t to s (arbitrary jump, s < t)."""
+        x0 = edges_pred
+        xt = edge_attr_global
+        t_edge = t[batch]
+        s_edge = s[batch]
+        reverse = self.reverse_posterior_jump(xt=xt, t=t_edge, s=s_edge)
+        unweighted_probs = (reverse * x0.unsqueeze(-1)).sum(1)
+        unweighted_probs[unweighted_probs.sum(dim=-1) == 0] = 1e-5
+        probs = unweighted_probs / unweighted_probs.sum(-1, keepdims=True)
+        probs[torch.isnan(probs)] = 1e-5
+
+        edges_triu = F.one_hot(
+            probs.multinomial(1).squeeze(),
+            num_classes=num_classes,
+        ).float()
+
+        j, i = edge_index_global
+        mask = j < i
+        mask_i = i[mask]
+        mask_j = j[mask]
+        j = torch.concat([mask_j, mask_i])
+        i = torch.concat([mask_i, mask_j])
+        edge_index_global = torch.stack([j, i], dim=0)
+        edge_attr_global = torch.concat([edges_triu, edges_triu], dim=0)
+        edge_index_global, edge_attr_global = sort_edge_index(
+            edge_index=edge_index_global,
+            edge_attr=edge_attr_global,
+            sort_by_row=False,
+        )
+        return edge_attr_global, edge_index_global, mask, mask_i
+
     def sample_edges_categorical(
         self,
         t,
