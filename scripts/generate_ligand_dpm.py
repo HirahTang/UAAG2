@@ -33,7 +33,41 @@ from uaag2.equivariant_diffusion import Trainer
 from torch_geometric.loader import DataLoader
 
 
+def _build_hparams(args):
+    """Load saved checkpoint hparams and patch in the CLI overrides.
+
+    This avoids having to replicate every hparam in argparse — we take the
+    checkpoint's own hparams as the base and only patch the fields that
+    differ between training and inference.
+    """
+    from argparse import Namespace
+    ckpt = torch.load(args.load_ckpt, map_location="cpu", weights_only=False)
+    saved = dict(ckpt.get("hyper_parameters", {}))
+
+    # Inference overrides
+    saved["load_ckpt"] = args.load_ckpt
+    saved["load_ckpt_from_pretrained"] = None  # never re-load during eval
+    saved["id"] = args.id
+    saved["save_dir"] = args.save_dir
+    saved["benchmark_path"] = args.benchmark_path
+    saved["split_index"] = args.split_index
+    saved["total_partition"] = args.total_partition
+    saved["num_samples"] = args.num_samples
+    saved["batch_size"] = args.batch_size
+    saved["virtual_node_size"] = args.virtual_node_size
+    saved["num_workers"] = args.num_workers
+    saved["data_info_path"] = args.data_info_path
+    saved["every_k_step"] = args.every_k_step
+    saved["dpm_solver_pp"] = args.dpm_solver_pp
+    saved["ddpm"] = args.ddpm
+    saved["gpus"] = 1  # single-GPU inference
+
+    return Namespace(**saved)
+
+
 def main(args):
+    hparams = _build_hparams(args)
+
     print("Loading data from:", args.benchmark_path)
     data_file = torch.load(args.benchmark_path, weights_only=False)
 
@@ -49,18 +83,18 @@ def main(args):
     index = partitions[args.split_index]
     print(f"Processing partition {args.split_index}/{NUM_PARTITIONS - 1} with {len(index)} residues")
 
-    dataset_info = Dataset_Info(args, args.data_info_path)
+    dataset_info = Dataset_Info(hparams, args.data_info_path)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Loading model from checkpoint:", args.load_ckpt)
     model = Trainer.load_from_checkpoint(
         args.load_ckpt,
-        hparams=args,
+        hparams=hparams,
         dataset_info=dataset_info,
     ).to(device)
     model = model.eval()
 
-    nfe = args.timesteps // args.every_k_step
+    nfe = hparams.timesteps // args.every_k_step
     sampler = "DPM-Solver++" if args.dpm_solver_pp else ("DDPM" if args.ddpm else "DDIM")
     print(f"Sampler: {sampler}  every_k_step={args.every_k_step}  NFE≈{nfe}")
 
@@ -73,7 +107,7 @@ def main(args):
 
         save_path = os.path.join("Samples", f"{seq_res}_{seq_position}")
         dataset = UAAG2Dataset_sampling(
-            graph, args, save_path, dataset_info,
+            graph, hparams, save_path, dataset_info,
             sample_size=args.virtual_node_size,
             sample_length=args.num_samples,
         )
@@ -97,7 +131,7 @@ def main(args):
     config_path = os.path.join(args.save_dir, f"run{args.id}", "config.yaml")
     os.makedirs(os.path.dirname(config_path), exist_ok=True)
     with open(config_path, "w") as f:
-        yaml.dump(vars(args), f)
+        yaml.dump(vars(hparams), f)
 
 
 if __name__ == "__main__":
