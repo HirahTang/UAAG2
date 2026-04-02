@@ -1,0 +1,28 @@
+# Data loading and processing configuration
+# Dataset paths
+data_info_path: data/statistic.pkl
+training_data: data/pdb_subset.lmdb
+
+# Data splitting
+train_size: 0.99
+test_size: 100
+
+# Data processing
+batch_size: 32
+num_workers: 4
+
+# Masking settings
+mask_rate: 0.5
+
+# Pocket noise augmentation
+pocket_noise: false
+pocket_noise_scale: 0.2
+
+# Weighted sampling
+use_metadata_sampler: false
+metadata_path: data/unaagi_whole_v1.metadata.pkl
+pdbbind_weight: 1.0
+
+# Features
+use_qm_props: false
+additional_feats: true

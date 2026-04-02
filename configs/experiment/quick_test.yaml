@@ -1,0 +1,32 @@
+# @package _global_
+# Example experiment configuration for quick testing
+# Run with: uv run python src/uaag2/train.py +experiment=quick_test
+
+defaults:
+  - override /optimizer: adam
+
+# Quick test settings
+num_epochs: 5
+seed: 42
+
+# Model settings
+model:
+  num_layers: 3
+  sdim: 128
+  vdim: 32
+
+# Data settings
+data:
+  batch_size: 16
+  test_size: 10
+
+# Diffusion settings
+diffusion:
+  timesteps: 100
+
+# Optimizer settings
+optimizer:
+  lr: 0.001
+
+# Logger
+logger_type: tensorboard

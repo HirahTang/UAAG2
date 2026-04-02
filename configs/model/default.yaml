@@ -1,0 +1,74 @@
+# Model architecture configuration
+# Embedding dimensions
+sdim: 256
+vdim: 64
+edim: 32
+rbf_dim: 32
+latent_dim: null
+
+# Model structure
+num_layers: 7
+fully_connected: true
+local_global_model: false
+edge_mp: false
+vector_aggr: mean
+
+# Feature settings
+additional_feats: true
+use_qm_props: false
+build_mol_with_addfeats: false
+
+# Dropout and regularization
+dropout_prob: 0.3
+weight_decay: 0.9999
+
+# Virtual nodes
+virtual_node: 1
+max_virtual_nodes: 11
+
+# Local and global settings
+local_edge_attrs: false
+use_cross_product: false
+cutoff_local: 7.0
+cutoff_global: 10.0
+
+# Position normalization
+use_pos_norm: false
+
+# Training modes
+energy_training: false
+property_training: false
+property_prediction: false
+
+# Regression settings
+regression_property: polarizability  # dipole_norm, total_energy, HOMO-LUMO_gap, dispersion, atomisation_energy, polarizability
+energy_loss: l2  # l2 or l1
+
+# Bond prediction and guidance
+bond_guidance_model: false
+bond_prediction: false
+bond_model_guidance: false
+energy_model_guidance: false
+polarizabilty_model_guidance: false
+ckpt_bond_model: null
+ckpt_energy_model: null
+ckpt_polarizabilty_model: null
+guidance_scale: 1.0e-4
+
+# Context
+context_mapping: false
+num_context_features: 0
+properties_list: []
+
+# Latent settings
+prior_beta: 1.0
+sdim_latent: 256
+vdim_latent: 64
+edim_latent: 32
+num_layers_latent: 7
+latent_layers: 7
+latentmodel: diffusion
+latent_detach: false
+
+# Backpropagation
+backprop_local: false

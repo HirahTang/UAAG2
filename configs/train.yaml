@@ -1,0 +1,41 @@
+# Main training configuration
+defaults:
+  - model: default
+  - data: default
+  - diffusion: default
+  - optimizer: adam
+  - _self_
+
+# General settings
+id: ${now:%Y%m%d_%H%M%S}
+gpus: 1
+num_epochs: 300
+precision: 32
+seed: 42
+detect_anomaly: false
+num_workers: 4
+accum_batch: 1
+
+# Logger settings
+logger_type: wandb  # wandb or tensorboard
+
+# Directory settings
+save_dir: ${hydra:runtime.cwd}/models/run${id}
+test_save_dir: ${save_dir}
+
+# Evaluation settings
+eval_freq: 1.0
+test_interval: 5
+num_test_graphs: 10000
+
+# EMA settings
+ema_decay: 0.9999
+
+# Sampling settings
+calculate_energy: false
+save_xyz: false
+variational_sampling: false
+
+# Checkpointing
+load_ckpt: null
+load_ckpt_from_pretrained: null
