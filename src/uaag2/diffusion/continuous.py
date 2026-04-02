@@ -611,28 +611,32 @@ class DiscreteDDPM(nn.Module):
         s,
         xt,
         x0_pred,
-        x0_pred_prev,
+        eps_prev,
         h_prev,
         batch,
         cog_proj=False,
     ):
-        """DPM-Solver++ 2nd-order multistep step from timestep t to s (s < t).
+        """PLMS 2nd-order multistep step from timestep t to s (s < t).
 
-        Implements Algorithm 2 from Lu et al. "DPM-Solver++: Fast Solver for
-        Guided Sampling of Diffusion Probabilistic Models" (2022), adapted for
-        discrete DDPM with x0 (data) parameterization.
+        Uses the DDIM-based (PLMS) formula which is exact for discrete DDPM
+        at any jump size, unlike the continuous ODE formula which blows up
+        for large jumps (expm1(h) ~ 150 at t=500 with every_k_step=25).
+
+        Reference: Song et al. "Denoising Diffusion Implicit Models" (DDIM),
+        extended to 2nd order via PLMS noise-direction blending.
 
         Args:
             t: current timestep indices, shape (n,), 1..T
             s: target timestep indices, shape (n,), 0..T (s < t)
             xt: noisy coordinates at time t, shape (n, 3)
             x0_pred: x0 prediction at current step t, shape (n, 3)
-            x0_pred_prev: x0 prediction at previous sparse step, or None for 1st step
+            eps_prev: noise-direction from previous sparse step, or None for 1st step
             h_prev: h value (lambda difference) from previous step, or None for 1st step
             batch: per-atom batch indices, shape (n,)
             cog_proj: if True, zero-mean the output per molecule
         Returns:
             x_s: denoised coordinates at timestep s, shape (n, 3)
+            eps_t: noise direction at t (to pass as eps_prev at next step)
             h: current h value to pass as h_prev at the next step
         """
         alpha_t = self.sqrt_alphas_cumprod[t].unsqueeze(-1)   # (n, 1)
@@ -640,30 +644,37 @@ class DiscreteDDPM(nn.Module):
         alpha_s = self.sqrt_alphas_cumprod[s].unsqueeze(-1)
         sigma_s = self.sqrt_1m_alphas_cumprod[s].unsqueeze(-1)
 
-        # lambda = log(alpha / sigma), h = lambda_s - lambda_t > 0
-        lambda_t = torch.log(alpha_t / sigma_t.clamp_min(1e-8))
-        lambda_s = torch.log(alpha_s / sigma_s.clamp_min(1e-8))
-        h = lambda_s - lambda_t  # (n, 1), positive
+        # Compute noise direction at t from x0 prediction (exact inversion of forward process)
+        eps_t = (xt - alpha_t[batch] * x0_pred) / sigma_t[batch].clamp_min(1e-8)
 
-        if x0_pred_prev is None or h_prev is None:
-            # First step: 1st-order DPM-Solver++ (equivalent to DDIM with jump)
-            D = x0_pred
+        if eps_prev is None or h_prev is None:
+            # 1st step: 1st-order DDIM (exact for any jump size)
+            eps_bar = eps_t
+            h = None  # will be computed below for return
         else:
-            # 2nd-order multistep: D_bar = (1 + 1/(2r))*D_cur - (1/(2r))*D_prev
-            # where r = h_prev / h (ratio of previous to current lambda interval)
+            # 2nd-order PLMS: blend current and previous noise directions
+            # r = h_prev / h; coefficients from Adams-Bashforth 2nd order
+            lambda_t = torch.log(alpha_t / sigma_t.clamp_min(1e-8))
+            lambda_s = torch.log(alpha_s / sigma_s.clamp_min(1e-8))
+            h = lambda_s - lambda_t  # (n, 1), positive (lambda increases as noise decreases)
             r = h_prev / h.clamp_min(1e-8)
-            D = (1.0 + 1.0 / (2.0 * r)) * x0_pred - (1.0 / (2.0 * r)) * x0_pred_prev
+            eps_bar = (1.0 + 1.0 / (2.0 * r)) * eps_t - (1.0 / (2.0 * r)) * eps_prev
 
-        # x_s = (alpha_s / alpha_t) * x_t + sigma_s * expm1(h) * D
-        scale = alpha_s / alpha_t.clamp_min(1e-8)
-        expm1_h = torch.expm1(h)
-        x_s = scale[batch] * xt + sigma_s[batch] * expm1_h[batch] * D
+        # Compute h if not done yet (1st-order branch)
+        if h is None:
+            lambda_t = torch.log(alpha_t / sigma_t.clamp_min(1e-8))
+            lambda_s = torch.log(alpha_s / sigma_s.clamp_min(1e-8))
+            h = lambda_s - lambda_t
+
+        # DDIM update: x_s = alpha_s * x0_pred + sigma_s * eps_bar
+        # This is exact for any jump size (no expm1 blow-up)
+        x_s = alpha_s[batch] * x0_pred + sigma_s[batch] * eps_bar
 
         if cog_proj:
             bs = int(batch.max()) + 1
             x_s = zero_mean(x_s, batch=batch, dim_size=bs, dim=0)
 
-        return x_s, h
+        return x_s, eps_t, h
 
     def snr_s_t_weighting(self, s, t, device, clamp_min=None, clamp_max=None):
         signal_s = self.alphas_cumprod[s]

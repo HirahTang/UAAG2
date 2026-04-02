@@ -1073,9 +1073,9 @@ class Trainer(pl.LightningModule):
         # For DPM-Solver++: build the reversed chain as a list so we can look ahead
         chain_list = list(reversed(chain))
 
-        # State for DPM-Solver++ 2nd-order multistep correction
-        _dpm_x0_prev = None  # x0 prediction from previous sparse step
-        _dpm_h_prev = None   # lambda-step size from previous sparse step
+        # State for DPM-Solver++ 2nd-order multistep correction (PLMS)
+        _dpm_eps_prev = None  # noise direction from previous sparse step
+        _dpm_h_prev = None    # lambda-step size from previous sparse step
 
         iterator = (
             tqdm(enumerate(chain_list), total=len(chain_list)) if verbose
@@ -1149,18 +1149,17 @@ class Trainer(pl.LightningModule):
             degree_pred = degree_pred.softmax(dim=-1)
             
             if dpm_solver_pp:
-                # DPM-Solver++ 2nd-order multistep for continuous coordinates
-                pos, _dpm_h_prev = self.sde_pos.sample_dpm_solver_pp(
+                # PLMS 2nd-order multistep for continuous coordinates
+                pos, _dpm_eps_prev, _dpm_h_prev = self.sde_pos.sample_dpm_solver_pp(
                     t=t,
                     s=s_next,
                     xt=pos,
                     x0_pred=coords_pred,
-                    x0_pred_prev=_dpm_x0_prev,
+                    eps_prev=_dpm_eps_prev,
                     h_prev=_dpm_h_prev,
                     batch=batch_lig,
                     cog_proj=False,
                 )
-                _dpm_x0_prev = coords_pred
 
                 # Categorical variables: jump reverse posterior from t to s_next
                 atom_types = self.cat_atoms.sample_reverse_categorical_jump(
