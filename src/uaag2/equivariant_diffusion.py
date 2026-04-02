@@ -871,15 +871,16 @@ class Trainer(pl.LightningModule):
         every_k_step: int = 1,
         show_pocket: bool = False,
         device: str = "cpu",
+        dpm_solver_pp: bool = False,
         ):
-        
+
         print("Number of graphs: ", len(loader))
         molecule_list = []
         connected_list = []
         sanitized_list = []
         start = datetime.now()
 
-        
+
         for i, batch in enumerate(loader):
             reconstruct_mask = batch.is_ligand - batch.is_backbone
             molecules = self.reverse_sampling(
@@ -892,6 +893,7 @@ class Trainer(pl.LightningModule):
                 every_k_step=every_k_step,
                 iteration=i,
                 show_pocket=False,
+                dpm_solver_pp=dpm_solver_pp,
             )
             connected_list_batch, sanitized_list_batch = convert_edge_to_bond(
                 batch=batch,

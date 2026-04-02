@@ -106,7 +106,15 @@ def main(cfg: DictConfig) -> None:
             raise ValueError("load_ckpt must be provided for evaluation")
 
         model = model.eval()
-        model.generate_ligand(dataloader, save_path=save_path, verbose=True)
+        every_k_step = getattr(cfg, "every_k_step", 1)
+        dpm_solver_pp = getattr(cfg, "dpm_solver_pp", False)
+        model.generate_ligand(
+            dataloader,
+            save_path=save_path,
+            verbose=True,
+            every_k_step=every_k_step,
+            dpm_solver_pp=dpm_solver_pp,
+        )
 
     # Save the configuration
     config_path: str = os.path.join(cfg.save_dir, f"run{cfg.id}", "config.yaml")
