@@ -59,6 +59,7 @@ def _build_hparams(args):
     saved["data_info_path"] = args.data_info_path
     saved["every_k_step"] = args.every_k_step
     saved["dpm_solver_pp"] = args.dpm_solver_pp
+    saved["ctmc"] = args.ctmc
     saved["ddpm"] = args.ddpm
     saved["gpus"] = 1  # single-GPU inference
 
@@ -95,7 +96,14 @@ def main(args):
     model = model.eval()
 
     nfe = hparams.timesteps // args.every_k_step
-    sampler = "DPM-Solver++" if args.dpm_solver_pp else ("DDPM" if args.ddpm else "DDIM")
+    if args.ctmc:
+        sampler = "CTMC-TauLeap"
+    elif args.dpm_solver_pp:
+        sampler = "DPM-Solver++"
+    elif args.ddpm:
+        sampler = "DDPM"
+    else:
+        sampler = "DDIM"
     print(f"Sampler: {sampler}  every_k_step={args.every_k_step}  NFE≈{nfe}")
 
     print("Number of Residues to process:", len(index))
@@ -124,6 +132,7 @@ def main(args):
             verbose=True,
             every_k_step=args.every_k_step,
             dpm_solver_pp=args.dpm_solver_pp,
+            ctmc=args.ctmc,
             ddpm=args.ddpm,
         )
 
@@ -159,6 +168,8 @@ if __name__ == "__main__":
                         help="Step spacing: 500/25=20 NFE. Use 1 for full 500 steps.")
     parser.add_argument("--dpm-solver-pp", action="store_true",
                         help="Use DPM-Solver++ 2nd-order multistep (recommended with --every-k-step 25)")
+    parser.add_argument("--ctmc", action="store_true",
+                        help="Use CTMC tau-leaping for categorical variables (requires --dpm-solver-pp)")
     parser.add_argument("--ddpm", default=True, action="store_true",
                         help="Use DDPM (default when --dpm-solver-pp not set)")
     parser.add_argument("--eta-ddim", default=1.0, type=float)

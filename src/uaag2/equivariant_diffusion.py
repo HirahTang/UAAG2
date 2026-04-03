@@ -872,6 +872,7 @@ class Trainer(pl.LightningModule):
         show_pocket: bool = False,
         device: str = "cpu",
         dpm_solver_pp: bool = False,
+        ctmc: bool = False,
         ):
 
         print("Number of graphs: ", len(loader))
@@ -894,6 +895,7 @@ class Trainer(pl.LightningModule):
                 iteration=i,
                 show_pocket=False,
                 dpm_solver_pp=dpm_solver_pp,
+                ctmc=ctmc,
             )
             connected_list_batch, sanitized_list_batch = convert_edge_to_bond(
                 batch=batch,
@@ -937,6 +939,7 @@ class Trainer(pl.LightningModule):
         iteration: int = 0,
         show_pocket: bool = False,
         dpm_solver_pp: bool = False,
+        ctmc: bool = False,
         ):
         # implement empirical_distribution_num_nodes of ligand node (randomly initiated)
         # back to the graph, with fully connected edges
@@ -1161,36 +1164,49 @@ class Trainer(pl.LightningModule):
                     cog_proj=False,
                 )
 
-                # Categorical variables: jump reverse posterior from t to s_next
-                atom_types = self.cat_atoms.sample_reverse_categorical_jump(
-                    xt=atom_types, x0=atoms_pred,
-                    t=t[batch_lig], s=s_next[batch_lig],
-                    num_classes=self.num_atom_types,
+                # Categorical variables: CTMC tau-leaping or posterior jump from t to s_next
+                _cat_fn      = (self.cat_atoms.sample_ctmc_tauleaping
+                                if ctmc else self.cat_atoms.sample_reverse_categorical_jump)
+                _cat_ch_fn   = (self.cat_charges.sample_ctmc_tauleaping
+                                if ctmc else self.cat_charges.sample_reverse_categorical_jump)
+                _cat_ri_fn   = (self.cat_ring.sample_ctmc_tauleaping
+                                if ctmc else self.cat_ring.sample_reverse_categorical_jump)
+                _cat_ar_fn   = (self.cat_aromatic.sample_ctmc_tauleaping
+                                if ctmc else self.cat_aromatic.sample_reverse_categorical_jump)
+                _cat_hy_fn   = (self.cat_hybridization.sample_ctmc_tauleaping
+                                if ctmc else self.cat_hybridization.sample_reverse_categorical_jump)
+                _cat_de_fn   = (self.cat_degree.sample_ctmc_tauleaping
+                                if ctmc else self.cat_degree.sample_reverse_categorical_jump)
+
+                _kw = dict(x0_pred=atoms_pred)     if ctmc else dict(x0=atoms_pred)
+                atom_types = _cat_fn(
+                    xt=atom_types, t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_atom_types, **_kw,
                 )
-                charge_types = self.cat_charges.sample_reverse_categorical_jump(
-                    xt=charge_types, x0=charges_pred,
-                    t=t[batch_lig], s=s_next[batch_lig],
-                    num_classes=self.num_charge_classes,
+                _kw = dict(x0_pred=charges_pred)   if ctmc else dict(x0=charges_pred)
+                charge_types = _cat_ch_fn(
+                    xt=charge_types, t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_charge_classes, **_kw,
                 )
-                ring_feat = self.cat_ring.sample_reverse_categorical_jump(
-                    xt=ring_feat, x0=ring_pred,
-                    t=t[batch_lig], s=s_next[batch_lig],
-                    num_classes=self.num_is_in_ring,
+                _kw = dict(x0_pred=ring_pred)       if ctmc else dict(x0=ring_pred)
+                ring_feat = _cat_ri_fn(
+                    xt=ring_feat, t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_is_in_ring, **_kw,
                 )
-                aromatic_feat = self.cat_aromatic.sample_reverse_categorical_jump(
-                    xt=aromatic_feat, x0=aromatic_pred,
-                    t=t[batch_lig], s=s_next[batch_lig],
-                    num_classes=self.num_is_aromatic,
+                _kw = dict(x0_pred=aromatic_pred)   if ctmc else dict(x0=aromatic_pred)
+                aromatic_feat = _cat_ar_fn(
+                    xt=aromatic_feat, t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_is_aromatic, **_kw,
                 )
-                hybridization_feat = self.cat_hybridization.sample_reverse_categorical_jump(
-                    xt=hybridization_feat, x0=hybridization_pred,
-                    t=t[batch_lig], s=s_next[batch_lig],
-                    num_classes=self.num_hybridization,
+                _kw = dict(x0_pred=hybridization_pred) if ctmc else dict(x0=hybridization_pred)
+                hybridization_feat = _cat_hy_fn(
+                    xt=hybridization_feat, t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_hybridization, **_kw,
                 )
-                degree_feat = self.cat_degree.sample_reverse_categorical_jump(
-                    xt=degree_feat, x0=degree_pred,
-                    t=t[batch_lig], s=s_next[batch_lig],
-                    num_classes=self.num_degree,
+                _kw = dict(x0_pred=degree_pred)     if ctmc else dict(x0=degree_pred)
+                degree_feat = _cat_de_fn(
+                    xt=degree_feat, t=t[batch_lig], s=s_next[batch_lig],
+                    num_classes=self.num_degree, **_kw,
                 )
                 (
                     edge_attr_global_lig,

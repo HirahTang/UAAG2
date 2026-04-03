@@ -328,6 +328,161 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         x_s = F.one_hot(probs.multinomial(1).squeeze(), num_classes=num_classes).float()
         return x_s
 
+    # ------------------------------------------------------------------
+    # CTMC tau-leaping for empirical-marginal D3PM
+    # ------------------------------------------------------------------
+
+    def _ctmc_expected_transitions(
+        self,
+        xt: Tensor,
+        x0_pred: Tensor,
+        t: Tensor,
+        s: Tensor,
+    ) -> Tensor:
+        """Expected number of CTMC transitions from current class to each class.
+
+        For empirical-marginal D3PM the reverse CTMC rate simplifies to:
+          E[N(j* → k)] = (ᾱ_s - ᾱ_t) / (1 - ᾱ_t) * p_θ(x0=k | x_t)   for k ≠ j*
+
+        Args:
+            xt:      (n, K) one-hot current state at time t
+            x0_pred: (n, K) soft x0 prediction (probabilities)
+            t:       (n,)  current discrete timestep index
+            s:       (n,)  target discrete timestep index (s < t)
+        Returns:
+            rates: (n, K) expected number of transitions to each class
+        """
+        t = t.long().clamp(0, self.alphas_bar.size(0) - 1)
+        s = s.long().clamp(0, self.alphas_bar.size(0) - 1)
+
+        abar_t = self.alphas_bar[t]           # (n,)
+        abar_s = self.alphas_bar[s]           # (n,)
+        # ᾱ_s > ᾱ_t because s has less noise
+        delta_abar = (abar_s - abar_t).clamp_min(0.0)    # (n,)  ≥ 0
+        one_minus_abar_t = (1.0 - abar_t).clamp_min(1e-8)   # (n,)
+
+        # scalar rate per step for each sample
+        rate = delta_abar / one_minus_abar_t   # (n,)
+
+        # expected transitions to each class: rate * p_θ(x0=k)
+        # zero out the current class (no self-transitions in rate)
+        current = xt.argmax(-1, keepdim=True)  # (n, 1)
+        rates = rate.unsqueeze(-1) * x0_pred   # (n, K)
+        rates.scatter_(-1, current, 0.0)       # zero diagonal
+
+        return rates
+
+    def sample_ctmc_tauleaping(
+        self,
+        xt: Tensor,
+        x0_pred: Tensor,
+        t: Tensor,
+        s: Tensor,
+        num_classes: int,
+        eps: float = 1e-5,
+    ) -> Tensor:
+        """CTMC tau-leaping reverse step from t to s for empirical-marginal D3PM.
+
+        Uses Poisson sampling of the expected number of transitions and picks
+        the class with the most transitions. Falls back to the D3PM posterior
+        jump when the total expected rate is >= 1 (large step / high SNR regime)
+        where the Poisson approximation is less reliable.
+
+        Args:
+            xt:          (n, K) one-hot current state
+            x0_pred:     (n, K) soft x0 prediction from model
+            t:           (n,)  current timestep index
+            s:           (n,)  target timestep index (s < t)
+            num_classes: K
+        Returns:
+            x_s: (n, K) one-hot sample at time s
+        """
+        rates = self._ctmc_expected_transitions(xt, x0_pred, t, s)  # (n, K)
+        total_rate = rates.sum(-1)  # (n,)
+
+        # For large steps (rate ≥ 1): Poisson approximation is inaccurate;
+        # fall back to the exact posterior jump formula.
+        large_step_mask = total_rate >= 1.0   # (n,) bool
+
+        # ---- Poisson tau-leaping (small-rate regime) ----
+        # Sample number of transitions to each class
+        with torch.no_grad():
+            transitions = torch.poisson(rates)  # (n, K)  ← integer counts
+
+        # New class = argmax of transitions (or stay if no transitions)
+        current = xt.argmax(-1)                          # (n,)
+        any_transition = transitions.sum(-1) > 0          # (n,)
+        tauleap_class = torch.where(
+            any_transition,
+            transitions.argmax(-1),
+            current,
+        )
+
+        # ---- Exact posterior jump (large-rate regime) ----
+        reverse = self.reverse_posterior_jump(xt=xt, t=t, s=s)
+        unweighted = (reverse * x0_pred.unsqueeze(-1)).sum(1)
+        unweighted[unweighted.sum(-1) == 0] = eps
+        probs = unweighted / (unweighted.sum(-1, keepdim=True) + eps)
+        probs[torch.isnan(probs)] = eps
+        posterior_class = probs.multinomial(1).squeeze(-1)   # (n,)
+
+        # Select based on step size
+        new_class = torch.where(large_step_mask, posterior_class, tauleap_class)
+
+        x_s = F.one_hot(new_class, num_classes=num_classes).float()
+        return x_s
+
+    def sample_ctmc_tauleaping_rk2(
+        self,
+        xt: Tensor,
+        x0_pred_t: Tensor,
+        x0_pred_mid: Tensor,
+        t: Tensor,
+        s: Tensor,
+        num_classes: int,
+        eps: float = 1e-5,
+        theta: float = 0.5,
+    ) -> Tensor:
+        """RK2 (trapezoidal) CTMC step using two x0 predictions.
+
+        Stage 2 of DiscreteFastSolver RK2: combines the rate at (x_t, t)
+        with the rate at (x_mid, t_mid) for a higher-order update.
+
+        Args:
+            xt:          (n, K) one-hot state at t
+            x0_pred_t:   (n, K) x0 prediction from GNN at (x_t,   t)
+            x0_pred_mid: (n, K) x0 prediction from GNN at (x_mid, t_mid)
+            t, s:        current / target timestep tensors
+            theta:       weighting parameter (0.5 = trapezoidal rule)
+        """
+        rates_t   = self._ctmc_expected_transitions(xt, x0_pred_t,   t, s)
+        rates_mid = self._ctmc_expected_transitions(xt, x0_pred_mid, t, s)
+        rates_combined = (1.0 - 0.5 / theta) * rates_t + (0.5 / theta) * rates_mid
+
+        rates_combined = rates_combined.clamp_min(0.0)
+        total_rate = rates_combined.sum(-1)
+        large_step_mask = total_rate >= 1.0
+
+        with torch.no_grad():
+            transitions = torch.poisson(rates_combined)
+
+        current = xt.argmax(-1)
+        any_transition = transitions.sum(-1) > 0
+        tauleap_class = torch.where(any_transition, transitions.argmax(-1), current)
+
+        # Posterior fallback for large steps
+        x0_blended = (1.0 - 0.5 / theta) * x0_pred_t + (0.5 / theta) * x0_pred_mid
+        x0_blended = x0_blended.clamp_min(0).div(x0_blended.clamp_min(0).sum(-1, keepdim=True).clamp_min(1e-8))
+        reverse = self.reverse_posterior_jump(xt=xt, t=t, s=s)
+        unweighted = (reverse * x0_blended.unsqueeze(-1)).sum(1)
+        unweighted[unweighted.sum(-1) == 0] = eps
+        probs = unweighted / (unweighted.sum(-1, keepdim=True) + eps)
+        probs[torch.isnan(probs)] = eps
+        posterior_class = probs.multinomial(1).squeeze(-1)
+
+        new_class = torch.where(large_step_mask, posterior_class, tauleap_class)
+        return F.one_hot(new_class, num_classes=num_classes).float()
+
     def sample_reverse_edges_categorical_jump(
         self,
         edge_attr_global,
