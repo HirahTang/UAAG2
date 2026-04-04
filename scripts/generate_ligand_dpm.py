@@ -193,13 +193,19 @@ def main(args):
             print(f"[INFO] aa_distribution → {aa_csv}")
 
         # 3b. PoseBusters structural validity evaluation
-        print("[INFO] Running PoseBusters evaluation ...")
+        #     Randomly subsample 100 mol files from the full set to keep
+        #     PoseBusters runtime reasonable (1000 samples would take too long).
+        print("[INFO] Running PoseBusters evaluation (subsample=100) ...")
         pb_csv = os.path.join(perm_run_dir, f"posebusters_split{args.split_index}.csv")
+        # SDF conversion temp dir also lives in /tmp to avoid Lustre inodes
+        pb_tmp_sdf = os.path.join(tmp_work, "pb_sdf")
         evaluate_script = os.path.join(scripts_dir, "evaluate_mol_samples.py")
         ret = subprocess.run(
             [sys.executable, evaluate_script,
              "--input-dir", tmp_samples_dir,
-             "--output", pb_csv],
+             "--output", pb_csv,
+             "--temp-dir", pb_tmp_sdf,
+             "--subsample", "100"],
             check=False,  # non-zero exit if no mols pass; that's OK
         )
         if ret.returncode != 0:

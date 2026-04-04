@@ -20,6 +20,7 @@ import os
 import sys
 import argparse
 import csv
+import random
 import shutil
 from pathlib import Path
 from datetime import datetime
@@ -158,30 +159,33 @@ def evaluate_with_bust(sdf_file, mol_file=None, max_workers=4):
         }
 
 
-def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbose=True, max_workers=4):
+def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbose=True,
+                    max_workers=4, subsample=None, seed=42):
     """
-    Process all .mol samples: convert, evaluate, and record results.
-    
+    Process .mol samples: optionally subsample, convert to SDF, run PoseBusters.
+
     Args:
         input_dir (str): Root directory containing .mol files
         output_csv (str): Output CSV file path
         temp_dir (str, optional): Temporary directory for .sdf files
         keep_sdf (bool): Keep .sdf files after evaluation
         verbose (bool): Print detailed status messages
-        
+        subsample (int, optional): If set, randomly pick this many mol files
+        seed (int): Random seed for subsampling reproducibility
+
     Returns:
         dict: Summary statistics
     """
     # Setup directories
     input_path = Path(input_dir)
-    
+
     if temp_dir is None:
         temp_path = Path('temp_sdf_' + datetime.now().strftime('%Y%m%d_%H%M%S'))
     else:
         temp_path = Path(temp_dir)
-    
+
     temp_path.mkdir(parents=True, exist_ok=True)
-    
+
     if verbose:
         print(f"\nProcessing .mol samples from: {input_dir}")
         print(f"Temporary .sdf directory: {temp_path}")
@@ -190,15 +194,24 @@ def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbos
     
     # Find all .mol files
     mol_files = find_mol_files(input_dir, verbose=verbose)
-    
+
     if not mol_files:
         print("No .mol files found!")
-        return {'total': 0, 'conversion_success': 0, 'conversion_failed': 0, 
+        return {'total': 0, 'conversion_success': 0, 'conversion_failed': 0,
                 'pass_all_criteria': 0, 'pass_mol_loaded': 0, 'bust_failed': 0}
-    
+
+    # Optionally subsample before running PoseBusters (saves time on large runs)
+    total_found = len(mol_files)
+    if subsample is not None and subsample < total_found:
+        rng = random.Random(seed)
+        mol_files = rng.sample(mol_files, subsample)
+        if verbose:
+            print(f"Subsampled {subsample} / {total_found} mol files (seed={seed})")
+
     # Statistics
     stats = {
         'total': len(mol_files),
+        'total_found': total_found,
         'conversion_success': 0,
         'conversion_failed': 0,
         'pass_all_criteria': 0,
@@ -433,19 +446,24 @@ Example:
                        help='Keep .sdf files after evaluation (default: remove)')
     parser.add_argument('-q', '--quiet', action='store_true',
                        help='Suppress detailed output')
-    parser.add_argument('--max-workers', default=4)
-    
+    parser.add_argument('--max-workers', default=4, type=int)
+    parser.add_argument('--subsample', default=None, type=int,
+                        help='Randomly pick this many mol files before running PoseBusters '
+                             '(e.g. 100). If omitted, all files are evaluated.')
+    parser.add_argument('--seed', default=42, type=int,
+                        help='Random seed for subsampling (default: 42)')
+
     args = parser.parse_args()
-    
+
     # Check if PoseBusters is available
     if not POSEBUSTERS_AVAILABLE:
         print("\nError: PoseBusters is not installed!")
         print("Install with: pip install posebusters")
         print("Or: conda install -c conda-forge posebusters")
         sys.exit(1)
-    
+
     verbose = not args.quiet
-    
+
     try:
         stats = process_samples(
             input_dir=args.input_dir,
@@ -454,6 +472,8 @@ Example:
             keep_sdf=args.keep_sdf,
             verbose=verbose,
             max_workers=args.max_workers,
+            subsample=args.subsample,
+            seed=args.seed,
         )
         
         # Exit with error code if no samples passed (using strict criteria)
