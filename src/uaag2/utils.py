@@ -202,6 +202,8 @@ def is_connected_molecule(atom_list, edge_list):
     G.add_nodes_from(atom_list)
     for i, j in edge_list:
         G.add_edge(i, j)
+    if G.number_of_nodes() == 0:
+        return False
     return nx.is_connected(G)
 
 
@@ -537,7 +539,7 @@ def mol_to_graph(mol):  # Convert mol to nx.graph for isomorphism checking
 def aa_check(gen_mol):
     nm = iso.categorical_node_match("symbol", "C")
     gen_aa_graph = mol_to_graph(gen_mol)
-    if not nx.is_connected(gen_aa_graph):
+    if gen_aa_graph.number_of_nodes() == 0 or not nx.is_connected(gen_aa_graph):
         return "INV"
     for aa in AA_GRAPH_DICT:
         aa_graph = nx.node_link_graph(AA_GRAPH_DICT[aa])
