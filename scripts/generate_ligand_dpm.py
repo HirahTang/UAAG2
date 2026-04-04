@@ -4,20 +4,32 @@ Drop-in replacement for scripts/generate_ligand.py using the uaag2 package.
 Key additions over the original:
   --every-k-step   : subsample the 500-step chain (e.g. 25 → 20 NFE)
   --dpm-solver-pp  : use DPM-Solver++ 2nd-order multistep instead of DDPM
+  --ctmc           : use CTMC tau-leaping for categorical variables
 
-Usage (DPM-Solver++ with 20 NFE):
-  python scripts/generate_ligand_dpm.py \
-      --load-ckpt /path/to/last.ckpt \
-      --id mymodel/ENVZ_ECOLI_100_iter0 \
-      --benchmark-path /path/to/ENVZ_ECOLI.pt \
-      --num-samples 100 \
-      --split_index 0 \
-      --every-k-step 25 \
-      --dpm-solver-pp
+File I/O design (inode-friendly):
+  - Mol/xyz files are written to a local /tmp directory (node NVMe, no quota)
+  - After all positions are processed: post_analysis and PoseBusters run in-place
+  - All mol files are compressed to one tar.gz on the scratch filesystem
+  - aa_distribution CSV and PoseBusters CSV are copied to scratch
+  - /tmp is cleaned up at the end
+
+Usage (CTMC tau-leaping with 20 NFE):
+  python scripts/generate_ligand_dpm.py \\
+      --load-ckpt /path/to/last.ckpt \\
+      --id mymodel/ENVZ_ECOLI_100_iter0 \\
+      --benchmark-path /path/to/ENVZ_ECOLI.pt \\
+      --num-samples 100 \\
+      --split_index 0 \\
+      --every-k-step 25 \\
+      --ctmc
 """
 import argparse
 import os
+import shutil
+import subprocess
 import sys
+import tarfile
+import tempfile
 import yaml
 
 import torch
@@ -33,7 +45,7 @@ from uaag2.equivariant_diffusion import Trainer
 from torch_geometric.loader import DataLoader
 
 
-def _build_hparams(args):
+def _build_hparams(args, save_dir_override=None):
     """Load saved checkpoint hparams and patch in the CLI overrides.
 
     This avoids having to replicate every hparam in argparse — we take the
@@ -48,7 +60,7 @@ def _build_hparams(args):
     saved["load_ckpt"] = args.load_ckpt
     saved["load_ckpt_from_pretrained"] = None  # never re-load during eval
     saved["id"] = args.id
-    saved["save_dir"] = args.save_dir
+    saved["save_dir"] = save_dir_override if save_dir_override is not None else args.save_dir
     saved["benchmark_path"] = args.benchmark_path
     saved["split_index"] = args.split_index
     saved["total_partition"] = args.total_partition
@@ -67,86 +79,161 @@ def _build_hparams(args):
 
 
 def main(args):
-    hparams = _build_hparams(args)
+    # ------------------------------------------------------------------ #
+    # 1.  Create a temporary working dir on local node NVMe (/tmp).       #
+    #     Mol/xyz files go here — not on Lustre scratch — to stay well    #
+    #     below the 2 M inode quota.                                       #
+    # ------------------------------------------------------------------ #
+    tmp_root = os.environ.get("TMPDIR", "/tmp")
+    tmp_work = tempfile.mkdtemp(prefix="uaag2_", dir=tmp_root)
+    print(f"[INFO] Temporary working directory: {tmp_work}")
 
-    print("Loading data from:", args.benchmark_path)
-    data_file = torch.load(args.benchmark_path, weights_only=False)
+    try:
+        # Build hparams: mol files will be written under tmp_work/Samples/
+        hparams = _build_hparams(args, save_dir_override=tmp_work)
 
-    NUM_PARTITIONS = args.total_partition
-    index = list(range(len(data_file)))
-    part_size = len(index) // NUM_PARTITIONS
-    partitions = [index[i * part_size:(i + 1) * part_size] for i in range(NUM_PARTITIONS - 1)]
-    partitions.append(index[(NUM_PARTITIONS - 1) * part_size:])
+        print("Loading data from:", args.benchmark_path)
+        data_file = torch.load(args.benchmark_path, weights_only=False)
 
-    if not (0 <= args.split_index < NUM_PARTITIONS):
-        raise ValueError(f"split_index must be 0..{NUM_PARTITIONS - 1}, got {args.split_index}")
+        NUM_PARTITIONS = args.total_partition
+        index = list(range(len(data_file)))
+        part_size = len(index) // NUM_PARTITIONS
+        partitions = [index[i * part_size:(i + 1) * part_size] for i in range(NUM_PARTITIONS - 1)]
+        partitions.append(index[(NUM_PARTITIONS - 1) * part_size:])
 
-    index = partitions[args.split_index]
-    print(f"Processing partition {args.split_index}/{NUM_PARTITIONS - 1} with {len(index)} residues")
+        if not (0 <= args.split_index < NUM_PARTITIONS):
+            raise ValueError(f"split_index must be 0..{NUM_PARTITIONS - 1}, got {args.split_index}")
 
-    dataset_info = Dataset_Info(hparams, args.data_info_path)
+        index = partitions[args.split_index]
+        print(f"Processing partition {args.split_index}/{NUM_PARTITIONS - 1} with {len(index)} residues")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Loading model from checkpoint:", args.load_ckpt)
-    model = Trainer.load_from_checkpoint(
-        args.load_ckpt,
-        hparams=hparams,
-        dataset_info=dataset_info,
-    ).to(device)
-    model = model.eval()
+        dataset_info = Dataset_Info(hparams, args.data_info_path)
 
-    nfe = hparams.timesteps // args.every_k_step
-    if args.ctmc:
-        sampler = "CTMC-TauLeap"
-    elif args.dpm_solver_pp:
-        sampler = "DPM-Solver++"
-    elif args.ddpm:
-        sampler = "DDPM"
-    else:
-        sampler = "DDIM"
-    print(f"Sampler: {sampler}  every_k_step={args.every_k_step}  NFE≈{nfe}")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print("Loading model from checkpoint:", args.load_ckpt)
+        model = Trainer.load_from_checkpoint(
+            args.load_ckpt,
+            hparams=hparams,
+            dataset_info=dataset_info,
+        ).to(device)
+        model = model.eval()
+        # Ensure the model writes to /tmp (belt-and-suspenders guard)
+        model.save_dir = tmp_work
 
-    print("Number of Residues to process:", len(index))
-    for graph_num in index:
-        seq_position = int(data_file[graph_num].compound_id.split("_")[-3])
-        seq_res = data_file[graph_num].compound_id.split("_")[-4]
-        graph = data_file[graph_num]
-        print(f"Sampling for: {seq_res} {seq_position}")
+        nfe = hparams.timesteps // args.every_k_step
+        if args.ctmc:
+            sampler = "CTMC-TauLeap"
+        elif args.dpm_solver_pp:
+            sampler = "DPM-Solver++"
+        elif args.ddpm:
+            sampler = "DDPM"
+        else:
+            sampler = "DDIM"
+        print(f"Sampler: {sampler}  every_k_step={args.every_k_step}  NFE≈{nfe}")
 
-        save_path = os.path.join("Samples", f"{seq_res}_{seq_position}")
-        dataset = UAAG2Dataset_sampling(
-            graph, hparams, save_path, dataset_info,
-            sample_size=args.virtual_node_size,
-            sample_length=args.num_samples,
+        # ---------------------------------------------------------------- #
+        # 2.  Generate molecules for every residue in this partition.       #
+        # ---------------------------------------------------------------- #
+        print("Number of Residues to process:", len(index))
+        for graph_num in index:
+            seq_position = int(data_file[graph_num].compound_id.split("_")[-3])
+            seq_res = data_file[graph_num].compound_id.split("_")[-4]
+            graph = data_file[graph_num]
+            print(f"Sampling for: {seq_res} {seq_position}")
+
+            save_path = os.path.join("Samples", f"{seq_res}_{seq_position}")
+            dataset = UAAG2Dataset_sampling(
+                graph, hparams, save_path, dataset_info,
+                sample_size=args.virtual_node_size,
+                sample_length=args.num_samples,
+            )
+            dataloader = DataLoader(
+                dataset=dataset,
+                batch_size=args.batch_size,
+                num_workers=args.num_workers,
+                pin_memory=True,
+                shuffle=False,
+            )
+            model.generate_ligand(
+                dataloader,
+                save_path=save_path,
+                verbose=True,
+                every_k_step=args.every_k_step,
+                dpm_solver_pp=args.dpm_solver_pp,
+                ctmc=args.ctmc,
+                ddpm=args.ddpm,
+            )
+
+        # ---------------------------------------------------------------- #
+        # 3.  Post-generation analysis (runs on /tmp data before cleanup). #
+        # ---------------------------------------------------------------- #
+        perm_run_dir = os.path.join(args.save_dir, f"run{args.id}")
+        os.makedirs(perm_run_dir, exist_ok=True)
+
+        tmp_samples_dir = os.path.join(tmp_work, "Samples")
+        scripts_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 3a. Post-analysis: amino acid identity / validity distribution
+        #     post_analysis.py --analysis_path <dir>  writes aa_distribution.csv
+        #     inside that dir, then we copy it to the permanent run directory.
+        print("[INFO] Running post_analysis ...")
+        post_analysis_script = os.path.join(scripts_dir, "post_analysis.py")
+        ret = subprocess.run(
+            [sys.executable, post_analysis_script,
+             "--analysis_path", tmp_samples_dir],
+            check=False,
         )
-        dataloader = DataLoader(
-            dataset=dataset,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-            pin_memory=True,
-            shuffle=False,
-        )
-        model.generate_ligand(
-            dataloader,
-            save_path=save_path,
-            verbose=True,
-            every_k_step=args.every_k_step,
-            dpm_solver_pp=args.dpm_solver_pp,
-            ctmc=args.ctmc,
-            ddpm=args.ddpm,
-        )
+        if ret.returncode != 0:
+            print(f"[WARN] post_analysis returned exit code {ret.returncode} — continuing.")
+        # Copy the CSV to permanent storage
+        aa_csv_tmp = os.path.join(tmp_samples_dir, "aa_distribution.csv")
+        aa_csv = os.path.join(perm_run_dir, f"aa_distribution_split{args.split_index}.csv")
+        if os.path.isfile(aa_csv_tmp):
+            shutil.copy2(aa_csv_tmp, aa_csv)
+            print(f"[INFO] aa_distribution → {aa_csv}")
 
-    # Save config
-    config_path = os.path.join(args.save_dir, f"run{args.id}", "config.yaml")
-    os.makedirs(os.path.dirname(config_path), exist_ok=True)
-    with open(config_path, "w") as f:
-        yaml.dump(vars(hparams), f)
+        # 3b. PoseBusters structural validity evaluation
+        print("[INFO] Running PoseBusters evaluation ...")
+        pb_csv = os.path.join(perm_run_dir, f"posebusters_split{args.split_index}.csv")
+        evaluate_script = os.path.join(scripts_dir, "evaluate_mol_samples.py")
+        ret = subprocess.run(
+            [sys.executable, evaluate_script,
+             "--input-dir", tmp_samples_dir,
+             "--output", pb_csv],
+            check=False,  # non-zero exit if no mols pass; that's OK
+        )
+        if ret.returncode != 0:
+            print(f"[WARN] evaluate_mol_samples returned exit code {ret.returncode} — continuing.")
+
+        # ---------------------------------------------------------------- #
+        # 4.  Compress all mol files into one archive on scratch.          #
+        #     One .tar.gz per split → O(1) inodes regardless of sample     #
+        #     count.                                                        #
+        # ---------------------------------------------------------------- #
+        archive_path = os.path.join(perm_run_dir, f"samples_split{args.split_index}.tar.gz")
+        print(f"[INFO] Compressing mol files → {archive_path}")
+        with tarfile.open(archive_path, "w:gz") as tar:
+            if os.path.isdir(tmp_samples_dir):
+                tar.add(tmp_samples_dir, arcname="Samples")
+        print(f"[INFO] Archive written: {archive_path}")
+
+        # ---------------------------------------------------------------- #
+        # 5.  Save config (once per split, idempotent).                    #
+        # ---------------------------------------------------------------- #
+        config_path = os.path.join(perm_run_dir, "config.yaml")
+        with open(config_path, "w") as f:
+            yaml.dump(vars(hparams), f)
+
+    finally:
+        # Always clean up /tmp, even on error
+        print(f"[INFO] Cleaning up {tmp_work}")
+        shutil.rmtree(tmp_work, ignore_errors=True)
 
 
 if __name__ == "__main__":
     DEFAULT_SAVE_DIR = "/scratch/project_465002574/ProteinGymSampling"
 
-    parser = argparse.ArgumentParser(description="UAAG2 sampling with DPM-Solver++")
+    parser = argparse.ArgumentParser(description="UAAG2 sampling with DPM-Solver++ / CTMC (inode-safe)")
 
     # Core paths
     parser.add_argument("--load-ckpt", required=True, type=str)
@@ -167,11 +254,11 @@ if __name__ == "__main__":
     parser.add_argument("--every-k-step", default=25, type=int,
                         help="Step spacing: 500/25=20 NFE. Use 1 for full 500 steps.")
     parser.add_argument("--dpm-solver-pp", action="store_true",
-                        help="Use DPM-Solver++ 2nd-order multistep (recommended with --every-k-step 25)")
+                        help="Use DPM-Solver++ 2nd-order multistep")
     parser.add_argument("--ctmc", action="store_true",
-                        help="Use CTMC tau-leaping for categorical variables (requires --dpm-solver-pp)")
+                        help="Use CTMC tau-leaping for categorical variables")
     parser.add_argument("--ddpm", default=True, action="store_true",
-                        help="Use DDPM (default when --dpm-solver-pp not set)")
+                        help="Use DDPM (default when neither --dpm-solver-pp nor --ctmc is set)")
     parser.add_argument("--eta-ddim", default=1.0, type=float)
 
     # Diffusion schedule (must match checkpoint)
