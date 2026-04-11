@@ -19,7 +19,6 @@ allowable_features = {
     "possible_number_radical_e_list": [0, 1, 2, 3, 4, "misc"],
     "possible_hybridization_list": ["SP", "SP2", "SP3", "SP3D", "SP3D2", "misc"],
     "possible_is_aromatic_list": [False, True],
-    "possible_is_in_ring_list": [False, True],
     "possible_bond_type_list": [
         "SINGLE",
         "DOUBLE",
@@ -85,7 +84,6 @@ def atom_to_feature_vector(atom):
         safe_index(allowable_features["possible_degree_list"], atom.GetTotalDegree()),
         safe_index(allowable_features["possible_hybridization_list"], str(atom.GetHybridization())),
         allowable_features["possible_is_aromatic_list"].index(atom.GetIsAromatic()),
-        allowable_features["possible_is_in_ring_list"].index(atom.IsInRing()),
     ]
     return atom_feature
 
@@ -99,7 +97,6 @@ def get_atom_feature_dims():
                 allowable_features["possible_degree_list"],
                 allowable_features["possible_hybridization_list"],
                 allowable_features["possible_is_aromatic_list"],
-                allowable_features["possible_is_in_ring_list"],
             ],
         )
     )
@@ -127,14 +124,13 @@ def get_bond_feature_dims():
 
 
 def atom_feature_vector_to_dict(atom_feature):
-    [atomic_num_idx, degree_idx, hybridization_idx, is_aromatic_idx, is_in_ring_idx] = atom_feature
+    [atomic_num_idx, degree_idx, hybridization_idx, is_aromatic_idx] = atom_feature
 
     feature_dict = {
         "atomic_num": allowable_features["possible_atomic_num_list"][atomic_num_idx],
         "degree": allowable_features["possible_degree_list"][degree_idx],
         "hybridization": allowable_features["possible_hybridization_list"][hybridization_idx],
         "is_aromatic": allowable_features["possible_is_aromatic_list"][is_aromatic_idx],
-        "is_in_ring": allowable_features["possible_is_in_ring_list"][is_in_ring_idx],
     }
     return feature_dict
 

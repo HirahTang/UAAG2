@@ -64,7 +64,6 @@ class Trainer(pl.LightningModule):
         bond_types_distribution = dataset_info.bond_types.float()
         charge_types_distribution = dataset_info.charge_types.float()
         is_aromatic_distribution = dataset_info.is_aromatic.float()
-        is_ring_distribution = dataset_info.is_ring.float()
         hybridization_distribution = dataset_info.hybridization.float()
         degree_distribution = dataset_info.degree.float()
         
@@ -81,9 +80,6 @@ class Trainer(pl.LightningModule):
         # is_aromatic_distribution = torch.zeros_like(is_aromatic_distribution)
         # is_aromatic_distribution[-1] = 1.0
         
-        # is_ring_distribution = torch.zeros_like(is_ring_distribution)
-        # is_ring_distribution[-1] = 1.0
-        
         # hybridization_distribution = torch.zeros_like(hybridization_distribution)
         # hybridization_distribution[-1] = 1.0
         
@@ -94,12 +90,10 @@ class Trainer(pl.LightningModule):
         self.register_buffer("bonds_prior", bond_types_distribution.clone())
         self.register_buffer("charges_prior", charge_types_distribution.clone())
         self.register_buffer("is_aromatic_prior", is_aromatic_distribution.clone())
-        self.register_buffer("is_in_ring_prior", is_ring_distribution.clone())
         self.register_buffer("hybridization_prior", hybridization_distribution.clone())
         self.register_buffer("degree_prior", degree_distribution.clone())
         
         self.num_is_aromatic = len(is_aromatic_distribution)
-        self.num_is_in_ring = len(is_ring_distribution)
         self.is_ligand = 1
         self.num_hybridization = len(hybridization_distribution)
         # self.num_hybridization = dataset_info.num_hybridization
@@ -115,7 +109,6 @@ class Trainer(pl.LightningModule):
             self.num_atom_types
             + self.num_charge_classes
             + self.num_is_aromatic
-            + self.num_is_in_ring
             + self.num_hybridization
             + self.num_degree
             + self.is_ligand
@@ -213,11 +206,6 @@ class Trainer(pl.LightningModule):
             alphas=self.sde_atom_charge.alphas.clone(),
             num_is_aromatic=self.num_is_aromatic,
         )
-        self.cat_ring = CategoricalDiffusionKernel(
-            terminal_distribution=is_ring_distribution,
-            alphas=self.sde_atom_charge.alphas.clone(),
-            num_is_in_ring=self.num_is_in_ring,
-        )
         self.cat_hybridization = CategoricalDiffusionKernel(
             terminal_distribution=hybridization_distribution,
             alphas=self.sde_atom_charge.alphas.clone(),
@@ -234,12 +222,11 @@ class Trainer(pl.LightningModule):
                 "atoms",
                 "charges",
                 "bonds",
-                "ring",
                 "aromatic",
                 "hybridization",
                 "degree",
             ],
-            param=["data"] * 8,
+            param=["data"] * 7,
         )
         # print("Defined Trainer")
         # from IPython import embed; embed()
@@ -265,7 +252,6 @@ class Trainer(pl.LightningModule):
         atoms_loss,
         charges_loss,
         bonds_loss,
-        ring_loss,
         aromatic_loss,
         hybridization_loss,
         degree_loss,
@@ -317,14 +303,6 @@ class Trainer(pl.LightningModule):
             sync_dist=self.hparams.gpus > 1 and stage == "val",
         )
 
-        self.log(
-            f"{stage}/ring_loss",
-            ring_loss,
-            on_step=True,
-            batch_size=batch_size,
-            prog_bar=(stage == "train"),
-            sync_dist=self.hparams.gpus > 1 and stage == "val",
-        )
         self.log(
             f"{stage}/aromatic_loss",
             aromatic_loss,
@@ -402,7 +380,6 @@ class Trainer(pl.LightningModule):
             "atoms": out_dict["atoms_true"],
             "charges": out_dict["charges_true"],
             "bonds": out_dict["bonds_true"],
-            "ring": out_dict["ring_true"],
             "aromatic": out_dict["aromatic_true"],
             "hybridization": out_dict["hybridization_true"],
             "degree": out_dict["degree_true"],
@@ -414,7 +391,6 @@ class Trainer(pl.LightningModule):
         (
             atoms_pred,
             charges_pred,
-            ring_pred,
             aromatic_pred,
             hybridization_pred,
             degree_pred,
@@ -423,7 +399,6 @@ class Trainer(pl.LightningModule):
             [
                 self.num_atom_types,
                 self.num_charge_classes,
-                self.num_is_in_ring,
                 self.num_is_aromatic,
                 self.num_hybridization,
                 self.num_degree,
@@ -431,15 +406,14 @@ class Trainer(pl.LightningModule):
             ],
             dim=-1,
         )
-        
+
         edges_pred = out_dict["bonds_pred"]
-        
+
         pred_data = {
             "coords": coords_pred,
             "atoms": atoms_pred,
             "charges": charges_pred,
             "bonds": edges_pred,
-            "ring": ring_pred,
             "aromatic": aromatic_pred,
             "hybridization": hybridization_pred,
             "degree": degree_pred,
@@ -459,7 +433,6 @@ class Trainer(pl.LightningModule):
             + self.hparams.lc_atoms * loss["atoms"]
             + self.hparams.lc_bonds * loss["bonds"]
             + self.hparams.lc_charges * loss["charges"]
-            + 0.5 * loss["ring"]
             + 0.7 * loss["aromatic"]
             + 1.0 * loss["hybridization"]
             + 1.0 * loss["degree"]
@@ -476,7 +449,6 @@ class Trainer(pl.LightningModule):
             loss["atoms"],
             loss["charges"],
             loss["bonds"],
-            loss["ring"],
             loss["aromatic"],
             loss["hybridization"],
             loss['degree'],
@@ -530,7 +502,6 @@ class Trainer(pl.LightningModule):
         n = batch.num_nodes
         bs = batch.batch.max() + 1
         
-        ring_feat = batch.is_in_ring
         aromatic_feat = batch.is_aromatic
         hybridization_feat = batch.hybridization
         degree_feat = batch.degree
@@ -588,18 +559,6 @@ class Trainer(pl.LightningModule):
         edge_attr_global_perturbed = edge_attr_global_perturbed * batch.edge_ligand.unsqueeze(1) + edge_attr_global_original * (1-batch.edge_ligand).unsqueeze(1)
         edge_attr_global_original = edge_attr_global_original[batch.edge_ligand==1]
         
-        ring_feat, ring_feat_perturbed = self.cat_ring.sample_categorical(
-            t,
-            ring_feat,
-            data_batch,
-            self.dataset_info,
-            num_classes=self.num_is_in_ring,
-            type="ring",
-        )
-        ring_feat_perturbed = ring_feat_perturbed * ligand_mask.unsqueeze(1) + ring_feat * pocket_mask.unsqueeze(1)
-        ring_feat = ring_feat[ligand_mask==1]
-        
-        
         (
             aromatic_feat,
             aromatic_feat_perturbed,
@@ -651,7 +610,6 @@ class Trainer(pl.LightningModule):
             [
                 atom_types_perturbed,
                 charges_perturbed,
-                ring_feat_perturbed,
                 aromatic_feat_perturbed,
                 hybridization_feat_perturbed,
                 degree_feat_perturbed,
@@ -693,7 +651,6 @@ class Trainer(pl.LightningModule):
         out["atoms_perturbed"] = atom_types_perturbed[ligand_mask==1]
         out["charges_perturbed"] = charges_perturbed[ligand_mask==1]
         out["bonds_perturbed"] = edge_attr_global_perturbed[batch.edge_ligand==1]
-        out["ring_perturbed"] = ring_feat_perturbed[ligand_mask==1]
         out["aromatic_perturbed"] = aromatic_feat_perturbed[ligand_mask==1]
         out["hybridization_perturbed"] = hybridization_feat_perturbed[ligand_mask==1]
         out["degree_perturbed"] = degree_feat_perturbed[ligand_mask==1]
@@ -703,7 +660,6 @@ class Trainer(pl.LightningModule):
         out["atoms_true"] = atom_types.argmax(dim=-1)
         out["bonds_true"] = edge_attr_global_original
         out["charges_true"] = charges.argmax(dim=-1)
-        out["ring_true"] = ring_feat.argmax(dim=-1)
         out["aromatic_true"] = aromatic_feat.argmax(dim=-1)
         out["hybridization_true"] = hybridization_feat.argmax(dim=-1)
         out["degree_true"] = degree_feat.argmax(dim=-1)
@@ -976,17 +932,6 @@ class Trainer(pl.LightningModule):
         compound_charges = F.one_hot(compound_charges, num_classes=self.num_charge_classes).float()
         charge_types = F.one_hot(charge_types, num_classes=self.num_charge_classes).float()
         
-        # ring
-        ring_feat = torch.multinomial(
-            self.is_in_ring_prior, num_samples=n, replacement=True
-        ).to(self.device)
-        ring_feat_ligand = batch.is_in_ring[reconstruct_mask==1]
-        
-        compound_ring_feat = batch.is_in_ring.long().to(self.device)
-        compound_ring_feat[reconstruct_mask==1] = ring_feat
-        compound_ring_feat = F.one_hot(compound_ring_feat, num_classes=self.num_is_in_ring).float()
-        ring_feat = F.one_hot(ring_feat, num_classes=self.num_is_in_ring).float()
-        
         # aromatic
         aromatic_feat = torch.multinomial(
             self.is_aromatic_prior, num_samples=n, replacement=True
@@ -1050,7 +995,6 @@ class Trainer(pl.LightningModule):
             [
                 compound_atom_types,
                 compound_charges,
-                compound_ring_feat,
                 compound_aromatic_feat,
                 compound_hybridization_feat,
                 compound_degree_feat,
@@ -1058,7 +1002,7 @@ class Trainer(pl.LightningModule):
             ],
             dim=-1,
         )
-        
+
         pocket_mask = (1 - batch.is_ligand + batch.is_backbone).long()
         
         pos_traj = []
@@ -1123,7 +1067,6 @@ class Trainer(pl.LightningModule):
             (
                 atoms_pred,
                 charges_pred,
-                ring_pred,
                 aromatic_pred,
                 hybridization_pred,
                 degree_pred,
@@ -1132,7 +1075,6 @@ class Trainer(pl.LightningModule):
                 [
                     self.num_atom_types,
                     self.num_charge_classes,
-                    self.num_is_in_ring,
                     self.num_is_aromatic,
                     self.num_hybridization,
                     self.num_degree,
@@ -1142,11 +1084,10 @@ class Trainer(pl.LightningModule):
             )
             
             atoms_pred = atoms_pred.softmax(dim=-1)
-            
+
             edges_pred = out["bonds_pred"].softmax(dim=-1)
-            
+
             charges_pred = charges_pred.softmax(dim=-1)
-            ring_pred = ring_pred.softmax(dim=-1)
             aromatic_pred = aromatic_pred.softmax(dim=-1)
             hybridization_pred = hybridization_pred.softmax(dim=-1)
             degree_pred = degree_pred.softmax(dim=-1)
@@ -1169,8 +1110,6 @@ class Trainer(pl.LightningModule):
                                 if ctmc else self.cat_atoms.sample_reverse_categorical_jump)
                 _cat_ch_fn   = (self.cat_charges.sample_ctmc_tauleaping
                                 if ctmc else self.cat_charges.sample_reverse_categorical_jump)
-                _cat_ri_fn   = (self.cat_ring.sample_ctmc_tauleaping
-                                if ctmc else self.cat_ring.sample_reverse_categorical_jump)
                 _cat_ar_fn   = (self.cat_aromatic.sample_ctmc_tauleaping
                                 if ctmc else self.cat_aromatic.sample_reverse_categorical_jump)
                 _cat_hy_fn   = (self.cat_hybridization.sample_ctmc_tauleaping
@@ -1187,11 +1126,6 @@ class Trainer(pl.LightningModule):
                 charge_types = _cat_ch_fn(
                     xt=charge_types, t=t[batch_lig], s=s_next[batch_lig],
                     num_classes=self.num_charge_classes, **_kw,
-                )
-                _kw = dict(x0_pred=ring_pred)       if ctmc else dict(x0=ring_pred)
-                ring_feat = _cat_ri_fn(
-                    xt=ring_feat, t=t[batch_lig], s=s_next[batch_lig],
-                    num_classes=self.num_is_in_ring, **_kw,
                 )
                 _kw = dict(x0_pred=aromatic_pred)   if ctmc else dict(x0=aromatic_pred)
                 aromatic_feat = _cat_ar_fn(
@@ -1242,10 +1176,6 @@ class Trainer(pl.LightningModule):
                     xt=charge_types, x0=charges_pred,
                     t=t[batch_lig], num_classes=self.num_charge_classes,
                 )
-                ring_feat = self.cat_ring.sample_reverse_categorical(
-                    xt=ring_feat, x0=ring_pred,
-                    t=t[batch_lig], num_classes=self.num_is_in_ring,
-                )
                 aromatic_feat = self.cat_aromatic.sample_reverse_categorical(
                     xt=aromatic_feat, x0=aromatic_pred,
                     t=t[batch_lig], num_classes=self.num_is_aromatic,
@@ -1282,10 +1212,6 @@ class Trainer(pl.LightningModule):
                     xt=charge_types, x0=charges_pred,
                     t=t[batch_lig], num_classes=self.num_charge_classes,
                 )
-                ring_feat = self.cat_ring.sample_reverse_categorical(
-                    xt=ring_feat, x0=ring_pred,
-                    t=t[batch_lig], num_classes=self.num_is_in_ring,
-                )
                 aromatic_feat = self.cat_aromatic.sample_reverse_categorical(
                     xt=aromatic_feat, x0=aromatic_pred,
                     t=t[batch_lig], num_classes=self.num_is_aromatic,
@@ -1314,7 +1240,6 @@ class Trainer(pl.LightningModule):
             
             compound_atom_types[reconstruct_mask==1] = atom_types
             compound_charges[reconstruct_mask==1] = charge_types
-            compound_ring_feat[reconstruct_mask==1] = ring_feat
             compound_aromatic_feat[reconstruct_mask==1] = aromatic_feat
             compound_hybridization_feat[reconstruct_mask==1] = hybridization_feat
             compound_degree_feat[reconstruct_mask==1] = degree_feat
@@ -1327,7 +1252,6 @@ class Trainer(pl.LightningModule):
                 [
                     compound_atom_types,
                     compound_charges,
-                    compound_ring_feat,
                     compound_aromatic_feat,
                     compound_hybridization_feat,
                     compound_degree_feat,

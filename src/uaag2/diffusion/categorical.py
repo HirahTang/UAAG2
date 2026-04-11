@@ -28,7 +28,6 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         num_bond_types: int = 5,
         num_atom_types: int = 16,
         num_charge_types: int = 6,
-        num_is_in_ring: int = 2,
         num_is_aromatic: int = 2,
         num_hybridization: int = 8,
         num_degree: int = 5,
@@ -38,7 +37,6 @@ class CategoricalDiffusionKernel(torch.nn.Module):
         self.num_bond_types = num_bond_types
         self.num_atom_types = num_atom_types
         self.num_charge_types = num_charge_types
-        self.num_is_in_ring = num_is_in_ring
         self.num_is_aromatic = num_is_aromatic
         self.num_hybridization = num_hybridization
         self.num_degree = num_degree
