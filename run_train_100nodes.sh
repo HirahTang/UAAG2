@@ -1,25 +1,24 @@
 #!/bin/bash
-#SBATCH --job-name=UAAG_train_40gpu
+#SBATCH --job-name=UAAG_train_400gpu
 #SBATCH --account=project_465002574
 #SBATCH --partition=standard-g
-#SBATCH --nodes=5
+#SBATCH --nodes=50
 #SBATCH --gpus-per-node=8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
 #SBATCH --mem=480G
 #SBATCH --time=2-00:00:00
-#SBATCH -o logs/train_40gpu_%j.log
-#SBATCH -e logs/train_40gpu_%j.log
+#SBATCH -o logs/train_100nodes_%j.log
+#SBATCH -e logs/train_100nodes_%j.log
 
 # =============================================================================
 # Dataset source switches — set to 1 to enable each source
 # =============================================================================
-USE_LMDB=0           # Pre-built LMDB shards (original UAAG2Dataset)
-USE_PDB=1            # On-the-fly PDB processing (UAAG2DatasetPDB)
-USE_PDBBIND=1        # Pre-built PDBBind LMDB (PDBBindDataset)
-USE_NCAA=1           # Pre-built NCAA LMDB (PDBBindDataset)
+USE_LMDB=0
+USE_PDB=1
+USE_PDBBIND=1
+USE_NCAA=1
 
-# Per-source sampling weights (relative; automatically normalised)
 LMDB_WEIGHT=1.0
 PDB_WEIGHT=1.0
 PDBBIND_WEIGHT=1.0
@@ -28,29 +27,20 @@ NCAA_WEIGHT=1.0
 # =============================================================================
 # Paths
 # =============================================================================
-OUTPUT_DIR=/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/Full_mask_gpu_UAAG_model_condition_ProteinMPNN_128_0324
+OUTPUT_DIR=/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/flagship_400gpu_alldata_pocketdropout_0.2
 
-# LMDB shards (used only when USE_LMDB=1)
 LMDB_DATA=/scratch/project_465002574/PDB/uaag2_eqgat_lmdb_shards
-
-# On-the-fly PDB directory (used only when USE_PDB=1)
 PDB_DIR=/scratch/project_465002574/PDB/PDB_processed
-
-# ProteinMPNN latent roots for UAAG2DatasetPDB (leave empty to disable)
 LATENT_128=/scratch/project_465002574/PDB/PDB_128
 LATENT_20=/scratch/project_465002574/PDB/PDB_20
-
-# PDBBind LMDB (used only when USE_PDBBIND=1)
 PDBBIND_LMDB=/scratch/project_465002574/PDB/PDBBind.lmdb
-
-# NCAA LMDB (used only when USE_NCAA=1)
 NCAA_LMDB=/scratch/project_465002574/PDB/NCAA/NCAA.lmdb
 
 mkdir -p "$OUTPUT_DIR"
 mkdir -p logs
 
 # =============================================================================
-# Build dataset flag arguments dynamically
+# Build dataset flag arguments
 # =============================================================================
 DATASET_ARGS=""
 [ "$USE_LMDB"    = "1" ] && DATASET_ARGS="$DATASET_ARGS --use-lmdb    --training-data $LMDB_DATA    --lmdb-weight $LMDB_WEIGHT"
@@ -87,7 +77,7 @@ export MIOPEN_CUSTOM_CACHE_DIR=$MIOPEN_USER_DB_PATH
 srun mkdir -p $MIOPEN_USER_DB_PATH
 
 # =============================================================================
-# Execution — one task per GPU (40 total across 5 nodes × 8 GPUs)
+# Execution — one task per GPU (800 total across 100 nodes × 8 GPUs)
 # =============================================================================
 srun --cpu-bind=mask_cpu:$MYMASKS bash -c "
     export ROCR_VISIBLE_DEVICES=\$SLURM_LOCALID
@@ -98,10 +88,10 @@ srun --cpu-bind=mask_cpu:$MYMASKS bash -c "
 
     python -W ignore scripts/run_train.py \
       --gpus 1 \
-      --num_nodes 40 \
+      --num_nodes 400 \
       --batch-size 8 \
       --logger-type wandb \
-      --id Full_mask_gpu_UAAG_model_condition_ProteinMPNN_128_0324 \
+      --id flagship_400gpu_alldata_pocketdropout_0.2 \
       --save-every-epoch \
       --use_protein_mpnn_context_128 \
       --data_info_path /flash/project_465002574/UAAG2_main/data/statistic.pkl \

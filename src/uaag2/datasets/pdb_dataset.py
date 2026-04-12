@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 
+import lmdb
 import numpy as np
 import torch
 from Bio.PDB import PDBParser
@@ -195,7 +196,7 @@ def _extract_atom_bond_features(mol, structure) -> Tuple[Dict, Dict]:
     for chain in structure[0]:
         for residue in chain:
             rname = residue.get_resname().strip()
-            cid   = chain.id
+            cid   = chain.id.strip()   # strip so blank chain ' ' matches RDKit ''
             rseq  = int(residue.id[1])
             icode = residue.id[2].strip()
             for atom in residue:
@@ -241,7 +242,7 @@ def _extract_atom_bond_features(mol, structure) -> Tuple[Dict, Dict]:
         for chain in structure[0]:
             for residue in chain:
                 rname = residue.get_resname().strip()
-                cid   = chain.id
+                cid   = chain.id.strip()
                 rseq  = int(residue.id[1])
                 rid   = f"{rname}_{rseq}_{cid}"
                 for atom in residue:
@@ -685,6 +686,172 @@ def _count_aa_residues_fast(pdb_path: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Shared post-processing (used by both UAAG2DatasetPDB and PDBBindDataset)
+# ---------------------------------------------------------------------------
+def _post_process_graph(
+    graph_data: Data,
+    *,
+    charge_emb: dict,
+    mask_rate: float = 0.0,
+    pocket_noise: bool = False,
+    noise_scale: float = 0.1,
+    pocket_dropout_prob: float = 0.0,
+    params=None,
+) -> Data:
+    """Centre, cast, mask backbone, optionally add virtual nodes.
+
+    Identical logic to the former UAAG2DatasetPDB._post_process; extracted
+    so that PDBBindDataset can reuse it without inheriting the full class.
+    """
+    # --- Pocket dropout ---
+    # With probability pocket_dropout_prob, remove all pocket atoms (is_ligand==0),
+    # keeping only the centre residue atoms (is_ligand==1, including backbone N/CA/C/O).
+    if pocket_dropout_prob > 0.0 and torch.rand(1).item() < pocket_dropout_prob:
+        keep = (graph_data.is_ligand > 0.5) | (graph_data.is_backbone > 0.5)
+        if not keep.all():
+            n_orig = graph_data.x.size(0)
+            new_id = torch.full((n_orig,), -1, dtype=torch.long)
+            keep_idx = torch.where(keep)[0]
+            new_id[keep_idx] = torch.arange(keep.sum(), dtype=torch.long)
+            # Filter and remap edges
+            src_e, dst_e = graph_data.edge_index
+            edge_keep = keep[src_e] & keep[dst_e]
+            graph_data.edge_index = new_id[graph_data.edge_index[:, edge_keep]]
+            for attr in ("edge_attr", "edge_ligand"):
+                t = getattr(graph_data, attr, None)
+                if t is not None and isinstance(t, torch.Tensor):
+                    setattr(graph_data, attr, t[edge_keep])
+            # Filter node features
+            for attr in ("x", "pos", "charges", "degree", "is_aromatic",
+                         "hybridization", "is_backbone", "is_ligand"):
+                t = getattr(graph_data, attr, None)
+                if t is not None and isinstance(t, torch.Tensor) and t.size(0) == n_orig:
+                    setattr(graph_data, attr, t[keep])
+            # Filter latent if present
+            lat = getattr(graph_data, "protein_mpnn_latent_node_128", None)
+            if lat is not None and isinstance(lat, torch.Tensor) and lat.size(0) == n_orig:
+                graph_data.protein_mpnn_latent_node_128 = lat[keep]
+
+    # Centre positions on pocket mean
+    if graph_data.is_ligand.sum() < len(graph_data.is_ligand):
+        pocket_mean = graph_data.pos[graph_data.is_ligand == 0].mean(dim=0)
+    else:
+        pocket_mean = graph_data.pos.mean(dim=0)
+    graph_data.pos = graph_data.pos - pocket_mean
+
+    CoM = graph_data.pos[graph_data.is_ligand == 1].mean(dim=0)
+
+    # Cast
+    graph_data.x             = graph_data.x.float()
+    graph_data.pos           = graph_data.pos.float()
+    graph_data.edge_attr      = graph_data.edge_attr.float()
+    graph_data.edge_index     = graph_data.edge_index.long()
+    graph_data.degree         = graph_data.degree.float()
+    graph_data.is_aromatic    = graph_data.is_aromatic.float()
+    graph_data.hybridization  = graph_data.hybridization.float()
+    graph_data.is_backbone    = graph_data.is_backbone.float()
+    graph_data.is_ligand      = graph_data.is_ligand.float()
+
+    # Map charges
+    charges_np = graph_data.charges.numpy()
+    graph_data.charges = torch.from_numpy(
+        np.vectorize(charge_emb.get)(charges_np)
+    ).float()
+
+    # Handle latent shape
+    lat128 = None
+    if hasattr(graph_data, "protein_mpnn_latent_node_128") and graph_data.protein_mpnn_latent_node_128 is not None:
+        lat128 = graph_data.protein_mpnn_latent_node_128.float()
+        if lat128.dim() == 1:
+            lat128 = lat128.unsqueeze(0)
+
+    # Backbone masking
+    reconstruct_mask = graph_data.is_ligand - graph_data.is_backbone
+    new_bb = torch.bernoulli(
+        torch.ones(reconstruct_mask.eq(1).sum()) * mask_rate
+    ).float()
+    graph_data.is_backbone[reconstruct_mask == 1] = new_bb
+
+    # Optional pocket noise
+    if pocket_noise:
+        noise = torch.randn_like(graph_data.pos[reconstruct_mask == 1]) * noise_scale
+        graph_data.pos[reconstruct_mask == 1] += noise
+
+    # Virtual nodes
+    if params is not None and params.virtual_node:
+        sample_n = int(np.random.randint(1, params.max_virtual_nodes))
+        vx    = torch.ones(sample_n) * 8
+        vpos  = CoM.unsqueeze(0).expand(sample_n, -1).clone()
+        graph_data.x            = torch.cat([graph_data.x,           vx])
+        graph_data.pos          = torch.cat([graph_data.pos,          vpos])
+        graph_data.charges      = torch.cat([graph_data.charges,      torch.ones(sample_n)])
+        graph_data.degree       = torch.cat([graph_data.degree,       torch.zeros(sample_n)])
+        graph_data.is_aromatic  = torch.cat([graph_data.is_aromatic,  torch.zeros(sample_n)])
+        graph_data.hybridization= torch.cat([graph_data.hybridization,torch.zeros(sample_n)])
+        graph_data.is_backbone  = torch.cat([graph_data.is_backbone,  torch.zeros(sample_n)])
+        graph_data.is_ligand    = torch.cat([graph_data.is_ligand,    torch.ones(sample_n)])
+
+        all_ids   = torch.arange(len(graph_data.x))
+        virt_ids  = all_ids[-sample_n:]
+        exist_ids = all_ids[:-sample_n]
+
+        g1, g2 = torch.meshgrid(virt_ids, exist_ids, indexing="ij")
+        bi_new = torch.cat([
+            torch.stack([g1.flatten(), g2.flatten()]),
+            torch.stack([g2.flatten(), g1.flatten()]),
+        ], dim=1)
+
+        g1v, g2v = torch.meshgrid(virt_ids, virt_ids, indexing="ij")
+        mask_v = g1v != g2v
+        bi_vv = torch.stack([g1v[mask_v], g2v[mask_v]])
+
+        new_ei = torch.cat([graph_data.edge_index, bi_new, bi_vv], dim=1)
+        n_new  = bi_new.size(1) + bi_vv.size(1)
+        new_ea = torch.cat([graph_data.edge_attr,  torch.zeros(n_new)])
+        new_el = torch.cat([
+            torch.tensor(graph_data.edge_ligand).float(),
+            torch.zeros(bi_new.size(1)),
+            torch.ones(bi_vv.size(1)),
+        ])
+        graph_data.edge_index = new_ei
+        graph_data.edge_attr  = new_ea
+        graph_data.edge_ligand = new_el
+
+    # Final dtype pass (matches UAAG2Dataset exactly)
+    graph_data.degree        = graph_data.degree.float()
+    graph_data.is_aromatic   = graph_data.is_aromatic.float()
+    graph_data.hybridization = graph_data.hybridization.float()
+    graph_data.is_backbone   = graph_data.is_backbone.float()
+    graph_data.is_ligand     = graph_data.is_ligand.float()
+
+    num_nodes = graph_data.x.size(0)
+    if lat128 is not None and lat128.size(0) != num_nodes:
+        lat128 = lat128[0].unsqueeze(0).expand(num_nodes, -1)
+
+    data_kwargs = dict(
+        x=graph_data.x,
+        pos=graph_data.pos,
+        edge_index=graph_data.edge_index,
+        edge_attr=graph_data.edge_attr,
+        edge_ligand=torch.tensor(graph_data.edge_ligand).float(),
+        charges=graph_data.charges,
+        degree=graph_data.degree,
+        is_aromatic=graph_data.is_aromatic,
+        hybridization=graph_data.hybridization,
+        is_backbone=graph_data.is_backbone,
+        is_ligand=graph_data.is_ligand,
+        ligand_size=torch.tensor(
+            int(graph_data.is_ligand.sum() - graph_data.is_backbone.sum())
+        ).long(),
+        id=graph_data.compound_id,
+    )
+    if lat128 is not None:
+        data_kwargs["protein_mpnn_latent_node_128"] = lat128
+
+    return Data(**data_kwargs)
+
+
+# ---------------------------------------------------------------------------
 # Main Dataset
 # ---------------------------------------------------------------------------
 class UAAG2DatasetPDB(torch.utils.data.Dataset):
@@ -734,11 +901,14 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
         mask_rate: float = 0.0,
         pocket_noise: bool = False,
         noise_scale: float = 0.1,
+        pocket_dropout_prob: float = 0.0,
         params=None,
         latent_cache_files: int = 32,
         index_cache_path: Optional[str] = None,
         parse_cache_size: int = 64,
-        max_retries: int = 20,
+        max_retries: int = 100,
+        pdb_fraction: float = 1.0,
+        max_pdb_files: int = 0,
     ):
         super().__init__()
         self.pdb_dir       = pdb_dir
@@ -747,6 +917,7 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
         self.mask_rate     = mask_rate
         self.pocket_noise  = pocket_noise
         self.noise_scale   = noise_scale
+        self.pocket_dropout_prob = pocket_dropout_prob
         self.params        = params
         self.max_retries   = max_retries
 
@@ -765,15 +936,23 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
         )
 
         # Build or load flat index
-        cache_path = index_cache_path or os.path.join(pdb_dir, ".uaag2_index_cache.pkl")
-        self._flat_index: List[Tuple[str, int]] = self._build_or_load_index(cache_path)
+        _base_cache = index_cache_path or os.path.join(pdb_dir, ".uaag2_index_cache.pkl")
+        if max_pdb_files > 0:
+            cache_path = _base_cache.replace(".pkl", f"_top{max_pdb_files}.pkl")
+        else:
+            cache_path = _base_cache
+        self._flat_index: List[Tuple[str, int]] = self._build_or_load_index(cache_path, max_pdb_files=max_pdb_files)
+        if 0.0 < pdb_fraction < 1.0:
+            n = max(1, int(len(self._flat_index) * pdb_fraction))
+            self._flat_index = self._flat_index[:n]
+            print(f"[UAAG2DatasetPDB] Subset {pdb_fraction:.0%}: using {n:,} residues")
 
         self.charge_emb = CHARGE_EMB
 
     # ------------------------------------------------------------------
     # Index
     # ------------------------------------------------------------------
-    def _build_or_load_index(self, cache_path: str) -> List[Tuple[str, int]]:
+    def _build_or_load_index(self, cache_path: str, max_pdb_files: int = 0) -> List[Tuple[str, int]]:
         if os.path.isfile(cache_path):
             try:
                 with open(cache_path, "rb") as fh:
@@ -788,6 +967,8 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
             for f in os.listdir(self.pdb_dir)
             if f.lower().endswith(".pdb")
         )
+        if max_pdb_files > 0:
+            pdb_files = pdb_files[:max_pdb_files]
         print(f"[UAAG2DatasetPDB] Building flat index over {len(pdb_files):,} PDB files …")
         flat: List[Tuple[str, int]] = []
         for pdb_path in tqdm(pdb_files, desc="Indexing PDBs"):
@@ -814,9 +995,13 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
         return len(self._flat_index)
 
     def __getitem__(self, idx: int) -> Data:
-        for offset in range(self.max_retries):
+        n = len(self)
+        for attempt in range(self.max_retries):
             try:
-                graph = self._try_get((idx + offset) % len(self))
+                # First attempt: exact index. Subsequent: random index
+                # to escape clusters of bad residues in a single PDB file.
+                i = idx if attempt == 0 else int(torch.randint(n, (1,)).item())
+                graph = self._try_get(i)
                 if graph is not None:
                     return graph
             except Exception:
@@ -862,125 +1047,141 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
         return self._post_process(graph)
 
     # ------------------------------------------------------------------
-    # Post-processing — mirrors UAAG2Dataset.__getitem__ exactly
+    # Post-processing — delegates to module-level _post_process_graph
     # ------------------------------------------------------------------
     def _post_process(self, graph_data: Data) -> Data:
-        # Centre positions on pocket mean
-        if graph_data.is_ligand.sum() < len(graph_data.is_ligand):
-            pocket_mean = graph_data.pos[graph_data.is_ligand == 0].mean(dim=0)
-        else:
-            pocket_mean = graph_data.pos.mean(dim=0)
-        graph_data.pos = graph_data.pos - pocket_mean
-
-        CoM = graph_data.pos[graph_data.is_ligand == 1].mean(dim=0)
-
-        # Cast
-        graph_data.x             = graph_data.x.float()
-        graph_data.pos           = graph_data.pos.float()
-        graph_data.edge_attr      = graph_data.edge_attr.float()
-        graph_data.edge_index     = graph_data.edge_index.long()
-        graph_data.degree         = graph_data.degree.float()
-        graph_data.is_aromatic    = graph_data.is_aromatic.float()
-        graph_data.hybridization  = graph_data.hybridization.float()
-        graph_data.is_backbone    = graph_data.is_backbone.float()
-        graph_data.is_ligand      = graph_data.is_ligand.float()
-
-        # Map charges
-        charges_np = graph_data.charges.numpy()
-        graph_data.charges = torch.from_numpy(
-            np.vectorize(self.charge_emb.get)(charges_np)
-        ).float()
-
-        # Handle latent shape
-        lat128 = None
-        if hasattr(graph_data, "protein_mpnn_latent_node_128") and graph_data.protein_mpnn_latent_node_128 is not None:
-            lat128 = graph_data.protein_mpnn_latent_node_128.float()
-            if lat128.dim() == 1:
-                lat128 = lat128.unsqueeze(0)
-
-        # Backbone masking
-        reconstruct_mask = graph_data.is_ligand - graph_data.is_backbone
-        new_bb = torch.bernoulli(
-            torch.ones(reconstruct_mask.eq(1).sum()) * self.mask_rate
-        ).float()
-        graph_data.is_backbone[reconstruct_mask == 1] = new_bb
-
-        # Optional pocket noise
-        if self.pocket_noise:
-            noise = torch.randn_like(graph_data.pos[reconstruct_mask == 1]) * self.noise_scale
-            graph_data.pos[reconstruct_mask == 1] += noise
-
-        reconstruct_size = int((graph_data.is_ligand.sum() - graph_data.is_backbone.sum()).item())
-
-        # Virtual nodes
-        if self.params is not None and self.params.virtual_node:
-            sample_n = int(np.random.randint(1, self.params.max_virtual_nodes))
-            vx    = torch.ones(sample_n) * 8
-            vpos  = CoM.unsqueeze(0).expand(sample_n, -1).clone()
-            graph_data.x            = torch.cat([graph_data.x,           vx])
-            graph_data.pos          = torch.cat([graph_data.pos,          vpos])
-            graph_data.charges      = torch.cat([graph_data.charges,      torch.ones(sample_n)])
-            graph_data.degree       = torch.cat([graph_data.degree,       torch.zeros(sample_n)])
-            graph_data.is_aromatic  = torch.cat([graph_data.is_aromatic,  torch.zeros(sample_n)])
-            graph_data.hybridization= torch.cat([graph_data.hybridization,torch.zeros(sample_n)])
-            graph_data.is_backbone  = torch.cat([graph_data.is_backbone,  torch.zeros(sample_n)])
-            graph_data.is_ligand    = torch.cat([graph_data.is_ligand,    torch.ones(sample_n)])
-
-            all_ids   = torch.arange(len(graph_data.x))
-            virt_ids  = all_ids[-sample_n:]
-            exist_ids = all_ids[:-sample_n]
-
-            g1, g2 = torch.meshgrid(virt_ids, exist_ids, indexing="ij")
-            bi_new = torch.cat([
-                torch.stack([g1.flatten(), g2.flatten()]),
-                torch.stack([g2.flatten(), g1.flatten()]),
-            ], dim=1)
-
-            g1v, g2v = torch.meshgrid(virt_ids, virt_ids, indexing="ij")
-            mask_v = g1v != g2v
-            bi_vv = torch.stack([g1v[mask_v], g2v[mask_v]])
-
-            new_ei = torch.cat([graph_data.edge_index, bi_new, bi_vv], dim=1)
-            n_new  = bi_new.size(1) + bi_vv.size(1)
-            new_ea = torch.cat([graph_data.edge_attr,  torch.zeros(n_new)])
-            new_el = torch.cat([
-                torch.tensor(graph_data.edge_ligand).float(),
-                torch.zeros(bi_new.size(1)),
-                torch.ones(bi_vv.size(1)),
-            ])
-            graph_data.edge_index = new_ei
-            graph_data.edge_attr  = new_ea
-            graph_data.edge_ligand = new_el
-
-        # Final dtype pass (matches UAAG2Dataset exactly)
-        graph_data.degree        = graph_data.degree.float()
-        graph_data.is_aromatic   = graph_data.is_aromatic.float()
-        graph_data.hybridization = graph_data.hybridization.float()
-        graph_data.is_backbone   = graph_data.is_backbone.float()
-        graph_data.is_ligand     = graph_data.is_ligand.float()
-
-        num_nodes = graph_data.x.size(0)
-        if lat128 is not None and lat128.size(0) != num_nodes:
-            lat128 = lat128[0].unsqueeze(0).expand(num_nodes, -1)
-
-        data_kwargs = dict(
-            x=graph_data.x,
-            pos=graph_data.pos,
-            edge_index=graph_data.edge_index,
-            edge_attr=graph_data.edge_attr,
-            edge_ligand=torch.tensor(graph_data.edge_ligand).float(),
-            charges=graph_data.charges,
-            degree=graph_data.degree,
-            is_aromatic=graph_data.is_aromatic,
-            hybridization=graph_data.hybridization,
-            is_backbone=graph_data.is_backbone,
-            is_ligand=graph_data.is_ligand,
-            ligand_size=torch.tensor(
-                int(graph_data.is_ligand.sum() - graph_data.is_backbone.sum())
-            ).long(),
-            id=graph_data.compound_id,
+        return _post_process_graph(
+            graph_data,
+            charge_emb=self.charge_emb,
+            mask_rate=self.mask_rate,
+            pocket_noise=self.pocket_noise,
+            noise_scale=self.noise_scale,
+            pocket_dropout_prob=self.pocket_dropout_prob,
+            params=self.params,
         )
-        if lat128 is not None:
-            data_kwargs["protein_mpnn_latent_node_128"] = lat128
 
-        return Data(**data_kwargs)
+
+# ---------------------------------------------------------------------------
+# PDBBind Dataset — reads pre-built graphs from an LMDB written by
+# build_pdbbind_lmdb.py; applies _post_process at __getitem__ time.
+# ---------------------------------------------------------------------------
+class PDBBindDataset(torch.utils.data.Dataset):
+    """Dataset backed by PDBBind.lmdb.
+
+    Each LMDB entry is a raw (pre-_post_process) pickled PyG Data object
+    representing one protein-ligand complex (pocket + small molecule).
+    The ligand plays the same role as a target residue in UAAG2DatasetPDB:
+    ``is_ligand=1`` for all ligand atoms, ``is_ligand=0`` for pocket atoms.
+
+    Parameters
+    ----------
+    lmdb_path : str
+        Path to PDBBind.lmdb (a flat LMDB file, not a directory).
+    mask_rate, pocket_noise, noise_scale, params :
+        Passed through to _post_process_graph — same semantics as in
+        UAAG2DatasetPDB.
+    """
+
+    def __init__(
+        self,
+        lmdb_path: str,
+        mask_rate: float = 0.0,
+        pocket_noise: bool = False,
+        noise_scale: float = 0.1,
+        pocket_dropout_prob: float = 0.0,
+        params=None,
+    ):
+        super().__init__()
+        self.lmdb_path   = lmdb_path
+        self.mask_rate   = mask_rate
+        self.pocket_noise = pocket_noise
+        self.noise_scale = noise_scale
+        self.pocket_dropout_prob = pocket_dropout_prob
+        self.params      = params
+        self.charge_emb  = CHARGE_EMB
+
+        # Read the key list eagerly (fast — stored as a single LMDB entry).
+        env = lmdb.open(lmdb_path, readonly=True, lock=False, subdir=False,
+                        map_size=20 * 1024 ** 3)
+        with env.begin() as txn:
+            meta = txn.get(b"__keys__")
+            if meta is not None:
+                self._keys: List[bytes] = pickle.loads(meta)
+            else:
+                self._keys = [k for k, _ in txn.cursor() if not k.startswith(b"__")]
+        env.close()
+        self._env = None  # re-opened lazily inside each worker
+
+    # ------------------------------------------------------------------
+    # Lazy LMDB handle — safe across fork() because we open after fork
+    # ------------------------------------------------------------------
+    def _get_env(self):
+        if self._env is None:
+            self._env = lmdb.open(
+                self.lmdb_path, readonly=True, lock=False, subdir=False,
+                map_size=20 * 1024 ** 3,
+            )
+        return self._env
+
+    # ------------------------------------------------------------------
+    # Dataset interface
+    # ------------------------------------------------------------------
+    def __len__(self) -> int:
+        return len(self._keys)
+
+    def __getitem__(self, idx: int) -> Data:
+        env = self._get_env()
+        with env.begin() as txn:
+            val = txn.get(self._keys[idx])
+        if val is None:
+            raise KeyError(f"[PDBBindDataset] LMDB key not found: {self._keys[idx]}")
+        graph = pickle.loads(val)
+        return _post_process_graph(
+            graph,
+            charge_emb=self.charge_emb,
+            mask_rate=self.mask_rate,
+            pocket_noise=self.pocket_noise,
+            noise_scale=self.noise_scale,
+            pocket_dropout_prob=self.pocket_dropout_prob,
+            params=self.params,
+        )
+
+
+# ---------------------------------------------------------------------------
+# CombinedPDBDataset — wraps UAAG2DatasetPDB and/or PDBBindDataset so the
+# training loop can sample from either or both with a single Dataset object.
+# ---------------------------------------------------------------------------
+class CombinedPDBDataset(torch.utils.data.Dataset):
+    """Union of an on-the-fly PDB dataset and a pre-built PDBBind LMDB dataset.
+
+    Pass ``pdb_dataset=None`` to use only PDBBind, or ``pdbbind_dataset=None``
+    to use only the on-the-fly PDB dataset.  Both can be provided to train on
+    the combined pool (indices 0..len(pdb)-1 map to pdb_dataset; remaining
+    indices map to pdbbind_dataset).
+
+    Parameters
+    ----------
+    pdb_dataset : UAAG2DatasetPDB or None
+    pdbbind_dataset : PDBBindDataset or None
+    """
+
+    def __init__(
+        self,
+        pdb_dataset: Optional["UAAG2DatasetPDB"] = None,
+        pdbbind_dataset: Optional[PDBBindDataset] = None,
+    ):
+        if pdb_dataset is None and pdbbind_dataset is None:
+            raise ValueError("At least one of pdb_dataset or pdbbind_dataset must be provided.")
+        super().__init__()
+        self.pdb_dataset     = pdb_dataset
+        self.pdbbind_dataset = pdbbind_dataset
+        self._pdb_len        = len(pdb_dataset)     if pdb_dataset     is not None else 0
+        self._pdbbind_len    = len(pdbbind_dataset)  if pdbbind_dataset is not None else 0
+
+    def __len__(self) -> int:
+        return self._pdb_len + self._pdbbind_len
+
+    def __getitem__(self, idx: int) -> Data:
+        if idx < self._pdb_len:
+            return self.pdb_dataset[idx]
+        return self.pdbbind_dataset[idx - self._pdb_len]
