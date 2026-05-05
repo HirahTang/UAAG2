@@ -1,0 +1,41 @@
+name: Test and deploy
+
+on:
+  push:
+    branches: [main, mlops]
+  pull_request:
+    branches: [main, mlops]
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      matrix:
+        operating-system: ["ubuntu-latest", "macos-latest"]
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --locked --dev
+          uv tree
+
+      - name: Fetch data
+        run: |
+          uv run invoke fetch-data
+
+      - name: Run tests & coverage
+        run: |
+          uv run coverage run -m pytest tests/
+          uv run coverage report -m

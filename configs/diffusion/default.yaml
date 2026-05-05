@@ -1,0 +1,40 @@
+# Diffusion process configuration
+# Time settings
+continuous: false
+timesteps: 500
+max_time: null
+eps_min: 1.0e-3
+
+# Noise scheduler
+noise_scheduler: cosine  # linear, cosine, quad, sigmoid, adaptive, linear-time
+beta_min: 1.0e-4
+beta_max: 2.0e-2
+
+# Loss coefficients
+lc_coords: 3.0
+lc_atoms: 0.4
+lc_bonds: 2.0
+lc_charges: 1.0
+lc_mulliken: 1.5
+lc_wbo: 2.0
+
+# Loss weighting
+loss_weighting: snr_t  # snr_s_t, snr_t, exp_t, expt_t_half, uniform
+snr_clamp_min: 0.05
+snr_clamp_max: 1.50
+
+# Diffusion settings
+use_ligand_dataset_sizes: false
+ligand_pocket_interaction: false
+diffusion_pretraining: false
+continuous_param: data  # data or noise
+
+# Categorical settings
+atoms_categorical: true
+bonds_categorical: true
+atom_type_masking: true
+use_absorbing_state: false
+
+# Number of classes
+num_bond_classes: 5
+num_charge_classes: 6

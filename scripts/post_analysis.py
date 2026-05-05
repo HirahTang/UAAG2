@@ -6,7 +6,7 @@ import sys
 import argparse
 sys.path.append('.')
 sys.path.append('..')
-from uaag.utils import aa_check
+from uaag2.utils import aa_check
 from collections import Counter
 from tqdm import tqdm
 

@@ -20,6 +20,7 @@ import os
 import sys
 import argparse
 import csv
+import random
 import shutil
 from pathlib import Path
 from datetime import datetime
@@ -96,7 +97,7 @@ def convert_mol_to_sdf(mol_file, output_dir, input_path):
         return (False, None, str(e))
 
 
-def evaluate_with_bust(sdf_file, mol_file=None):
+def evaluate_with_bust(sdf_file, mol_file=None, max_workers=4):
     """
     Evaluate a molecule using PoseBusters.
     
@@ -115,10 +116,10 @@ def evaluate_with_bust(sdf_file, mol_file=None):
     
     try:
         # Initialize PoseBusters
-        buster = PoseBusters(config='mol')
+        buster = PoseBusters(config='mol', max_workers=max_workers)
         
         # Run evaluation
-        results = buster.bust([str(sdf_file)])
+        results = buster.bust(mol_pred=sdf_file, mol_true=sdf_file, mol_cond=sdf_file)
         
         # Extract results (bust returns a dataframe)
         if results is not None and len(results) > 0:
@@ -158,30 +159,33 @@ def evaluate_with_bust(sdf_file, mol_file=None):
         }
 
 
-def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbose=True):
+def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbose=True,
+                    max_workers=4, subsample=None, seed=42):
     """
-    Process all .mol samples: convert, evaluate, and record results.
-    
+    Process .mol samples: optionally subsample, convert to SDF, run PoseBusters.
+
     Args:
         input_dir (str): Root directory containing .mol files
         output_csv (str): Output CSV file path
         temp_dir (str, optional): Temporary directory for .sdf files
         keep_sdf (bool): Keep .sdf files after evaluation
         verbose (bool): Print detailed status messages
-        
+        subsample (int, optional): If set, randomly pick this many mol files
+        seed (int): Random seed for subsampling reproducibility
+
     Returns:
         dict: Summary statistics
     """
     # Setup directories
     input_path = Path(input_dir)
-    
+
     if temp_dir is None:
         temp_path = Path('temp_sdf_' + datetime.now().strftime('%Y%m%d_%H%M%S'))
     else:
         temp_path = Path(temp_dir)
-    
+
     temp_path.mkdir(parents=True, exist_ok=True)
-    
+
     if verbose:
         print(f"\nProcessing .mol samples from: {input_dir}")
         print(f"Temporary .sdf directory: {temp_path}")
@@ -190,15 +194,24 @@ def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbos
     
     # Find all .mol files
     mol_files = find_mol_files(input_dir, verbose=verbose)
-    
+
     if not mol_files:
         print("No .mol files found!")
-        return {'total': 0, 'conversion_success': 0, 'conversion_failed': 0, 
+        return {'total': 0, 'conversion_success': 0, 'conversion_failed': 0,
                 'pass_all_criteria': 0, 'pass_mol_loaded': 0, 'bust_failed': 0}
-    
+
+    # Optionally subsample before running PoseBusters (saves time on large runs)
+    total_found = len(mol_files)
+    if subsample is not None and subsample < total_found:
+        rng = random.Random(seed)
+        mol_files = rng.sample(mol_files, subsample)
+        if verbose:
+            print(f"Subsampled {subsample} / {total_found} mol files (seed={seed})")
+
     # Statistics
     stats = {
         'total': len(mol_files),
+        'total_found': total_found,
         'conversion_success': 0,
         'conversion_failed': 0,
         'pass_all_criteria': 0,
@@ -257,20 +270,20 @@ def process_samples(input_dir, output_csv, temp_dir=None, keep_sdf=False, verbos
             result['sdf_created'] = False
         
         results.append(result)
-    
+        
     # Evaluate with PoseBusters
     if verbose:
         print("\n2. Evaluating molecules with PoseBusters...")
         iterator = tqdm(results, desc="Evaluating", unit="molecule")
     else:
         iterator = results
-    
+
     for result in iterator:
         if result['conversion_success'] and result['sdf_file']:
             sdf_path = Path(result['sdf_file'])
-            
+            # from IPython import embed; embed()
             if sdf_path.exists():
-                bust_results = evaluate_with_bust(sdf_path, Path(result['mol_full_path']))
+                bust_results = evaluate_with_bust(sdf_path, Path(result['mol_full_path']), max_workers=max_workers)
                 result['bust_evaluated'] = True
                 
                 # Merge bust results into main result
@@ -423,7 +436,7 @@ Example:
         """
     )
     
-    parser.add_argument('input_dir', 
+    parser.add_argument('--input-dir', 
                        help='Root directory containing .mol files (will search recursively)')
     parser.add_argument('-o', '--output', default='evaluation_results.csv',
                        help='Output CSV file path (default: evaluation_results.csv)')
@@ -433,25 +446,34 @@ Example:
                        help='Keep .sdf files after evaluation (default: remove)')
     parser.add_argument('-q', '--quiet', action='store_true',
                        help='Suppress detailed output')
-    
+    parser.add_argument('--max-workers', default=4, type=int)
+    parser.add_argument('--subsample', default=None, type=int,
+                        help='Randomly pick this many mol files before running PoseBusters '
+                             '(e.g. 100). If omitted, all files are evaluated.')
+    parser.add_argument('--seed', default=42, type=int,
+                        help='Random seed for subsampling (default: 42)')
+
     args = parser.parse_args()
-    
+
     # Check if PoseBusters is available
     if not POSEBUSTERS_AVAILABLE:
         print("\nError: PoseBusters is not installed!")
         print("Install with: pip install posebusters")
         print("Or: conda install -c conda-forge posebusters")
         sys.exit(1)
-    
+
     verbose = not args.quiet
-    
+
     try:
         stats = process_samples(
             input_dir=args.input_dir,
             output_csv=args.output,
             temp_dir=args.temp_dir,
             keep_sdf=args.keep_sdf,
-            verbose=verbose
+            verbose=verbose,
+            max_workers=args.max_workers,
+            subsample=args.subsample,
+            seed=args.seed,
         )
         
         # Exit with error code if no samples passed (using strict criteria)

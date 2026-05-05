@@ -1,0 +1,121 @@
+#!/bin/bash
+# Submit all 3 approaches for PUMA and CP2 NCAA benchmarks on LUMI
+# Tracks compute time and resources per approach
+
+WORK_DIR="/flash/project_465002574/UAAG2_main"
+LOG_DIR="/scratch/project_465002574/UAAG_logs"
+OUTPUT_DIR="/scratch/project_465002574/NCAA_ddg_results"
+SCRIPT_DIR="${WORK_DIR}/scripts/ncaa_ddg"
+ENV="/flash/project_465002574/unaagi_env/bin"
+PYROSETTA_ENV="/flash/project_465002574/pyrosetta_env/bin"
+CKPT_PATH="/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFull_mask_40_gpu_UAAG_model_official_8_0202/last.ckpt"
+
+mkdir -p "${OUTPUT_DIR}" "${LOG_DIR}"
+
+for BENCHMARK in PUMA CP2; do
+    if [ "${BENCHMARK}" = "PUMA" ]; then
+        PDB="/flash/project_465002574/rosetta_ncaa/pdbs/2roc_model1.pdb"
+        CSV="/scratch/project_465002574/UNAAGI_benchmark_values/uaa_benchmark_csv/PUMA_reframe.csv"
+        CHAIN="B"   # PUMA BH3 peptide is chain B in 2ROC
+    else
+        PDB="/flash/project_465002574/rosetta_ncaa/pdbs/5ly1.pdb"
+        CSV="/scratch/project_465002574/UNAAGI_benchmark_values/uaa_benchmark_csv/CP2_reframe.csv"
+        CHAIN="E"   # CP2 macrocyclic peptide is chain E in 5LY1
+    fi
+
+    echo "===== ${BENCHMARK} ====="
+
+    # ── Approach C: OpenMM + GAFF2 (GPU, runs now) ──────────────────────────
+    JOB_C=$(sbatch --parsable \
+        --account=project_465002574 \
+        --partition=standard-g \
+        --ntasks=1 --cpus-per-task=4 --gpus-per-node=1 --mem=32G \
+        --time=4:00:00 \
+        --exclude=nid002467,nid002482 \
+        -o "${LOG_DIR}/ncaa_ddg_C_${BENCHMARK}_%j.log" \
+        -e "${LOG_DIR}/ncaa_ddg_C_${BENCHMARK}_%j.log" \
+        --job-name="NCAA_C_${BENCHMARK}" \
+        --wrap="
+set -e
+module load LUMI; module load CrayEnv; module load lumi-container-wrapper/0.4.2-cray-python-default
+export PATH=${ENV}:\$PATH
+export PYTHONPATH=${WORK_DIR}/src:\$PYTHONPATH
+cd ${WORK_DIR}
+git checkout dpm-solver-pp
+echo '[C] Start: \$(date)'
+START=\$(date +%s)
+python ${SCRIPT_DIR}/approach_c_openmm.py \
+    --pdb ${PDB} \
+    --chain ${CHAIN} \
+    --benchmark-csv ${CSV} \
+    --output-dir ${OUTPUT_DIR}/${BENCHMARK}/approach_C \
+    --platform CUDA
+END=\$(date +%s)
+echo '[C] Done: \$(date)  Wall=\$((END-START))s'
+sacct -j \$SLURM_JOB_ID --format=JobID,Elapsed,CPUTime,MaxRSS,AveRSS --units=M
+")
+    echo "  + Approach C: job ${JOB_C}"
+
+    # ── Approach A: Rosetta existing params (CPU, needs PyRosetta) ───────────
+    JOB_A_CHAIN="${CHAIN}"
+    JOB_A=$(sbatch --parsable \
+        --account=project_465002574 \
+        --partition=small \
+        --ntasks=1 --cpus-per-task=8 --mem=32G \
+        --time=8:00:00 \
+        --exclude=nid002467,nid002482 \
+        -o "${LOG_DIR}/ncaa_ddg_A_${BENCHMARK}_%j.log" \
+        -e "${LOG_DIR}/ncaa_ddg_A_${BENCHMARK}_%j.log" \
+        --job-name="NCAA_A_${BENCHMARK}" \
+        --wrap="
+set -e
+module load LUMI; module load CrayEnv; module load lumi-container-wrapper/0.4.2-cray-python-default
+export PATH=/flash/project_465002574/micromamba/envs/ncaa_tools/bin:\$PATH
+export PYTHONPATH=${WORK_DIR}/src:\$PYTHONPATH
+cd ${WORK_DIR}
+START=\$(date +%s)
+python ${SCRIPT_DIR}/approach_a_rosetta.py \
+    --pdb ${PDB} \
+    --chain ${CHAIN} \
+    --benchmark-csv ${CSV} \
+    --output-dir ${OUTPUT_DIR}/${BENCHMARK}/approach_A \
+    --nstruct 3
+END=\$(date +%s)
+echo '[A] Done: \$(date)  Wall=\$((END-START))s'
+sacct -j \$SLURM_JOB_ID --format=JobID,Elapsed,CPUTime,MaxRSS,AveRSS --units=M
+")
+    echo "  + Approach A: job ${JOB_A}"
+
+    # ── Approach B: Rosetta + AM1-BCC (CPU, needs PyRosetta + AmberTools) ───
+    JOB_B=$(sbatch --parsable \
+        --account=project_465002574 \
+        --partition=small \
+        --ntasks=1 --cpus-per-task=16 --mem=64G \
+        --time=24:00:00 \
+        --exclude=nid002467,nid002482 \
+        -o "${LOG_DIR}/ncaa_ddg_B_${BENCHMARK}_%j.log" \
+        -e "${LOG_DIR}/ncaa_ddg_B_${BENCHMARK}_%j.log" \
+        --job-name="NCAA_B_${BENCHMARK}" \
+        --wrap="
+set -e
+module load LUMI; module load CrayEnv; module load lumi-container-wrapper/0.4.2-cray-python-default
+export PATH=/flash/project_465002574/micromamba/envs/ncaa_tools/bin:\$PATH
+export PYTHONPATH=${WORK_DIR}/src:\$PYTHONPATH
+cd ${WORK_DIR}
+START=$(date +%s)
+python ${SCRIPT_DIR}/approach_b_rosetta_am1.py \
+    --pdb ${PDB} \
+    --chain ${CHAIN} \
+    --benchmark-csv ${CSV} \
+    --output-dir ${OUTPUT_DIR}/${BENCHMARK}/approach_B \
+    --nstruct 3
+END=\$(date +%s)
+echo '[B] Done: \$(date)  Wall=\$((END-START))s'
+sacct -j \$SLURM_JOB_ID --format=JobID,Elapsed,CPUTime,MaxRSS,AveRSS --units=M
+")
+    echo "  + Approach B: job ${JOB_B}"
+    echo ""
+done
+
+echo "All jobs submitted. Monitor with: squeue -u \$USER"
+echo "Results will appear in: ${OUTPUT_DIR}/"

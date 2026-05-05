@@ -256,6 +256,9 @@ def main(args):
     # df_benchmark['pred'] = np.log(df_benchmark['UAAG']) - np.log(df_benchmark['wt_UAAG'])
     # remove the rows with NaN in df_benchmark
     df_benchmark = df_benchmark.dropna()
+    if len(df_benchmark) == 0:
+        print('No matching benchmark entries — skipping (assay not in this UAA benchmark)')
+        return
     spearmanr_pred = spearmanr(df_benchmark['pred'], df_benchmark['value'])
     # spearmanr(df_benchmark['wt_UAAG'], df_benchmark['value'])
     spearmanr(df_benchmark['UAAG'], df_benchmark['value'])
