@@ -82,6 +82,8 @@ def _build_datasets(hparams):
             latent_root_20=hparams.latent_root_20 or "",
             pdb_fraction=hparams.pdb_fraction,
             max_pdb_files=hparams.pdb_max_files,
+            pdb_subset_file=hparams.pdb_subset_file,
+            pdb_subset_seed=hparams.pdb_subset_seed,
             **common_kw,
         )
         print(f"[dataset] PDB:      {len(ds):>8,} residues  weight={hparams.pdb_weight}")
@@ -322,7 +324,16 @@ if __name__ == "__main__":
     parser.add_argument("--pdb-fraction", type=float, default=1.0,
                         help="Fraction of PDB flat index to use (0<f<1 for subsets; default 1.0 = all)")
     parser.add_argument("--pdb-max-files", type=int, default=0,
-                        help="Limit PDB index to first N files (0 = all; uses separate cache file)")
+                        help="Limit PDB index to first N files (0 = all; uses separate cache file). "
+                             "When combined with --pdb-subset-file, the first run draws N files randomly "
+                             "using --pdb-subset-seed and persists the list; subsequent runs load it verbatim.")
+    parser.add_argument("--pdb-subset-file", type=str, default=None,
+                        help="Path to a text file listing PDB basenames (one per line) to use as a fixed "
+                             "subset. If the file exists, it is read as the authoritative list. If it does "
+                             "not exist and --pdb-max-files > 0, a seeded random subset is drawn and written.")
+    parser.add_argument("--pdb-subset-seed", type=int, default=42,
+                        help="RNG seed used to draw the initial PDB subset (only relevant when "
+                             "--pdb-subset-file does not yet exist).")
 
     # ---- Data info ----
     parser.add_argument("--data_info_path", type=str,

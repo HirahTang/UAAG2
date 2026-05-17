@@ -32,6 +32,29 @@ from scipy.stats import spearmanr
 # Hardcoded baselines (from prior notebooks / Rosetta README)
 # ---------------------------------------------------------------------------
 
+PEPINVENT_PROTEINGYM_VALUES = {
+    "A0A247D711_LISMN": -0.11,
+    "ARGR_ECOLI":        0.00,
+    "CCDB_ECOLI":        0.03,
+    "DN7A_SACS2":        0.16,
+    "ENVZ_ECOLI":       -0.09,
+    "FKBP3_HUMAN":       0.09,
+    "HCP_LAMBD":         0.09,
+    "IF1_ECOLI":        -0.06,
+    "ILF3_HUMAN":        0.02,
+    "OTU7A_HUMAN":       0.03,
+    "PKN1_HUMAN":       -0.48,
+    "RS15_GEOSE":        0.26,
+    "SBI_STAAM":         0.07,
+    "SCIN_STAAR":       -0.03,
+    "SOX30_HUMAN":       0.22,
+    "SQSTM_MOUSE":       0.07,
+    "SUMO1_HUMAN":       0.02,
+    "TAT_HV1BR":         0.14,
+    "VG08_BPP22":        0.18,
+    "VRPI_BPT7":        -0.09,
+}
+
 SAPROT_VALUES = {
     "SBI_STAAM":         0.62,
     "VRPI_BPT7":         0.662,
@@ -68,33 +91,48 @@ BARPLOT_BASELINES = {
     ("CP2",  "NCFlow(AEV-PLIG)"):  (-0.08,    0),
     ("PUMA", "NCFlow(AEV-PLIG)"):  ( 0.19,    0),
     ("CP2",  "NCFlow(ATM)"):       ( 0.15,    0),
-    # Rosetta A (ref2015)
+    # Rosetta A (ref2015) — NaN-dropped (259/468 CP2, 813/1326 PUMA missing)
     ("CP2",  "Rosetta A"):         ( 0.277,   0),
     ("PUMA", "Rosetta A"):         ( 0.184,   0),
+    # Rosetta A (imputed) — NaN filled with 0 (neutral ΔΔG)
+    ("CP2",  "Rosetta A (imp.)"):  ( 0.244,   0),
+    ("PUMA", "Rosetta A (imp.)"):  ( 0.159,   0),
     # Rosetta B (ref2015_cart + AM1-BCC)
     ("CP2",  "Rosetta B"):         ( 0.283,   0),
     ("PUMA", "Rosetta B"):         ( 0.313,   0),
-    # Rosetta C (OpenMM + GAFF2)
-    ("CP2",  "Rosetta C"):         ( 0.114,   0),
-    ("PUMA", "Rosetta C"):         ( 0.211,   0),
+    # Rosetta C (OpenMM + GAFF2) — updated from finished Approach C run
+    ("CP2",  "Rosetta C"):         ( 0.0482,  0),
+    ("PUMA", "Rosetta C"):         ( 0.0762,  0),
 }
 
 BARPLOT_NCAA_BASELINES = {
-    ("CP2",  "PepINVENT"):  ( 0.0984,  0),
-    ("PUMA", "PepINVENT"):  ( 0.1644,  0),
-    ("CP2",  "Rosetta A"):  ( 0.382,   0),
-    ("PUMA", "Rosetta A"):  ( 0.064,   0),
-    ("CP2",  "Rosetta C"):  ( 0.114,   0),
-    ("PUMA", "Rosetta C"):  ( 0.211,   0),
+    ("CP2",  "PepINVENT"):         ( 0.0984,  0),
+    ("PUMA", "PepINVENT"):         ( 0.1644,  0),
+    # Rosetta A — NaN-dropped
+    ("CP2",  "Rosetta A"):         ( 0.382,   0),
+    ("PUMA", "Rosetta A"):         ( 0.064,   0),
+    # Rosetta A (imputed) — NaN filled with 0
+    ("CP2",  "Rosetta A (imp.)"):  ( 0.156,   0),
+    ("PUMA", "Rosetta A (imp.)"):  ( 0.046,   0),
+    # Rosetta C (OpenMM + GAFF2) — updated from finished Approach C run
+    ("CP2",  "Rosetta C"):         ( 0.0688,  0),
+    ("PUMA", "Rosetta C"):         ( 0.1664,  0),
 }
 
 BARPLOT_NAA_BASELINES = {
-    ("CP2",  "PepINVENT"):  (-0.0339,  0),   # PepINVENT NAA same as total for CP2 (not separated)
-    ("PUMA", "PepINVENT"):  ( 0.1554,  0),
-    ("CP2",  "Rosetta A"):  ( 0.298,   0),
-    ("PUMA", "Rosetta A"):  ( 0.189,   0),
-    ("CP2",  "Rosetta B"):  ( 0.283,   0),
-    ("PUMA", "Rosetta B"):  ( 0.313,   0),
+    ("CP2",  "PepINVENT"):         (-0.0339,  0),
+    ("PUMA", "PepINVENT"):         ( 0.1554,  0),
+    # Rosetta A — NaN-dropped
+    ("CP2",  "Rosetta A"):         ( 0.298,   0),
+    ("PUMA", "Rosetta A"):         ( 0.189,   0),
+    # Rosetta A (imputed) — NaN filled with 0
+    ("CP2",  "Rosetta A (imp.)"):  ( 0.342,   0),
+    ("PUMA", "Rosetta A (imp.)"):  ( 0.266,   0),
+    ("CP2",  "Rosetta B"):         ( 0.283,   0),
+    ("PUMA", "Rosetta B"):         ( 0.313,   0),
+    # Rosetta C (OpenMM + GAFF2) — updated from finished Approach C run
+    ("CP2",  "Rosetta C"):         (-0.1558,  0),
+    ("PUMA", "Rosetta C"):         (-0.0041,  0),
 }
 
 
@@ -218,7 +256,6 @@ def load_proteingym_results(results_dir: str):
         if os.path.isfile(per_iter_csv):
             df_iter = pd.read_csv(per_iter_csv)
             # rows: iter=0..4, mean, std
-            num_iters = df_iter[df_iter['iter'].astype(str).str.match(r'^\d+$')]
             mean_row = df_iter[df_iter['iter'].astype(str) == 'mean']
             std_row  = df_iter[df_iter['iter'].astype(str) == 'std']
             if not mean_row.empty and not std_row.empty:
@@ -226,6 +263,16 @@ def load_proteingym_results(results_dir: str):
                     'benchmark':      bench_name,
                     'mean_spearman':  float(mean_row['spearmanr'].values[0]),
                     'std_spearman':   float(std_row['spearmanr'].values[0]),
+                })
+        elif os.path.isfile(results_csv):
+            # Fallback: single-iter results.csv — extract UNAAGI row, std=0
+            df_res = pd.read_csv(results_csv)
+            unaagi_row = df_res[df_res['model'] == 'UNAAGI']
+            if not unaagi_row.empty:
+                iter_rows.append({
+                    'benchmark':     bench_name,
+                    'mean_spearman': float(unaagi_row['spearmanr_pred'].values[0]),
+                    'std_spearman':  0.0,
                 })
 
         # Baselines
@@ -268,7 +315,12 @@ BASELINE_COLORS = {
 }
 
 
-def plot_proteingym(summary_df, baseline_df, output_path):
+def plot_proteingym(summary_df, baseline_df, output_path, extra_models=None):
+    """Plot ProteinGym dot plot.
+
+    extra_models: list of (summary_df, label, color, marker) for additional
+                  UNAAGI-style models to overlay alongside the primary one.
+    """
     plt.rcParams.update({
         "font.size": 16, "font.weight": "bold",
         "axes.labelweight": "bold", "axes.titlesize": 15, "axes.titleweight": "bold",
@@ -296,14 +348,38 @@ def plot_proteingym(summary_df, baseline_df, output_path):
                edgecolor='black', linewidth=0.6,
                label='SaProt(650M)', zorder=1)
 
-    # UNAAGI mean ± std (gold stars)
+    # PepINVENT — hardcoded (20/25 assays); prominent circles
+    pepinvent_y = [PEPINVENT_PROTEINGYM_VALUES.get(b, np.nan) for b in benchmarks]
+    ax.scatter(x_pos, pepinvent_y, s=120, alpha=1.0,
+               marker='o',
+               color=BASELINE_COLORS['PepINVENT'],
+               edgecolor='black', linewidth=1.5,
+               label='PepINVENT', zorder=2)
+
+    # UNAAGI (primary — ctmc) mean ± std (gold stars)
     ax.errorbar(x_pos, summary_df['mean_spearman'],
                 yerr=summary_df['std_spearman'],
                 fmt='*', markersize=16,
                 color='#FFD700',
                 ecolor='black', elinewidth=2, capsize=5, capthick=2,
                 alpha=1.0, markeredgecolor='black', markeredgewidth=1.5,
-                label='UNAAGI', zorder=3)
+                label='UNAAGI (ctmc)', zorder=3)
+
+    # Extra models (e.g. SWIFT) — aligned to same x-axis order
+    if extra_models:
+        for extra_df, label, color, marker in extra_models:
+            extra_indexed = extra_df.set_index('benchmark')
+            y_vals  = [extra_indexed.loc[b, 'mean_spearman'] if b in extra_indexed.index else np.nan
+                       for b in benchmarks]
+            y_errs  = [extra_indexed.loc[b, 'std_spearman']  if b in extra_indexed.index else np.nan
+                       for b in benchmarks]
+            ax.errorbar(x_pos, y_vals,
+                        yerr=y_errs,
+                        fmt=marker, markersize=14,
+                        color=color,
+                        ecolor='black', elinewidth=2, capsize=5, capthick=2,
+                        alpha=1.0, markeredgecolor='black', markeredgewidth=1.5,
+                        label=label, zorder=4)
 
     ax.set_xticks(x_pos)
     ax.set_xticklabels(benchmarks, rotation=75, ha='right')
@@ -330,6 +406,7 @@ MODEL_COLORS = {
     "NCFlow(AEV-PLIG)":"#2A9D8F",
     "NCFlow(ATM)":     "#F4A261",
     "Rosetta A":       "#6A4C93",
+    "Rosetta A (imp.)": "#B39DDB",
     "Rosetta B":       "#1982C4",
     "Rosetta C":       "#8AC926",
 }
@@ -414,8 +491,8 @@ def _bar_chart(df, title, output_path):
 def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # --- ProteinGym data ---
-    print("[1/4] Loading ProteinGym results ...")
+    # --- ProteinGym data (primary: ctmc) ---
+    print("[1/4] Loading ProteinGym results (ctmc) ...")
     summary_df, baseline_df = load_proteingym_results(args.results_dir)
     print(f"      {len(summary_df)} benchmarks, {len(baseline_df['benchmark_name'].unique())} with baselines")
     print(summary_df[['benchmark', 'mean_spearman', 'std_spearman']].to_string(index=False))
@@ -430,11 +507,32 @@ def main(args):
         args.puma_iter_dirs, args.puma_benchmark, args.total_num, "PUMA"
     )
 
+    # --- Extra models for ProteinGym overlay ---
+    EXTRA_COLORS  = ["#00B4D8", "#FF6B35", "#6A0572", "#2DC653", "#FF99C8"]
+    EXTRA_MARKERS = ["D", "s", "^", "P", "X"]
+    extra_models = []
+    extra_dirs   = args.extra_results_dirs or []
+    extra_labels = args.extra_labels or []
+    # Pad labels if fewer than dirs
+    while len(extra_labels) < len(extra_dirs):
+        extra_labels.append(os.path.basename(extra_dirs[len(extra_labels)]))
+    for i, (extra_dir, extra_label) in enumerate(zip(extra_dirs, extra_labels)):
+        color  = EXTRA_COLORS[i % len(EXTRA_COLORS)]
+        marker = EXTRA_MARKERS[i % len(EXTRA_MARKERS)]
+        if os.path.isdir(extra_dir):
+            print(f"[extra] Loading {extra_label} from {extra_dir} ...")
+            extra_summary, _ = load_proteingym_results(extra_dir)
+            print(extra_summary[['benchmark', 'mean_spearman', 'std_spearman']].to_string(index=False))
+            extra_models.append((extra_summary, extra_label, color, marker))
+        else:
+            print(f"[WARN] extra results dir not found: {extra_dir}")
+
     # --- Figure 1: ProteinGym dot plot ---
     print("[4/4] Generating plots ...")
     plot_proteingym(
         summary_df, baseline_df,
         os.path.join(args.output_dir, "proteingym_comparison.svg"),
+        extra_models=extra_models or None,
     )
 
     # --- Figures 2-4: Bar charts ---
@@ -524,6 +622,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output-dir", default="./figures",
         help="Directory to save SVG figures",
+    )
+    parser.add_argument(
+        "--extra-results-dirs", nargs="+", default=None,
+        help="One or more additional results dirs to overlay on the ProteinGym plot",
+    )
+    parser.add_argument(
+        "--extra-labels", nargs="+", default=None,
+        help="Legend labels for each extra model (matched by position to --extra-results-dirs)",
     )
 
     args = parser.parse_args()

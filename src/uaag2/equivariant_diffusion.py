@@ -231,7 +231,7 @@ class Trainer(pl.LightningModule):
         # print("Defined Trainer")
         # from IPython import embed; embed()
     def training_step(self, batch, batch_idx):
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()  # removed: forces CUDA sync barrier every step
         try:
             loss = self.step_fnc(batch=batch, batch_idx=batch_idx, stage="train")
         except RuntimeError as e:
@@ -240,7 +240,7 @@ class Trainer(pl.LightningModule):
         return loss
     
     def validation_step(self, batch, batch_idx):
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()  # removed: forces CUDA sync barrier every step
         return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="val")
     def on_test_epoch_end(self):
         pass

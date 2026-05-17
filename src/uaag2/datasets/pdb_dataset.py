@@ -31,6 +31,7 @@ import gc
 import json
 import os
 import pickle
+import random
 import sys
 import tempfile
 import warnings
@@ -703,11 +704,22 @@ def _post_process_graph(
     Identical logic to the former UAAG2DatasetPDB._post_process; extracted
     so that PDBBindDataset can reuse it without inheriting the full class.
     """
+    # Centre positions on pocket mean — before dropout so the origin is always
+    # the true pocket centroid regardless of whether dropout fires.
+    if graph_data.is_ligand.sum() < len(graph_data.is_ligand):
+        pocket_mean = graph_data.pos[graph_data.is_ligand == 0].mean(dim=0)
+    else:
+        pocket_mean = graph_data.pos.mean(dim=0)
+    graph_data.pos = graph_data.pos - pocket_mean
+
+    CoM = graph_data.pos[graph_data.is_ligand == 1].mean(dim=0)
+
     # --- Pocket dropout ---
-    # With probability pocket_dropout_prob, remove all pocket atoms (is_ligand==0),
-    # keeping only the centre residue atoms (is_ligand==1, including backbone N/CA/C/O).
+    # With probability pocket_dropout_prob, remove all pocket atoms (is_ligand==0).
+    # Positions are already centred on the pocket mean above, so the ligand
+    # retains its correct position relative to the pocket even after dropout.
     if pocket_dropout_prob > 0.0 and torch.rand(1).item() < pocket_dropout_prob:
-        keep = (graph_data.is_ligand > 0.5) | (graph_data.is_backbone > 0.5)
+        keep = graph_data.is_ligand > 0.5
         if not keep.all():
             n_orig = graph_data.x.size(0)
             new_id = torch.full((n_orig,), -1, dtype=torch.long)
@@ -731,15 +743,6 @@ def _post_process_graph(
             lat = getattr(graph_data, "protein_mpnn_latent_node_128", None)
             if lat is not None and isinstance(lat, torch.Tensor) and lat.size(0) == n_orig:
                 graph_data.protein_mpnn_latent_node_128 = lat[keep]
-
-    # Centre positions on pocket mean
-    if graph_data.is_ligand.sum() < len(graph_data.is_ligand):
-        pocket_mean = graph_data.pos[graph_data.is_ligand == 0].mean(dim=0)
-    else:
-        pocket_mean = graph_data.pos.mean(dim=0)
-    graph_data.pos = graph_data.pos - pocket_mean
-
-    CoM = graph_data.pos[graph_data.is_ligand == 1].mean(dim=0)
 
     # Cast
     graph_data.x             = graph_data.x.float()
@@ -767,15 +770,10 @@ def _post_process_graph(
 
     # Backbone masking
     reconstruct_mask = graph_data.is_ligand - graph_data.is_backbone
-    new_bb = torch.bernoulli(
-        torch.ones(reconstruct_mask.eq(1).sum()) * mask_rate
-    ).float()
-    graph_data.is_backbone[reconstruct_mask == 1] = new_bb
+    # mask_rate DEPRECATED: full side-chain always reconstructed.
 
     # Optional pocket noise
-    if pocket_noise:
-        noise = torch.randn_like(graph_data.pos[reconstruct_mask == 1]) * noise_scale
-        graph_data.pos[reconstruct_mask == 1] += noise
+    # pocket_noise DEPRECATED: position noise disabled.
 
     # Virtual nodes
     if params is not None and params.virtual_node:
@@ -909,6 +907,8 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
         max_retries: int = 100,
         pdb_fraction: float = 1.0,
         max_pdb_files: int = 0,
+        pdb_subset_file: Optional[str] = None,
+        pdb_subset_seed: int = 42,
     ):
         super().__init__()
         self.pdb_dir       = pdb_dir
@@ -920,6 +920,8 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
         self.pocket_dropout_prob = pocket_dropout_prob
         self.params        = params
         self.max_retries   = max_retries
+        self.pdb_subset_file = pdb_subset_file
+        self.pdb_subset_seed = pdb_subset_seed
 
         # Resize the module-level LRU cache if requested
         if parse_cache_size != _PARSE_CACHE_SIZE:
@@ -935,13 +937,21 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
             if latent_root_20 else None
         )
 
-        # Build or load flat index
+        # Build or load flat index.  Cache path differs per subset so different
+        # subsets never share a stale cache.
         _base_cache = index_cache_path or os.path.join(pdb_dir, ".uaag2_index_cache.pkl")
-        if max_pdb_files > 0:
+        if pdb_subset_file:
+            cache_path = pdb_subset_file + ".index_cache.pkl"
+        elif max_pdb_files > 0:
             cache_path = _base_cache.replace(".pkl", f"_top{max_pdb_files}.pkl")
         else:
             cache_path = _base_cache
-        self._flat_index: List[Tuple[str, int]] = self._build_or_load_index(cache_path, max_pdb_files=max_pdb_files)
+        self._flat_index: List[Tuple[str, int]] = self._build_or_load_index(
+            cache_path,
+            max_pdb_files=max_pdb_files,
+            subset_file=pdb_subset_file,
+            subset_seed=pdb_subset_seed,
+        )
         if 0.0 < pdb_fraction < 1.0:
             n = max(1, int(len(self._flat_index) * pdb_fraction))
             self._flat_index = self._flat_index[:n]
@@ -952,7 +962,13 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
     # ------------------------------------------------------------------
     # Index
     # ------------------------------------------------------------------
-    def _build_or_load_index(self, cache_path: str, max_pdb_files: int = 0) -> List[Tuple[str, int]]:
+    def _build_or_load_index(
+        self,
+        cache_path: str,
+        max_pdb_files: int = 0,
+        subset_file: Optional[str] = None,
+        subset_seed: int = 42,
+    ) -> List[Tuple[str, int]]:
         if os.path.isfile(cache_path):
             try:
                 with open(cache_path, "rb") as fh:
@@ -962,13 +978,42 @@ class UAAG2DatasetPDB(torch.utils.data.Dataset):
             except Exception as exc:
                 print(f"[UAAG2DatasetPDB] Could not load index cache ({exc}), rebuilding …")
 
-        pdb_files = sorted(
-            os.path.join(self.pdb_dir, f)
-            for f in os.listdir(self.pdb_dir)
-            if f.lower().endswith(".pdb")
-        )
-        if max_pdb_files > 0:
-            pdb_files = pdb_files[:max_pdb_files]
+        # Determine which PDB files to index
+        if subset_file and os.path.isfile(subset_file):
+            with open(subset_file) as fh:
+                basenames = [ln.strip() for ln in fh if ln.strip() and not ln.lstrip().startswith("#")]
+            pdb_files = sorted(os.path.join(self.pdb_dir, b) for b in basenames)
+            print(f"[UAAG2DatasetPDB] Loaded fixed subset ({len(pdb_files):,} PDBs) from {subset_file}")
+        else:
+            all_basenames = sorted(
+                f for f in os.listdir(self.pdb_dir) if f.lower().endswith(".pdb")
+            )
+            if subset_file and max_pdb_files > 0:
+                # First-time seeded random draw — persist list so all future
+                # runs (continue training, viz, etc.) see the identical subset.
+                if max_pdb_files > len(all_basenames):
+                    raise ValueError(
+                        f"--pdb-max-files {max_pdb_files} exceeds available PDBs "
+                        f"({len(all_basenames)}) in {self.pdb_dir}"
+                    )
+                rng = random.Random(subset_seed)
+                chosen = sorted(rng.sample(all_basenames, max_pdb_files))
+                os.makedirs(os.path.dirname(os.path.abspath(subset_file)), exist_ok=True)
+                with open(subset_file, "w") as fh:
+                    fh.write(
+                        f"# UAAG2 fixed PDB subset\n"
+                        f"# pdb_dir: {self.pdb_dir}\n"
+                        f"# size:    {max_pdb_files}\n"
+                        f"# seed:    {subset_seed}\n"
+                    )
+                    for b in chosen:
+                        fh.write(b + "\n")
+                pdb_files = [os.path.join(self.pdb_dir, b) for b in chosen]
+                print(f"[UAAG2DatasetPDB] Wrote seeded random subset → {subset_file}")
+            elif max_pdb_files > 0:
+                pdb_files = [os.path.join(self.pdb_dir, b) for b in all_basenames[:max_pdb_files]]
+            else:
+                pdb_files = [os.path.join(self.pdb_dir, b) for b in all_basenames]
         print(f"[UAAG2DatasetPDB] Building flat index over {len(pdb_files):,} PDB files …")
         flat: List[Tuple[str, int]] = []
         for pdb_path in tqdm(pdb_files, desc="Indexing PDBs"):

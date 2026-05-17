@@ -174,7 +174,7 @@ def main(cfg: DictConfig):
         devices=cfg.gpus if cfg.gpus else 1,
         strategy=strategy,
         plugins=LightningEnvironment(),
-        num_nodes=1,
+        num_nodes=cfg.num_nodes if hasattr(cfg, "num_nodes") else 1,
         logger=pl_logger,
         enable_checkpointing=True,
         accumulate_grad_batches=cfg.accum_batch,

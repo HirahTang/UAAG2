@@ -59,29 +59,41 @@ SAPROT_VALUES = {
     "ERBB2_HUMAN":      0.525,
 }
 
-# All mutations — Rosetta A/B removed, Rosetta C → OpenMM + GAFF2
+# All mutations
 BARPLOT_BASELINES = {
     ("CP2",  "PepINVENT"):          (-0.0339, 0),
     ("PUMA", "PepINVENT"):          ( 0.1554, 0),
     ("CP2",  "NCFlow(AEV-PLIG)"):   (-0.08,   0),
     ("PUMA", "NCFlow(AEV-PLIG)"):   ( 0.19,   0),
     ("CP2",  "NCFlow(ATM)"):        ( 0.15,   0),
+    ("CP2",  "Rosetta A"):          ( 0.277,  0),
+    ("PUMA", "Rosetta A"):          ( 0.184,  0),
+    ("CP2",  "Rosetta B"):          ( 0.283,  0),
+    ("PUMA", "Rosetta B"):          ( 0.313,  0),
     ("CP2",  "OpenMM + GAFF2"):     ( 0.114,  0),
     ("PUMA", "OpenMM + GAFF2"):     ( 0.211,  0),
 }
 
-# NCAA mutations — Rosetta A removed, Rosetta C → OpenMM + GAFF2
+# NCAA mutations
 BARPLOT_NCAA_BASELINES = {
     ("CP2",  "PepINVENT"):          ( 0.0984, 0),
     ("PUMA", "PepINVENT"):          ( 0.1644, 0),
+    ("CP2",  "Rosetta A"):          ( 0.382,  0),
+    ("PUMA", "Rosetta A"):          ( 0.064,  0),
     ("CP2",  "OpenMM + GAFF2"):     ( 0.114,  0),
     ("PUMA", "OpenMM + GAFF2"):     ( 0.211,  0),
 }
 
-# NAA mutations — Rosetta A/B removed (no Rosetta C in NAA)
+# NAA mutations
 BARPLOT_NAA_BASELINES = {
-    ("CP2",  "PepINVENT"):  (-0.0339, 0),
-    ("PUMA", "PepINVENT"):  ( 0.1554, 0),
+    ("CP2",  "PepINVENT"):          (-0.0339, 0),
+    ("PUMA", "PepINVENT"):          ( 0.1554, 0),
+    ("CP2",  "Rosetta A"):          ( 0.298,  0),
+    ("PUMA", "Rosetta A"):          ( 0.189,  0),
+    ("CP2",  "Rosetta B"):          ( 0.283,  0),
+    ("PUMA", "Rosetta B"):          ( 0.313,  0),
+    ("CP2",  "OpenMM + GAFF2"):     (-0.1495, 0),
+    ("PUMA", "OpenMM + GAFF2"):     (-0.0264, 0),
 }
 
 
@@ -225,7 +237,7 @@ BASELINE_COLORS = {
 }
 
 
-def plot_proteingym(ctmc_df, baseline_df, output_path):
+def plot_proteingym(ctmc_df, baseline_df, output_path, vanilla_df=None):
     benchmarks = ctmc_df.sort_values('mean_spearman', ascending=False)['benchmark'].tolist()
     x_pos = np.arange(len(benchmarks))
 
@@ -249,6 +261,19 @@ def plot_proteingym(ctmc_df, baseline_df, output_path):
                color=BASELINE_COLORS['SaProt(650M)'],
                edgecolor='black', linewidth=0.6, label='SaProt(650M)', zorder=1)
 
+    # vanilla model (circle markers, salmon color)
+    if vanilla_df is not None and not vanilla_df.empty:
+        van_map = vanilla_df.set_index('benchmark')
+        van_y    = [float(van_map.loc[b, 'mean_spearman']) if b in van_map.index else np.nan for b in benchmarks]
+        van_err  = [float(van_map.loc[b, 'std_spearman'])  if b in van_map.index else 0.0    for b in benchmarks]
+        ax.errorbar(x_pos, van_y, yerr=van_err,
+                    fmt='o', markersize=14,
+                    color='#FF8C69',
+                    ecolor='black', elinewidth=1.5, capsize=4, capthick=1.5,
+                    alpha=0.85, markeredgecolor='black', markeredgewidth=1.2,
+                    label='UNAAGI (vanilla)', zorder=2)
+
+    # p0203 ctmc model (gold star markers)
     ctmc_map = ctmc_df.set_index('benchmark')
     y_vals = [float(ctmc_map.loc[b, 'mean_spearman']) if b in ctmc_map.index else np.nan for b in benchmarks]
     y_err  = [float(ctmc_map.loc[b, 'std_spearman'])  if b in ctmc_map.index else 0.0    for b in benchmarks]
@@ -281,18 +306,23 @@ def plot_proteingym(ctmc_df, baseline_df, output_path):
 BENCHMARKS = ["CP2", "PUMA"]
 
 MODEL_COLORS = {
-    "UNAAGI":           "#E63946",
-    "PepINVENT":        "#457B9D",
-    "NCFlow(AEV-PLIG)": "#2A9D8F",
-    "NCFlow(ATM)":      "#F4A261",
-    "OpenMM + GAFF2":   "#8AC926",
+    "UNAAGI":             "#E63946",
+    "UNAAGI (vanilla)":   "#FF8C69",
+    "PepINVENT":          "#457B9D",
+    "NCFlow(AEV-PLIG)":   "#2A9D8F",
+    "NCFlow(ATM)":        "#F4A261",
+    "Rosetta A":          "#6A4C93",
+    "Rosetta B":          "#1982C4",
+    "OpenMM + GAFF2":     "#8AC926",
 }
 
 
-def _build_barplot_data(ctmc_cp2, ctmc_puma, baselines_dict):
+def _build_barplot_data(ctmc_cp2, ctmc_puma, vanilla_cp2, vanilla_puma, baselines_dict):
     rows = [
-        {"benchmark": "CP2",  "model": "UNAAGI", "spearmanr": ctmc_cp2[0],  "std": ctmc_cp2[1]},
-        {"benchmark": "PUMA", "model": "UNAAGI", "spearmanr": ctmc_puma[0], "std": ctmc_puma[1]},
+        {"benchmark": "CP2",  "model": "UNAAGI",           "spearmanr": ctmc_cp2[0],    "std": ctmc_cp2[1]},
+        {"benchmark": "PUMA", "model": "UNAAGI",           "spearmanr": ctmc_puma[0],   "std": ctmc_puma[1]},
+        {"benchmark": "CP2",  "model": "UNAAGI (vanilla)", "spearmanr": vanilla_cp2[0], "std": vanilla_cp2[1]},
+        {"benchmark": "PUMA", "model": "UNAAGI (vanilla)", "spearmanr": vanilla_puma[0],"std": vanilla_puma[1]},
     ]
     for (bm, model), (spr, std) in baselines_dict.items():
         rows.append({"benchmark": bm, "model": model, "spearmanr": spr, "std": std})
@@ -360,20 +390,29 @@ def _bar_chart(df, title, output_path):
 def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
-    print("[1/4] Loading ctmc ProteinGym results ...")
+    print("[1/4] Loading ProteinGym results ...")
     ctmc_summary, baseline_df = load_results(args.ctmc_results_dir)
-    print(f"      {len(ctmc_summary)} benchmarks")
+    print(f"      p0203 ctmc: {len(ctmc_summary)} benchmarks")
+    vanilla_summary = None
+    if args.vanilla_results_dir:
+        vanilla_summary, _ = load_results(args.vanilla_results_dir)
+        print(f"      vanilla ctmc: {len(vanilla_summary)} benchmarks")
 
     print("[2/4] Scoring CP2/PUMA ...")
-    print("  -- ctmc CP2 --")
-    ctmc_cp2  = compute_uaa_per_iter(args.ctmc_cp2_dirs,  args.cp2_benchmark,  args.total_num, "ctmc-CP2")
-    print("  -- ctmc PUMA --")
-    ctmc_puma = compute_uaa_per_iter(args.ctmc_puma_dirs, args.puma_benchmark, args.total_num, "ctmc-PUMA")
+    print("  -- p0203 ctmc CP2 --")
+    ctmc_cp2   = compute_uaa_per_iter(args.ctmc_cp2_dirs,    args.cp2_benchmark,  args.total_num, "ctmc-CP2")
+    print("  -- p0203 ctmc PUMA --")
+    ctmc_puma  = compute_uaa_per_iter(args.ctmc_puma_dirs,   args.puma_benchmark, args.total_num, "ctmc-PUMA")
+    print("  -- vanilla ctmc CP2 --")
+    van_cp2    = compute_uaa_per_iter(args.vanilla_cp2_dirs,  args.cp2_benchmark,  args.total_num, "vanilla-CP2")
+    print("  -- vanilla ctmc PUMA --")
+    van_puma   = compute_uaa_per_iter(args.vanilla_puma_dirs, args.puma_benchmark, args.total_num, "vanilla-PUMA")
 
     print("[3/4] Generating ProteinGym dot plot ...")
     plot_proteingym(
         ctmc_summary, baseline_df,
         os.path.join(args.output_dir, "proteingym_comparison.svg"),
+        vanilla_df=vanilla_summary,
     )
 
     print("[4/4] Generating bar charts ...")
@@ -382,7 +421,11 @@ def main(args):
         ("ncaa", "Protein Fitness Prediction — NCAA Mutations Only", BARPLOT_NCAA_BASELINES, "barplot_ncaa_mutations.svg"),
         ("naa",  "Protein Fitness Prediction — NAA Mutations Only",  BARPLOT_NAA_BASELINES,  "barplot_naa_mutations.svg"),
     ]:
-        df_bar = _build_barplot_data(ctmc_cp2[subset_key], ctmc_puma[subset_key], baselines_dict)
+        df_bar = _build_barplot_data(
+            ctmc_cp2[subset_key], ctmc_puma[subset_key],
+            van_cp2[subset_key],  van_puma[subset_key],
+            baselines_dict,
+        )
         _bar_chart(df_bar, title, os.path.join(args.output_dir, fname))
 
     print(f"\nAll figures saved to: {args.output_dir}")
@@ -402,25 +445,35 @@ def _expand(paths):
 
 
 if __name__ == "__main__":
-    CTMC_BASE = "/scratch/project_465002574/ProteinGymSampling/runp0203_ctmc"
-    BENCH_DIR = "/scratch/project_465002574/UNAAGI_benchmark_values/uaa_benchmark_csv"
+    CTMC_BASE    = "/scratch/project_465002574/ProteinGymSampling/runp0203_ctmc"
+    VANILLA_BASE = "/scratch/project_465002574/ProteinGymSampling/runctmc_1k_5iter"
+    BENCH_DIR    = "/scratch/project_465002574/UNAAGI_benchmark_values/uaa_benchmark_csv"
 
     parser = argparse.ArgumentParser(description=__doc__)
+    # p0203 ctmc (prior model)
     parser.add_argument("--ctmc-results-dir",
         default="/scratch/project_465002574/UNAAGI_result/results/p0203_ctmc")
+    parser.add_argument("--vanilla-results-dir",
+        default="/scratch/project_465002574/UNAAGI_result/results/ctmc_1k_5iter")
     parser.add_argument("--ctmc-cp2-dirs", nargs="+",
         default=[f"{CTMC_BASE}/CP2_p0203_ctmc_1000_iter{i}" for i in range(5)])
     parser.add_argument("--ctmc-puma-dirs", nargs="+",
         default=[f"{CTMC_BASE}/PUMA_p0203_ctmc_1000_iter{i}" for i in range(5)])
-    parser.add_argument("--cp2-benchmark",
-        default=f"{BENCH_DIR}/CP2_reframe.csv")
-    parser.add_argument("--puma-benchmark",
-        default=f"{BENCH_DIR}/PUMA_reframe.csv")
+    # vanilla ctmc model
+    parser.add_argument("--vanilla-cp2-dirs", nargs="+",
+        default=[f"{VANILLA_BASE}/CP2_ctmc_1k_5iter_1000_iter{i}" for i in range(5)])
+    parser.add_argument("--vanilla-puma-dirs", nargs="+",
+        default=[f"{VANILLA_BASE}/PUMA_ctmc_1k_5iter_1000_iter{i}" for i in range(5)])
+    # benchmarks
+    parser.add_argument("--cp2-benchmark",  default=f"{BENCH_DIR}/CP2_reframe.csv")
+    parser.add_argument("--puma-benchmark", default=f"{BENCH_DIR}/PUMA_reframe.csv")
     parser.add_argument("--total-num", type=int, default=1000)
     parser.add_argument("--output-dir",
         default="/scratch/project_465002574/UNAAGI_result/figures/clean_plots")
 
     args = parser.parse_args()
-    args.ctmc_cp2_dirs  = _expand(args.ctmc_cp2_dirs)
-    args.ctmc_puma_dirs = _expand(args.ctmc_puma_dirs)
+    args.ctmc_cp2_dirs    = _expand(args.ctmc_cp2_dirs)
+    args.ctmc_puma_dirs   = _expand(args.ctmc_puma_dirs)
+    args.vanilla_cp2_dirs = _expand(args.vanilla_cp2_dirs)
+    args.vanilla_puma_dirs= _expand(args.vanilla_puma_dirs)
     main(args)
