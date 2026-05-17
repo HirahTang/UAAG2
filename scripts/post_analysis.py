@@ -1,5 +1,6 @@
 from random import sample
 import pandas as pd
+import numpy as np
 from rdkit import Chem
 import os
 import sys
@@ -12,51 +13,62 @@ from tqdm import tqdm
 
 
 def get_aa_chirality(mol):
-    """Classify the chirality at the amino-acid Cα.
+    """Classify the chirality at the amino-acid Cα using 3D geometry.
 
     Returns one of:
-      'L'        — L-amino acid (CIP S at Cα; R for Cys/Sec where S/Se on Cβ
-                   inverts the CIP priority ordering)
-      'D'        — D-amino acid (CIP R at Cα; S for Cys/Sec)
+      'L'        — L-amino acid
+      'D'        — D-amino acid
       'achiral'  — no Cα stereocenter (e.g. glycine)
-      'unknown'  — Cα not found or stereochemistry undetermined
+      'unknown'  — Cα not found, no 3D conformer, or geometry degenerate
+
+    Implementation: locates Cα as the carbon bonded to (a) an amine N AND
+    (b) a carbonyl carbon (C=O), then computes the signed volume of the
+    vectors (N − Cα), (C(=O) − Cα), (Cβ − Cα). A positive signed volume
+    corresponds to L; negative to D. Calibrated against RDKit-embedded
+    L/D conformers of Ala, Ser, Phe (heavy-atom-only). Independent of CIP
+    priorities, so Cys/Sec don't need special handling.
+
+    Note: this works on mol files that store only heavy atoms (no H), as is
+    the case for UAAG2-generated ligand.mol files. RDKit's CIP-based stereo
+    perception fails on such files because Cα has only 3 heavy neighbors.
     """
-    if mol is None:
+    if mol is None or mol.GetNumConformers() == 0:
         return 'unknown'
-    try:
-        Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
-    except Exception:
-        return 'unknown'
-    # Cα = sp3 carbon bonded to an amine N AND to a carbonyl C(=O)
-    patt = Chem.MolFromSmarts('[C;X4]([N;!$(N=*)])[C](=O)')
-    matches = mol.GetSubstructMatches(patt) if patt is not None else []
-    if not matches:
-        return 'unknown'
-    ca_idx = matches[0][0]
-    ca = mol.GetAtomWithIdx(ca_idx)
-    if not ca.HasProp('_CIPCode'):
-        return 'achiral'
-    cip = ca.GetProp('_CIPCode')
-    # Cys / Sec convention: S or Se on Cβ inverts the CIP priority order
-    # relative to the rest of the canonical amino acids.
-    chalcogen_on_beta = False
-    for nb in ca.GetNeighbors():
-        if nb.GetSymbol() != 'C':
+    ca = n_a = co_a = r_a = None
+    for atom in mol.GetAtoms():
+        if atom.GetSymbol() != 'C':
             continue
-        # Skip the carbonyl carbon
-        if any(b.GetBondType() == Chem.BondType.DOUBLE and
-               b.GetOtherAtom(nb).GetSymbol() == 'O'
-               for b in nb.GetBonds()):
-            continue
-        for nb2 in nb.GetNeighbors():
-            if nb2.GetIdx() != ca_idx and nb2.GetSymbol() in ('S', 'Se'):
-                chalcogen_on_beta = True
-                break
-        if chalcogen_on_beta:
+        nbrs = list(atom.GetNeighbors())
+        n_nb = next((x for x in nbrs if x.GetSymbol() == 'N'), None)
+        co_nb = next((x for x in nbrs
+                      if x.GetSymbol() == 'C'
+                      and any(b.GetBondType() == Chem.BondType.DOUBLE
+                              and b.GetOtherAtom(x).GetSymbol() == 'O'
+                              for b in x.GetBonds())),
+                     None)
+        if n_nb and co_nb:
+            others = [x for x in nbrs
+                      if x.GetIdx() not in (n_nb.GetIdx(), co_nb.GetIdx())
+                      and x.GetSymbol() != 'H']
+            ca, n_a, co_a = atom, n_nb, co_nb
+            r_a = others[0] if others else None
             break
-    if chalcogen_on_beta:
-        return 'L' if cip == 'R' else 'D'
-    return 'L' if cip == 'S' else 'D'
+    if ca is None:
+        return 'unknown'
+    if r_a is None:
+        return 'achiral'
+    conf = mol.GetConformer()
+    def _pos(idx):
+        p = conf.GetAtomPosition(idx)
+        return np.array([p.x, p.y, p.z])
+    p_ca = _pos(ca.GetIdx())
+    v_n  = _pos(n_a.GetIdx())  - p_ca
+    v_co = _pos(co_a.GetIdx()) - p_ca
+    v_r  = _pos(r_a.GetIdx())  - p_ca
+    vol = float(np.dot(v_n, np.cross(v_co, v_r)))
+    if abs(vol) < 1e-4:
+        return 'unknown'
+    return 'L' if vol > 0 else 'D'
 
 
 parser = argparse.ArgumentParser()
