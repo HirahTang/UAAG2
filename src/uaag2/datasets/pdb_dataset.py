@@ -280,6 +280,7 @@ def _extract_atom_bond_features(mol, structure) -> Tuple[Dict, Dict]:
             "Hybridization": str(rdkit_atom.GetHybridization()),
             "Degree": rdkit_atom.GetDegree(),
             "Aromatic": rdkit_atom.GetIsAromatic(),
+            "IsInRing": rdkit_atom.IsInRing(),
             "Residue": cur_res,
             "Res_name": rname,
             "Chain": cid,
@@ -431,6 +432,7 @@ def _build_graph(
     atom_types   = torch.zeros(num_atoms, dtype=torch.long)
     charges      = torch.zeros(num_atoms, dtype=torch.float)
     is_aromatic  = torch.zeros(num_atoms, dtype=torch.float)
+    is_in_ring   = torch.zeros(num_atoms, dtype=torch.float)
     hybridization = torch.zeros(num_atoms, dtype=torch.long)
     degree       = torch.zeros(num_atoms, dtype=torch.long)
     position     = torch.zeros(num_atoms, 3, dtype=torch.float)
@@ -445,6 +447,7 @@ def _build_graph(
         atom_types[nid]    = ATOM_ENCODER[a["Atoms"]]
         charges[nid]       = float(a["Charges"])
         is_aromatic[nid]   = float(a["Aromatic"])
+        is_in_ring[nid]    = float(a["IsInRing"])
         hybridization[nid] = HYBRIDIZATION_ENCODER[a["Hybridization"]]
         degree[nid]        = int(a["Degree"])
         position[nid]      = torch.tensor(a["coords"], dtype=torch.float)
@@ -459,6 +462,7 @@ def _build_graph(
         atom_types[nid]    = ATOM_ENCODER[a["Atoms"]]
         charges[nid]       = float(a["Charges"])
         is_aromatic[nid]   = float(a["Aromatic"])
+        is_in_ring[nid]    = float(a["IsInRing"])
         hybridization[nid] = HYBRIDIZATION_ENCODER[a["Hybridization"]]
         degree[nid]        = int(a["Degree"])
         position[nid]      = torch.tensor(a["coords"], dtype=torch.float)
@@ -540,6 +544,7 @@ def _build_graph(
         charges=charges,
         degree=degree,
         is_aromatic=is_aromatic,
+        is_in_ring=is_in_ring,
         hybridization=hybridization,
         is_ligand=is_ligand,
         is_backbone=is_backbone,
@@ -722,7 +727,7 @@ def _post_process_graph(
                 if t is not None and isinstance(t, torch.Tensor):
                     setattr(graph_data, attr, t[edge_keep])
             # Filter node features
-            for attr in ("x", "pos", "charges", "degree", "is_aromatic",
+            for attr in ("x", "pos", "charges", "degree", "is_aromatic", "is_in_ring",
                          "hybridization", "is_backbone", "is_ligand"):
                 t = getattr(graph_data, attr, None)
                 if t is not None and isinstance(t, torch.Tensor) and t.size(0) == n_orig:
@@ -748,6 +753,7 @@ def _post_process_graph(
     graph_data.edge_index     = graph_data.edge_index.long()
     graph_data.degree         = graph_data.degree.float()
     graph_data.is_aromatic    = graph_data.is_aromatic.float()
+    graph_data.is_in_ring     = graph_data.is_in_ring.float()
     graph_data.hybridization  = graph_data.hybridization.float()
     graph_data.is_backbone    = graph_data.is_backbone.float()
     graph_data.is_ligand      = graph_data.is_ligand.float()
@@ -787,6 +793,7 @@ def _post_process_graph(
         graph_data.charges      = torch.cat([graph_data.charges,      torch.ones(sample_n)])
         graph_data.degree       = torch.cat([graph_data.degree,       torch.zeros(sample_n)])
         graph_data.is_aromatic  = torch.cat([graph_data.is_aromatic,  torch.zeros(sample_n)])
+        graph_data.is_in_ring   = torch.cat([graph_data.is_in_ring,   torch.zeros(sample_n)])
         graph_data.hybridization= torch.cat([graph_data.hybridization,torch.zeros(sample_n)])
         graph_data.is_backbone  = torch.cat([graph_data.is_backbone,  torch.zeros(sample_n)])
         graph_data.is_ligand    = torch.cat([graph_data.is_ligand,    torch.ones(sample_n)])
@@ -820,6 +827,7 @@ def _post_process_graph(
     # Final dtype pass (matches UAAG2Dataset exactly)
     graph_data.degree        = graph_data.degree.float()
     graph_data.is_aromatic   = graph_data.is_aromatic.float()
+    graph_data.is_in_ring    = graph_data.is_in_ring.float()
     graph_data.hybridization = graph_data.hybridization.float()
     graph_data.is_backbone   = graph_data.is_backbone.float()
     graph_data.is_ligand     = graph_data.is_ligand.float()
@@ -837,6 +845,7 @@ def _post_process_graph(
         charges=graph_data.charges,
         degree=graph_data.degree,
         is_aromatic=graph_data.is_aromatic,
+        is_in_ring=graph_data.is_in_ring,
         hybridization=graph_data.hybridization,
         is_backbone=graph_data.is_backbone,
         is_ligand=graph_data.is_ligand,

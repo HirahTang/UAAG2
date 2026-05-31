@@ -54,6 +54,7 @@ def _convert_item(item: Data, source_name: str) -> Data:
         charges=item.charges,                              # int64, raw formal charges
         degree=item.degree,                                # int64
         is_aromatic=is_aromatic,                           # int64
+        is_in_ring=item.is_in_ring.long() if item.is_in_ring.dtype == __import__("torch").bool else item.is_in_ring,  # int64
         hybridization=item.hybridization,                  # int64
         is_backbone=is_backbone,                           # int64/float
         is_ligand=is_ligand,                               # float32, all 1s

@@ -161,6 +161,7 @@ def _build_pdbbind_graph(
             "Hybridization": str(atom.GetHybridization()),
             "Degree":       atom.GetDegree(),
             "Aromatic":     atom.GetIsAromatic(),
+            "IsInRing":     atom.IsInRing(),
         })
 
     lig_bonds: dict = {}
@@ -199,6 +200,7 @@ def _build_pdbbind_graph(
     atom_types    = torch.zeros(num_atoms, dtype=torch.long)
     charges       = torch.zeros(num_atoms, dtype=torch.float)
     is_aromatic   = torch.zeros(num_atoms, dtype=torch.float)
+    is_in_ring    = torch.zeros(num_atoms, dtype=torch.float)
     hybridization = torch.zeros(num_atoms, dtype=torch.long)
     degree        = torch.zeros(num_atoms, dtype=torch.long)
     position      = torch.zeros(num_atoms, 3, dtype=torch.float)
@@ -209,6 +211,7 @@ def _build_pdbbind_graph(
         atom_types[k]    = ATOM_ENCODER[a["Atoms"]]
         charges[k]       = float(a["Charges"])
         is_aromatic[k]   = float(a["Aromatic"])
+        is_in_ring[k]    = float(a["IsInRing"])
         hybridization[k] = HYBRIDIZATION_ENCODER[a["Hybridization"]]
         degree[k]        = int(a["Degree"])
         position[k]      = torch.tensor(a["coords"], dtype=torch.float)
@@ -219,6 +222,7 @@ def _build_pdbbind_graph(
         atom_types[nid]    = ATOM_ENCODER[a["Atoms"]]
         charges[nid]       = float(a["Charges"])
         is_aromatic[nid]   = float(a["Aromatic"])
+        is_in_ring[nid]    = float(a["IsInRing"])
         hybridization[nid] = HYBRIDIZATION_ENCODER[a["Hybridization"]]
         degree[nid]        = int(a["Degree"])
         position[nid]      = torch.tensor(a["coords"], dtype=torch.float)
@@ -291,6 +295,7 @@ def _build_pdbbind_graph(
         charges=charges,
         degree=degree,
         is_aromatic=is_aromatic,
+        is_in_ring=is_in_ring,
         hybridization=hybridization,
         is_ligand=is_ligand,
         is_backbone=is_backbone,
