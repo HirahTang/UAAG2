@@ -14,6 +14,7 @@
 module load LUMI
 module load CrayEnv
 export PATH="/flash/project_465002574/unaagi_env/bin:$PATH"
+export PYTHONPATH="/flash/project_465002574/UAAG2_main/src:${PYTHONPATH:-}"
 
 export WORK_DIR=/flash/project_465002574/UAAG2_main
 cd ${WORK_DIR}
