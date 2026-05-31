@@ -560,6 +560,7 @@ class Statistics:
         bond_angles,
         dihedrals=None,
         is_aromatic=None,
+        is_in_ring=None,
         hybridization=None,
         degree=None,
         force_norms=None,
@@ -574,6 +575,7 @@ class Statistics:
         self.bond_angles = bond_angles
         self.dihedrals = dihedrals
         self.is_aromatic = is_aromatic
+        self.is_in_ring = is_in_ring
         self.hybridization = hybridization
         self.degree = degree
         self.force_norms = force_norms

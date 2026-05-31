@@ -221,6 +221,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         
         graph_data.degree = graph_data.degree.float()
         graph_data.is_aromatic = graph_data.is_aromatic.float()
+        graph_data.is_in_ring = graph_data.is_in_ring.float()
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
@@ -273,6 +274,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             virtual_charges = torch.ones(sample_n)
             virtual_degree = torch.ones(sample_n) * 0
             virtual_is_aromatic = torch.ones(sample_n) * 0
+            virtual_is_in_ring = torch.ones(sample_n) * 0
             virtual_hybridization = torch.ones(sample_n) * 0
             
             # append virtual_x to graph_data.x
@@ -281,6 +283,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             graph_data.charges = torch.cat([graph_data.charges, virtual_charges])
             graph_data.degree = torch.cat([graph_data.degree, virtual_degree])
             graph_data.is_aromatic = torch.cat([graph_data.is_aromatic, virtual_is_aromatic])
+            graph_data.is_in_ring = torch.cat([graph_data.is_in_ring, virtual_is_in_ring])
             graph_data.hybridization = torch.cat([graph_data.hybridization, virtual_hybridization])
             graph_data.is_backbone = torch.cat([graph_data.is_backbone, torch.zeros(sample_n)])
             graph_data.is_ligand = torch.cat([graph_data.is_ligand, torch.ones(sample_n)])
@@ -322,6 +325,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             
         graph_data.degree = graph_data.degree.float()
         graph_data.is_aromatic = graph_data.is_aromatic.float()
+        graph_data.is_in_ring = graph_data.is_in_ring.float()
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
@@ -340,6 +344,7 @@ class UAAG2Dataset(torch.utils.data.Dataset):
             charges=graph_data.charges,
             degree=graph_data.degree,
             is_aromatic=graph_data.is_aromatic,
+            is_in_ring=graph_data.is_in_ring,
             hybridization=graph_data.hybridization,
             is_backbone=graph_data.is_backbone,
             is_ligand=graph_data.is_ligand,
@@ -439,6 +444,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         
         graph_data.degree = graph_data.degree.float()
         graph_data.is_aromatic = graph_data.is_aromatic.float()
+        graph_data.is_in_ring = graph_data.is_in_ring.float()
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
@@ -462,6 +468,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             charges=charges,
             degree=graph_data.degree,
             is_aromatic=graph_data.is_aromatic,
+            is_in_ring=graph_data.is_in_ring,
             hybridization=graph_data.hybridization,
             is_backbone=graph_data.is_backbone,
             is_ligand=graph_data.is_ligand,
@@ -487,6 +494,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         charges = self.data.charges[reconstruct_mask==0]
         degree = self.data.degree[reconstruct_mask==0]
         is_aromatic = self.data.is_aromatic[reconstruct_mask==0]
+        is_in_ring = self.data.is_in_ring[reconstruct_mask==0]
         hybridization = self.data.hybridization[reconstruct_mask==0]
         is_ligand = self.data.is_ligand[reconstruct_mask==0]
         is_backbone = self.data.is_backbone[reconstruct_mask==0]
@@ -523,6 +531,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         charges_new = torch.cat([charges, torch.multinomial(self.dataset_info.charge_types, sample_size, replacement=True)])
         degree_new = torch.cat([degree, torch.multinomial(self.dataset_info.degree, sample_size, replacement=True)])
         is_aromatic_new = torch.cat([is_aromatic, torch.multinomial(self.dataset_info.is_aromatic, sample_size, replacement=True)])
+        is_in_ring_new = torch.cat([is_in_ring, torch.multinomial(self.dataset_info.is_ring, sample_size, replacement=True)])
         hybridization_new = torch.cat([hybridization, torch.multinomial(self.dataset_info.hybridization, sample_size, replacement=True)])
         is_ligand_new = torch.cat([is_ligand, torch.ones(sample_size)])
         is_backbone_new = torch.cat([is_backbone, torch.zeros(sample_size)])
@@ -598,6 +607,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
             charges=charges_new,
             degree=degree_new,
             is_aromatic=is_aromatic_new,
+            is_in_ring=is_in_ring_new,
             hybridization=hybridization_new,
             is_backbone=is_backbone_new,
             is_ligand=is_ligand_new,
@@ -696,6 +706,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         
         graph_data.degree = graph_data.degree.float()
         graph_data.is_aromatic = graph_data.is_aromatic.float()
+        graph_data.is_in_ring = graph_data.is_in_ring.float()
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
         graph_data.is_ligand = graph_data.is_ligand.float()
@@ -719,6 +730,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
             charges=charges,
             degree=graph_data.degree,
             is_aromatic=graph_data.is_aromatic,
+            is_in_ring=graph_data.is_in_ring,
             hybridization=graph_data.hybridization,
             is_backbone=graph_data.is_backbone,
             is_ligand=graph_data.is_ligand,
@@ -748,6 +760,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         charges = self.data.charges[reconstruct_mask==0]
         degree = self.data.degree[reconstruct_mask==0]
         is_aromatic = self.data.is_aromatic[reconstruct_mask==0]
+        is_in_ring = self.data.is_in_ring[reconstruct_mask==0]
         hybridization = self.data.hybridization[reconstruct_mask==0]
         is_ligand = self.data.is_ligand[reconstruct_mask==0]
         is_backbone = self.data.is_backbone[reconstruct_mask==0]
@@ -773,6 +786,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
         charges_new = torch.cat([charges, torch.multinomial(self.dataset_info.charge_types, sample_size, replacement=True)])
         degree_new = torch.cat([degree, torch.multinomial(self.dataset_info.degree, sample_size, replacement=True)])
         is_aromatic_new = torch.cat([is_aromatic, torch.multinomial(self.dataset_info.is_aromatic, sample_size, replacement=True)])
+        is_in_ring_new = torch.cat([is_in_ring, torch.multinomial(self.dataset_info.is_ring, sample_size, replacement=True)])
         hybridization_new = torch.cat([hybridization, torch.multinomial(self.dataset_info.hybridization, sample_size, replacement=True)])
         is_ligand_new = torch.cat([is_ligand, torch.ones(sample_size)])
         is_backbone_new = torch.cat([is_backbone, torch.zeros(sample_size)])
@@ -818,6 +832,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
             charges=charges_new,
             degree=degree_new,
             is_aromatic=is_aromatic_new,
+            is_in_ring=is_in_ring_new,
             hybridization=hybridization_new,
             is_backbone=is_backbone_new,
             is_ligand=is_ligand_new,
