@@ -1,0 +1,22 @@
+# UNAAGI evaluation manifest — single source of truth for "what can be evaluated".
+# One row per evaluatable checkpoint. run_eval.sh reads this file.
+#
+# Columns (TAB-separated):
+#   name      short id used for MODEL_TAG and result dirs
+#   ckpt      absolute path to the .ckpt on LUMI (/flash ...)
+#   arch      ring    -> needs ring_membership code (is_in_ring is a diffused variable)
+#             prering -> needs pre-ring code (atom_mapping 256x24, 240 params)
+#   code_ref  git ref the checkpoint's architecture matches.
+#             "ring_membership" -> use the live /flash/.../UAAG2_main checkout
+#             a commit hash      -> run_eval.sh provisions a worktree pinned to it
+#   notes     human description
+#
+# WHY arch/code_ref matters: equivariant_diffusion.py on ring_membership ALWAYS adds
+# num_is_in_ring to the model input + prediction head. A pre-ring checkpoint loaded on
+# ring code (or vice-versa) dies with a state_dict size mismatch. The manifest encodes
+# the right code per checkpoint so no agent has to rediscover this.
+#
+name	ckpt	arch	code_ref	notes
+v0.3ring_base	/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFlagship_v0.3_ring_weighted_8gpu_20260531/last.ckpt	ring	ring_membership	v0.3 ring-weighted base; 10x PDBBind/NCAA weights + is_in_ring channel
+v0.3ring_cont	/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFlagship_v0.3_ring_weighted_8gpu_20260531_cont/last.ckpt	ring	ring_membership	v0.3 ring-weighted continuation (ep19 / step 25000)
+v0.3weighted_end	/flash/project_465002574/UAAG2_main/3DcoordsAtomsBonds_0/runFlagship_v0.3_weighted_8gpu_20260601/last.ckpt	prering	d7d0165	v0.3 weighted-only end (ep13); 10x weights, NO ring -> pre-ring arch
