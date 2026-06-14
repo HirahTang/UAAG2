@@ -1,0 +1,12 @@
+# Hendrix evaluation manifest (CUDA). Counterpart of models.tsv (LUMI).
+# Columns (TAB-separated): name  ckpt  arch  srcdir  notes
+#   arch   ring | prering   (which architecture the checkpoint matches)
+#   srcdir absolute path to the code checkout for that arch on Hendrix:
+#            ring    -> /home/qcx679/hantang/UAAG2_ring   (ring_membership worktree)
+#            prering -> /home/qcx679/hantang/UAAG2        (main @ d7d0165, pre-ring)
+# Checkpoints staged from LUMI at /datasets/biochem/unaagi/ckpts_v0.3/.
+#
+name	ckpt	arch	srcdir	notes
+v0.3ring_base	/datasets/biochem/unaagi/ckpts_v0.3/v0.3ring_base_last.ckpt	ring	/home/qcx679/hantang/UAAG2_ring	v0.3 ring-weighted base; 10x weights + is_in_ring
+v0.3ring_cont	/datasets/biochem/unaagi/ckpts_v0.3/v0.3ring_cont_last.ckpt	ring	/home/qcx679/hantang/UAAG2_ring	v0.3 ring-weighted continuation (ep19/step25000)
+v0.3weighted_end	/datasets/biochem/unaagi/ckpts_v0.3/v0.3weighted_end_last.ckpt	prering	/home/qcx679/hantang/UAAG2	v0.3 weighted-only end (ep13); 10x weights, NO ring

@@ -12,12 +12,32 @@ not need to reverse-engineer the pipeline from the SLURM scripts.
 ## TL;DR — one button
 
 ```bash
-# on LUMI, from the repo root (/flash/project_465002574/UAAG2_main)
-eval/run_eval.sh v0.3ring_cont        # one model
-eval/run_eval.sh all                  # every model in the manifest
+# LUMI — from /flash/project_465002574/UAAG2_main
+eval/run_eval.sh v0.3ring_cont        # one model   (manifest: eval/models.tsv)
+eval/run_eval.sh all
+
+# Hendrix — from /home/qcx679/hantang/UAAG2   (CUDA / targetdiff env)
+eval/run_eval_hendrix.sh v0.3ring_base v0.3ring_cont   # manifest: eval/models_hendrix.tsv
+eval/run_eval_hendrix.sh all
 ```
 
 This submits the **sampling** stage. Then run the downstream stages below.
+
+### Cluster cheatsheet
+
+| | LUMI | Hendrix |
+|---|---|---|
+| login | `ssh lumi.csc.fi` (key) | `ssh hendrix1` (gates 1/3/4 work; 2/5 reject) |
+| env | `unaagi_env` container (ROCm) | `conda activate targetdiff` + `export LD_LIBRARY_PATH=$CONDA_PREFIX/lib` (CUDA 11.8) |
+| sbatch | `--account=project_465002574 --partition=standard-g` | `--account=boomsma --partition=gpu --gres=gpu:1 --exclude=hendrixgpu06fl,hendrixgpu09fl,hendrixgpu10fl` |
+| ring code | `UAAG2_main` (ring_membership) | worktree `/home/qcx679/hantang/UAAG2_ring` |
+| pre-ring code | worktree `UAAG2_preRing` @ d7d0165 | `/home/qcx679/hantang/UAAG2` (main @ d7d0165) |
+| ckpts | `/flash/.../3DcoordsAtomsBonds_0/<run>/` | `/datasets/biochem/unaagi/ckpts_v0.3/` |
+| benchmarks | `/scratch/.../UNAAGI_benchmarks/` | `/home/qcx679/hantang/UAAG2/data/full_graph/benchmarks/` |
+| data_info | baked in ckpt hparams | pass `--data_info_path .../data/statistic.pkl` (script does this) |
+| results | `/scratch/.../UNAAGI_result/results/<TAG>/` | `/datasets/biochem/unaagi/results/<TAG>/` |
+
+> **Note (2026-06): LUMI `project_465002574` GPU allocation exhausted (113%)** — GPU sbatch is rejected there until topped up. Fallback project with budget: `project_465002988`. Hendrix is the active compute for now.
 
 ---
 
