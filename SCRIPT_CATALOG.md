@@ -47,8 +47,10 @@ Procedure doc an agent can follow: **`eval/PIPELINE.md`**. Everything in §5–�
 | `eval/models_hendrix.tsv` | CANON | Hendrix (CUDA) counterpart of `models.tsv` |
 | `eval/slurm_sample.sh` | CANON | Parametrized sampling array (CTMC + 20 NFE, 1000 samples × 5 iters) — LUMI |
 | `eval/slurm_sample_hendrix.sh` | CANON | Hendrix port of the sampling array |
+| `eval/run_pipeline_hendrix.sh` | CANON | **Hendrix one button** (CUDA): sample group → afterok finalize+plot |
+| `eval/finalize_and_plot_hendrix.sh` | CANON | Hendrix port of finalize+plot (targetdiff env, `/datasets/...` paths) |
 | `eval/run_eval.sh` | CANON | Sampling-only launcher (no downstream); use `run_pipeline.sh` for the full chain |
-| `eval/run_eval_hendrix.sh` | CANON | Driver for Hendrix |
+| `eval/run_eval_hendrix.sh` | CANON | Hendrix sampling-only launcher |
 
 ---
 

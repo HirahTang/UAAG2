@@ -118,20 +118,36 @@ python scripts/compare_models.py --data-dir scripts/example_data/v03_compare \
 
 ---
 
-## §6 — Hendrix (CUDA) equivalents
+## §6 — Hendrix (CUDA) — full one button
+
+Hendrix has the complete chain too. Same semantics as LUMI, CUDA/targetdiff conventions:
+
+```bash
+# Hendrix, from a checkout on this branch (e.g. /home/qcx679/hantang/UAAG2)
+eval/run_pipeline_hendrix.sh v0.3ring_base v0.3ring_cont v0.3weighted_end
+eval/run_pipeline_hendrix.sh all
+```
+Figures land in `/datasets/biochem/unaagi/results/figures/pipeline_<timestamp>/`.
 
 | | LUMI | Hendrix |
 |---|---|---|
-| repo | `/flash/.../UAAG2_main` (ring) | `/home/qcx679/hantang/UAAG2` |
-| sampling | `eval/run_pipeline.sh` | `eval/run_eval_hendrix.sh` + `eval/slurm_sample_hendrix.sh` |
+| one button | `eval/run_pipeline.sh` | `eval/run_pipeline_hendrix.sh` |
+| finalize+plot | `eval/finalize_and_plot.sh` | `eval/finalize_and_plot_hendrix.sh` |
+| sampling array | `eval/slurm_sample.sh` | `eval/slurm_sample_hendrix.sh` |
 | manifest | `eval/models.tsv` | `eval/models_hendrix.tsv` |
+| repo | `/flash/.../UAAG2_main` (ring) | `/home/qcx679/hantang/UAAG2` |
 | env | `unaagi_env` container | `conda activate targetdiff; export LD_LIBRARY_PATH=$CONDA_PREFIX/lib` |
 | sbatch flags | `--account=project_465002574 --partition=standard-g` | `--account=boomsma --partition=gpu --gres=gpu:1 --exclude=hendrixgpu06fl,hendrixgpu09fl,hendrixgpu10fl` |
+| results root | `/scratch/.../UNAAGI_result/results` | `/datasets/biochem/unaagi/results` |
 
-Stages 3–5 (`finalize_and_plot.sh` logic, `make_modeldata.py`, `compare_models.py`) are
-cluster-agnostic python — run them under `targetdiff` on Hendrix with the paths from
-`models_hendrix.tsv`. (A `finalize_and_plot_hendrix.sh` wrapper can be added when Hendrix
-becomes the primary path; the python it calls is identical.)
+Notes for Hendrix:
+- The branch with these scripts must be checked out on the Hendrix repo first (`git fetch && git checkout`).
+- `run_pipeline_hendrix.sh` passes the repo path to the finalize job via `PIPE_SRC` (inside an
+  sbatch job `$0` is the spool copy, so the job can't self-locate the repo).
+- Set `UAA_CSV` if the CP2/PUMA `*_reframe.csv` are not at the default
+  `/home/qcx679/hantang/UAAG2/data/uaa_benchmark_csv/`.
+- The finalize job requests a GPU only to schedule on the `gpu` partition; the python is
+  CPU-only — point `--partition`/drop `--gres` if a CPU partition is available.
 
 ---
 
