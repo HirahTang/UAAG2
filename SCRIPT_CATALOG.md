@@ -33,16 +33,21 @@ All clusters track `github.com/HirahTang/UAAG2.git`.
 
 ## 1. One-button evaluation — `eval/`  (USE THIS)
 
-The consolidated pipeline. Everything else in §5–§7 predates it.
+The consolidated pipeline: **sampling → post-analysis → aggregate+Spearman → visualize group.**
+Procedure doc an agent can follow: **`eval/PIPELINE.md`**. Everything in §5–§7 predates it.
 
 | Script | Status | Purpose |
 |---|---|---|
-| `eval/RUNBOOK.md` | CANON | How to run the whole sample→aggregate→plot flow |
+| `eval/PIPELINE.md` | CANON | **Follow this** — full one-button procedure, all 5 stages, LUMI+Hendrix |
+| `eval/run_pipeline.sh` | CANON | **THE one button**: sample group → afterok finalize+plot. `run_pipeline.sh <m> [...]｜all` |
+| `eval/finalize_and_plot.sh` | CANON | Stages 3–5: CP2/PUMA per-iter scoring → modeldata → `compare_models.py` |
+| `eval/make_modeldata.py` | CANON | Stage 4 glue: per-assay outputs → `<TAG>_modeldata.csv` (+collate baselines). `--selftest` |
+| `eval/RUNBOOK.md` | CANON | Cluster cheatsheet + arch/code gotcha |
 | `eval/models.tsv` | CANON | LUMI manifest: one row per evaluatable checkpoint (single source of truth) |
 | `eval/models_hendrix.tsv` | CANON | Hendrix (CUDA) counterpart of `models.tsv` |
 | `eval/slurm_sample.sh` | CANON | Parametrized sampling array (CTMC + 20 NFE, 1000 samples × 5 iters) — LUMI |
 | `eval/slurm_sample_hendrix.sh` | CANON | Hendrix port of the sampling array |
-| `eval/run_eval.sh` | CANON | Driver: read manifest → sample → aggregate → plot (LUMI) |
+| `eval/run_eval.sh` | CANON | Sampling-only launcher (no downstream); use `run_pipeline.sh` for the full chain |
 | `eval/run_eval_hendrix.sh` | CANON | Driver for Hendrix |
 
 ---

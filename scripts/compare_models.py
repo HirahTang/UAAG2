@@ -21,11 +21,35 @@ _p=argparse.ArgumentParser()
 _p.add_argument("--data-dir", default=os.path.expanduser("~/pdb_nglyc_dataset"),
                 help="dir holding <model>_modeldata.csv and baselines_pg/")
 _p.add_argument("--output-dir", default=os.path.expanduser("~/unaagi_v03_plots"))
+_p.add_argument("--models", default="",
+                help="comma-separated model tags to plot (must have <tag>_modeldata.csv in --data-dir). "
+                     "Default: the v0.3 reference group if present, else auto-discover all.")
 _A=_p.parse_args()
 DATA=_A.data_dir; OUT=_A.output_dir; os.makedirs(OUT,exist_ok=True)
 
-MODELS=[("p0203_ctmc","p0203_ctmc","#000000"),("v0.3ring_base","v0.3 ring_base","#1f77b4"),
-        ("v0.3ring_cont","v0.3 ring_cont","#ff7f0e"),("v0.3weighted_end","v0.3 weighted_end","#9467bd")]
+# fixed colors so a given model keeps its colour across runs; p0203_ctmc is the black reference.
+_PALETTE=["#1f77b4","#ff7f0e","#9467bd","#2ca02c","#d62728","#8c564b","#e377c2","#17becf"]
+_FIXED={"p0203_ctmc":"#000000"}
+def _label(tag): return tag.replace("v0.3","v0.3 ")
+def _resolve_models():
+    if _A.models.strip():
+        tags=[t.strip() for t in _A.models.split(",") if t.strip()]
+    else:
+        ref=["p0203_ctmc","v0.3ring_base","v0.3ring_cont","v0.3weighted_end"]
+        have=lambda t: os.path.isfile(f"{DATA}/{t}_modeldata.csv")
+        tags=[t for t in ref if have(t)] or sorted(
+            os.path.basename(f)[:-len("_modeldata.csv")]
+            for f in glob.glob(f"{DATA}/*_modeldata.csv"))
+    out=[]; ci=0
+    for t in tags:
+        if t in _FIXED: c=_FIXED[t]
+        else: c=_PALETTE[ci % len(_PALETTE)]; ci+=1
+        out.append((t,_label(t),c))
+    return out
+MODELS=_resolve_models()
+assert MODELS, f"no <tag>_modeldata.csv found in {DATA}"
+# sort key for proteingym uses the first model as reference
+_REF=MODELS[0][0]
 # ---- baseline constants (verbatim from compare_ctmc_vs_ddpm.py) ----
 SAPROT={"SBI_STAAM":0.62,"VRPI_BPT7":0.662,"ARGR_ECOLI":0.604,"HCP_LAMBD":0.768,"FKBP3_HUMAN":0.581,"OTU7A_HUMAN":0.642,"RS15_GEOSE":0.433,"SQSTM_MOUSE":0.682,"PKN1_HUMAN":0.324,"SCIN_STAAR":0.62,"ENV_HV1B9":0.15,"DLG4_RAT":0.504,"SUMO1_HUMAN":0.479,"ILF3_HUMAN":0.319,"DN7A_SACS2":0.556,"VG08_BPP22":0.619,"A0A247D711_LISMN":0.427,"SOX30_HUMAN":0.333,"IF1_ECOLI":0.616,"B2L11_HUMAN":0.242,"CCDB_ECOLI":0.438,"AICDA_HUMAN":0.257,"TAT_HV1BR":0.157,"ENVZ_ECOLI":0.148,"ERBB2_HUMAN":0.525}
 SELECTED=['MSA_Transformer_ensemble','ESM2_15B','Progen2_xlarge','ProtGPT2','Tranception_L','MIFST','ESM-IF1','ProteinMPNN']
@@ -56,7 +80,7 @@ bdf=pd.DataFrame(brows)
 # ---- Plot 1: proteingym ----
 def plot_pg():
     pgs={m:pg(m) for m,_,_ in MODELS}
-    assays=sorted(pgs["p0203_ctmc"], key=lambda b: pgs["p0203_ctmc"][b][0], reverse=True)
+    assays=sorted(pgs[_REF], key=lambda b: pgs[_REF][b][0], reverse=True)
     x=np.arange(len(assays))
     plt.rcParams.update({"font.size":15,"font.weight":"bold","axes.titleweight":"bold"})
     fig,ax=plt.subplots(figsize=(22,10))
