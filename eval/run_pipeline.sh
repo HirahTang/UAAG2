@@ -22,6 +22,21 @@
 # ============================================================================
 set -euo pipefail
 
+# --- optional overrides (smoke tests / budget routing) ---
+#   ACCOUNT          billing project for both stages (default: per-script #SBATCH)
+#   SAMPLE_ACCOUNT   GPU project for sampling   (default: $ACCOUNT)
+#   FINAL_ACCOUNT    CPU project for finalize   (default: $ACCOUNT)
+#   SAMPLE_ARRAY     override sampling array, e.g. "0,125,130" for a smoke test
+#   NUM_SAMPLES      samples per iter (default 1000)
+ACCOUNT=${ACCOUNT:-}
+SAMPLE_ACCOUNT=${SAMPLE_ACCOUNT:-$ACCOUNT}
+FINAL_ACCOUNT=${FINAL_ACCOUNT:-$ACCOUNT}
+SAMPLE_ARRAY=${SAMPLE_ARRAY:-}
+NUM_SAMPLES=${NUM_SAMPLES:-1000}
+samp_extra=(); [[ -n "$SAMPLE_ACCOUNT" ]] && samp_extra+=(--account="$SAMPLE_ACCOUNT")
+[[ -n "$SAMPLE_ARRAY" ]] && samp_extra+=(--array="$SAMPLE_ARRAY")
+fin_extra=(); [[ -n "$FINAL_ACCOUNT" ]] && fin_extra+=(--account="$FINAL_ACCOUNT")
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO=/flash/project_465002574/UAAG2_main
 PRERING_WT=/flash/project_465002574/UAAG2_preRing
@@ -56,8 +71,8 @@ for m in "${MODELS[@]}"; do
     IFS=$'\t' read -r ckpt arch ref <<<"$row"
     [[ -f "$ckpt" ]] || { echo "[skip] $m ckpt missing: $ckpt"; continue; }
     srcdir=$(resolve_srcdir "$arch" "$ref"); RING_SRC=${RING_SRC:-$REPO}
-    jid=$(sbatch --parsable --job-name="samp_${m}" \
-          --export=ALL,CKPT="$ckpt",MODEL_TAG="$m",SRCDIR="$srcdir" "$SAMPLE_SH")
+    jid=$(sbatch --parsable --job-name="samp_${m}" "${samp_extra[@]}" \
+          --export=ALL,CKPT="$ckpt",MODEL_TAG="$m",SRCDIR="$srcdir",NUM_SAMPLES="$NUM_SAMPLES" "$SAMPLE_SH")
     echo "[$m] sampling array job $jid (arch=$arch)"
     echo "$m $jid" >> "$JOBLOG"
     SAMPLE_JIDS+=("$jid")
@@ -66,8 +81,8 @@ done
 [[ ${#SAMPLE_JIDS[@]} -ge 1 ]] || { echo "no models submitted"; exit 1; }
 
 DEP=$(IFS=:; echo "afterok:${SAMPLE_JIDS[*]}")
-FJID=$(sbatch --parsable --job-name="finalize" --dependency="$DEP" \
-       --export=ALL,MODELS="${MODELS[*]}",SRCDIR="$RING_SRC" "$FINAL_SH")
+FJID=$(sbatch --parsable --job-name="finalize" --dependency="$DEP" "${fin_extra[@]}" \
+       --export=ALL,MODELS="${MODELS[*]}",SRCDIR="$RING_SRC",NUM_SAMPLES="$NUM_SAMPLES" "$FINAL_SH")
 echo
 echo "[finalize+plot] job $FJID  (runs after: $DEP)"
 echo "group: ${MODELS[*]}"

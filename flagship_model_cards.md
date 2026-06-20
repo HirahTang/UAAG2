@@ -3,6 +3,8 @@
 This document records the full data processing pipeline, input graph format, and training configuration for the Flagship model generations (v0.0 → v0.3). Intended as a reference for reproducibility and cross-run comparison.
 
 > **Current flagship:** `Flagship_v0.3_ring_weighted_8gpu_20260531_cont` (§11). It restores both features lost in the v0.2 regression — the 10× PDBBind/NCAA sampling weights (Fix A) and the `is_in_ring` node channel.
+>
+> **In progress (2026-06-16):** two continuation runs launched because evaluation showed both arms still gaining from more training — `Flagship_v0.3_ring_weighted_8gpu_cont2_20260616` and `Flagship_v0.3_weighted_8gpu_cont_20260616` (§12).
 
 ---
 
@@ -19,6 +21,7 @@ This document records the full data processing pipeline, input graph format, and
 9. [Model: Flagship_v0.3_weighted_8gpu_20260601 (v0.3 weighted — Fix A)](#9-model-flagship_v03_weighted_8gpu_20260601-v03-weighted--fix-a)
 10. [Model: Flagship_v0.3_ring_weighted_8gpu_20260531 (v0.3 ring-weighted — current flagship)](#10-model-flagship_v03_ring_weighted_8gpu_20260531-v03-ring-weighted--current-flagship)
 11. [Key Differences Summary](#11-key-differences-summary)
+12. [v0.3 continuation runs (2026-06-16)](#12-v03-continuation-runs-2026-06-16)
 
 ---
 
@@ -453,3 +456,31 @@ The **current flagship**. Combines **Fix A** (10× PDBBind/NCAA up-weighting, as
 | **Architecture** | EQGAT, 7L, sdim=256 | Same | Same | Same | Same | Same | Same |
 | **Max virtual nodes** | 11 | 11 | 11 | 11 | 11 | 11 | 11 |
 | **Checkpoint dir** | `runflagship_…0.2/` | `runFlagship_…0.2v0.1/` | `…0.2v0.1_20260419/` | `…0.2v0.11/` | `…{0.2,0.5}v0.2/` | `runFlagship_v0.3_weighted_8gpu_20260601/` | `runFlagship_v0.3_ring_weighted_8gpu_20260531_cont/` |
+
+---
+
+## 12. v0.3 continuation runs (2026-06-16)
+
+Evaluation of the v0.3 arms (CP2/PUMA + ProteinGym, per-iter Spearman) showed both the
+ring-weighted continuation and the weighted-only model were **still improving** and had not
+plateaued, so each was continued from its latest checkpoint for up to 2 more days. New `--id`
+⇒ new `run<id>` folder; the source `last.ckpt` is read-only via `--load-ckpt` and never
+overwritten. Both resume keep the stored LR (0.0005) and `grad-clip 1.0`; 1 node × 8 GCDs
+(within the 12-node LUMI cap), billed to `project_465002988` (GPU budget).
+
+| Field | ring cont2 | weighted cont |
+|---|---|---|
+| New run id | `Flagship_v0.3_ring_weighted_8gpu_cont2_20260616` | `Flagship_v0.3_weighted_8gpu_cont_20260616` |
+| Resumed from | `runFlagship_v0.3_ring_weighted_8gpu_20260531_cont/last.ckpt` (ep19/step25000) | `runFlagship_v0.3_weighted_8gpu_20260601/last.ckpt` (ep13/step17500) |
+| Architecture | **ring** (`is_in_ring` channel) | **pre-ring** (no ring channel) |
+| Code checkout | `UAAG2_main` (ring_membership) | `UAAG2_preRing` worktree (`d7d0165`) |
+| Output tree | `UAAG2_main/3DcoordsAtomsBonds_0/run<id>/` | `UAAG2_preRing/3DcoordsAtomsBonds_0/run<id>/` |
+| Launch script | `run_train_flagship_v0.3_ring_weighted_8gpu_cont2.sh` | `run_train_flagship_v0.3_weighted_8gpu_cont.sh` |
+| SLURM job | 19388478 | 19388479 |
+| Account / nodes | `project_465002988` / 1×8 GCD | `project_465002988` / 1×8 GCD |
+| LR / grad-clip / eff. batch | 0.0005 / 1.0 / 128 (bs4 × accum4 × 8) | 0.0005 / 1.0 / 128 |
+| Data / weights | PDB+PDBBind+NCAA on-the-fly, 1/10/10 | identical |
+
+Note: ring cont2 resumes from `last.ckpt` (epoch 19); checkpoints `epochepoch=020/021.ckpt`
+exist in the source dir and are newer — switch `--load-ckpt` to `epochepoch=021.ckpt` if the
+2 extra epochs should be retained.
