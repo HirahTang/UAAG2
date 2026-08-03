@@ -81,6 +81,9 @@ def _strip_h_from_pdb(pdb_path: str) -> str:
         for line in fh:
             if line.startswith(("ATOM  ", "HETATM")):
                 padded = line.rstrip("\n").ljust(80)
+                resname = padded[17:20].strip().upper()
+                if resname in ("HOH", "WAT", "DOD", "H2O", "TIP", "TIP3", "TIP4", "SOL"):
+                    continue  # drop crystallographic water / solvent
                 elem = padded[76:78].strip().upper()
                 if not elem:
                     # Fall back to atom-name column: first alpha character

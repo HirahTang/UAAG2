@@ -33,6 +33,9 @@ MYMASKS="0x${c}000000000000,0x${c}00000000000000,0x${c}0000,0x${c}000000"
 module load LUMI CrayEnv
 module load lumi-container-wrapper/0.4.2-cray-python-default
 export PATH="/flash/project_465002574/unaagi_env/bin:$PATH"
+# Redirect W&B cache to /scratch (huge quota) so it stops filling the 20G home
+export WANDB_CACHE_DIR=/scratch/project_465002574/.wandb_cache
+export WANDB_DATA_DIR=/scratch/project_465002574/.wandb_cache/data
 
 export HSA_ENABLE_SDMA=0
 export AMD_DIRECT_DISPATCH=0

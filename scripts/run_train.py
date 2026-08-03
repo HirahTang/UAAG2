@@ -28,7 +28,7 @@ from pytorch_lightning.callbacks import (
 )
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.plugins.environments import LightningEnvironment
-from torch.utils.data import ConcatDataset, RandomSampler
+from torch.utils.data import ConcatDataset, RandomSampler, WeightedRandomSampler
 
 sys.path.insert(0, ".")
 sys.path.insert(0, "..")
@@ -106,10 +106,19 @@ def _build_datasets(hparams):
         datasets.append(ds)
         weights_per_item.extend([hparams.ncaa_weight] * len(ds))
 
+    # ---- 5. NCAA_PDB LMDB (PDBBindDataset, same class) — NCAA-in-context ----
+    if hparams.use_ncaa_pdb:
+        if not hparams.ncaa_pdb_lmdb:
+            raise ValueError("--use-ncaa-pdb requires --ncaa-pdb-lmdb")
+        ds = PDBBindDataset(hparams.ncaa_pdb_lmdb, **common_kw)
+        print(f"[dataset] NCAA_PDB: {len(ds):>8,} residues  weight={hparams.ncaa_pdb_weight}")
+        datasets.append(ds)
+        weights_per_item.extend([hparams.ncaa_pdb_weight] * len(ds))
+
     if not datasets:
         raise ValueError(
             "No dataset source enabled. Pass at least one of: "
-            "--use-lmdb, --use-pdb, --use-pdbbind, --use-ncaa"
+            "--use-lmdb, --use-pdb, --use-pdbbind, --use-ncaa, --use-ncaa-pdb"
         )
 
     all_data = ConcatDataset(datasets) if len(datasets) > 1 else datasets[0]
@@ -198,8 +207,27 @@ def main(hparams):
     train_data, val_data, test_data = _split(all_data, hparams)
     print(f"[split] train={len(train_data):,}  val={len(val_data):,}  test={len(test_data):,}")
 
+    # ---- Weighted sampler (only when sources carry non-uniform weights) ----
+    # item_weights is parallel to all_data; align to the post-split train subset.
+    train_w = item_weights[np.asarray(train_data.indices)] if len(item_weights) else np.array([])
+    train_sampler = None
+    if train_w.size and not np.allclose(train_w, train_w[0]):
+        _rank = int(os.environ.get("SLURM_PROCID", 0))
+        _g = torch.Generator().manual_seed(hparams.seed + _rank)
+        train_sampler = WeightedRandomSampler(
+            torch.as_tensor(train_w, dtype=torch.double),
+            num_samples=len(train_w),
+            replacement=True,
+            generator=_g,
+        )
+        print(f"[sampler] WeightedRandomSampler ACTIVE: distinct weights "
+              f"{sorted(set(train_w.tolist()))} over {len(train_w):,} train items "
+              f"(per-rank seed {hparams.seed}+{_rank})")
+    else:
+        print("[sampler] uniform weights -> sampler=None (unchanged default path)")
+
     # ---- DataModule ----
-    datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data, sampler=None)
+    datamodule = UAAG2DataModule(hparams, train_data, val_data, test_data, sampler=train_sampler)
 
     # ---- Model ----
     model = Trainer(hparams=hparams, dataset_info=dataset_info)
@@ -235,6 +263,8 @@ def main(hparams):
         max_epochs=hparams.num_epochs,
         detect_anomaly=hparams.detect_anomaly,
         limit_train_batches=5000,
+        limit_val_batches=50,  # hard cap: bound val time (full-PDB val split was ~15k batches / ~14h)
+        use_distributed_sampler=train_sampler is None,  # False only when a custom WeightedRandomSampler is in use
     )
 
     pl.seed_everything(seed=hparams.seed, workers=hparams.gpus > 1)
@@ -293,6 +323,8 @@ if __name__ == "__main__":
                         help="Train on PDBBind LMDB (PDBBindDataset)")
     parser.add_argument("--use-ncaa",    default=False, action="store_true",
                         help="Train on NCAA LMDB (PDBBindDataset)")
+    parser.add_argument("--use-ncaa-pdb", default=False, action="store_true",
+                        help="Train on NCAA_PDB LMDB — NCAA-in-context graphs (PDBBindDataset)")
 
     # ---- Dataset paths ----
     parser.add_argument("--training-data", type=str, default="",
@@ -303,6 +335,8 @@ if __name__ == "__main__":
                         help="Path to PDBBind.lmdb (--use-pdbbind)")
     parser.add_argument("--ncaa-lmdb", type=str, default="",
                         help="Path to NCAA.lmdb (--use-ncaa)")
+    parser.add_argument("--ncaa-pdb-lmdb", type=str, default="",
+                        help="Path to NCAA_PDB.lmdb (--use-ncaa-pdb)")
 
     # ---- Per-source sampling weights ----
     parser.add_argument("--lmdb-weight",    default=1.0, type=float,
@@ -313,6 +347,8 @@ if __name__ == "__main__":
                         help="Sampling weight for PDBBind source")
     parser.add_argument("--ncaa-weight",    default=1.0, type=float,
                         help="Sampling weight for NCAA source")
+    parser.add_argument("--ncaa-pdb-weight", default=1.0, type=float,
+                        help="Sampling weight for NCAA_PDB source")
 
     # ---- PDB-specific options ----
     parser.add_argument("--latent-root-128", type=str, default="",

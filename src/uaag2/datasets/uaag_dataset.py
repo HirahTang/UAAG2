@@ -41,9 +41,11 @@ class UAAG2Dataset(torch.utils.data.Dataset):
         mask_rate: float = 0,
         pocket_noise: bool = False,
         noise_scale: float = 0.1,
+        pocket_dropout_prob: float = 0.0,  # accepted for API parity; whole-graph has no pocket to drop (unused)
         params=None,
     ):
         super(UAAG2Dataset, self).__init__()
+        self.pocket_dropout_prob = pocket_dropout_prob
         # self.statistics = Statistic()
         self.params = params
         self.pocket_noise = pocket_noise
