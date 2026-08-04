@@ -295,6 +295,20 @@ def main(hparams):
         yaml.safe_dump(vars(hparams), fh)
 
     # ---- Fit ----
+    # Weight-only warm start. Lightning's fit(ckpt_path=...) is a STRICT load and will
+    # reject the prior checkpoint once the context layers exist (missing keys), and its
+    # optimizer state has no entries for the new parameters either.
+    if getattr(hparams, "load_prior_weights", ""):
+        _sd = torch.load(hparams.load_prior_weights, map_location="cpu")["state_dict"]
+        _missing, _unexpected = model.load_state_dict(_sd, strict=False)
+        print(f"[warm-start] {hparams.load_prior_weights}")
+        print(f"[warm-start] missing={len(_missing)} unexpected={len(_unexpected)}")
+        for _k in _missing:
+            print(f"[warm-start]   missing (newly initialised): {_k}")
+        for _k in _unexpected[:10]:
+            print(f"[warm-start]   unexpected (ignored): {_k}")
+        ckpt_path = None   # fresh optimizer + epoch counter
+
     pl_trainer.fit(
         model=model,
         datamodule=datamodule,
@@ -497,6 +511,22 @@ if __name__ == "__main__":
     parser.add_argument("--ema-decay",          default=0.9999, type=float)
     parser.add_argument("--weight-decay",       default=0.9999, type=float)
     parser.add_argument("--seed",               default=42, type=int)
+
+    # ---- Conditional UAAG2: static molecular-topology condition ----
+    parser.add_argument("--context-mapping", default=False, action="store_true",
+                        help="Enable the static topology condition (frozen GROVER latents)")
+    parser.add_argument("--num-context-features", default=0, type=int,
+                        help="Condition width; 3201 for GROVER-base mean||max||n_atoms")
+    parser.add_argument("--cond-table", type=str, default="",
+                        help="Path to grover_base_condition_table.npz")
+    parser.add_argument("--cond-dropout", default=0.5, type=float,
+                        help="Per-graph probability of dropping the condition (CFG branch)")
+    parser.add_argument("--cond-probe-batches", default=20, type=int,
+                        help="Val batches used for the condition-sensitivity probe")
+    parser.add_argument("--load-prior-weights", type=str, default="",
+                        help="Warm-start WEIGHTS ONLY from a ckpt (strict=False); fresh "
+                             "optimizer and epoch counter. Use instead of --load-ckpt when "
+                             "the architecture gained parameters (e.g. the context layers).")
     parser.add_argument("--backprop-local",     default=False, action="store_true")
     parser.add_argument("--max-num-conformers", default=5,  type=int)
     parser.add_argument("--energy-training",    default=False, action="store_true")

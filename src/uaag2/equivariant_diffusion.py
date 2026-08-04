@@ -157,6 +157,28 @@ class Trainer(pl.LightningModule):
                 property_prediction=hparams.property_prediction,
                 coords_param=hparams.continuous_param,
             )
+        # ---- conditional UAAG2: static topology condition ----
+        # Zero-init the context output projection so step 0 is bit-identical to the
+        # unconditional prior. This MUST happen here, after model construction:
+        # DenoisingEdgeNetwork.reset_parameters() re-randomises these layers.
+        self.cond_table = None
+        self._cond_shuffle = False
+        if getattr(hparams, "context_mapping", False):
+            _acm = getattr(self.model, "atom_context_mapping", None)
+            if _acm is not None:
+                torch.nn.init.zeros_(_acm.weight)
+                print("[cond] atom_context_mapping zero-initialised -> step 0 == prior")
+            _tbl = getattr(hparams, "cond_table", "")
+            if _tbl:
+                from uaag2.conditioning import ConditionTable
+                self.cond_table = ConditionTable(_tbl)
+                print(f"[cond] table: {len(self.cond_table):,} molecules, dim={self.cond_table.dim}")
+                _c = int(getattr(hparams, "num_context_features", 0))
+                if _c != self.cond_table.dim:
+                    raise ValueError(
+                        f"--num-context-features {_c} != condition table dim {self.cond_table.dim}"
+                    )
+
         self.sde_pos = DiscreteDDPM(
                 beta_min=hparams.beta_min,
                 beta_max=hparams.beta_max,
@@ -254,7 +276,25 @@ class Trainer(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         torch.cuda.empty_cache()
-        return self.step_fnc(batch=batch, batch_idx=batch_idx, stage="val")
+        out = self.step_fnc(batch=batch, batch_idx=batch_idx, stage="val")
+        # Condition-sensitivity probe: same batch, same seeds, condition rolled by one.
+        # A gap that stays flat means the model is ignoring the condition -- that is an
+        # injection-strength problem, not a train-longer problem.
+        probe_n = int(getattr(self.hparams, "cond_probe_batches", 20))
+        if self.cond_table is not None and batch_idx < probe_n:
+            try:
+                self._cond_shuffle = True
+                shuffled = self.step_fnc(batch=batch, batch_idx=batch_idx, stage="val_condshuf")
+            finally:
+                self._cond_shuffle = False
+            self.log(
+                "val/cond_sensitivity_gap",
+                (shuffled - out).detach(),
+                on_epoch=True,
+                batch_size=int(batch.batch.max()) + 1,
+                sync_dist=self.hparams.gpus > 1,
+            )
+        return out
     def on_test_epoch_end(self):
         pass
     
@@ -487,6 +527,44 @@ class Trainer(pl.LightningModule):
         return final_loss
 
     def _get_context_from_batch(self, batch: Batch):
+        """Static molecular-topology condition, injected only into sidechain nodes.
+
+        The condition describes the WHOLE residue (is_ligand==1, backbone N/CA/C/O
+        included) but is applied only to the nodes actually being denoised
+        (is_ligand - is_backbone). Rows are zero for pocket nodes, backbone nodes,
+        dropped graphs and table misses; because the two context layers are
+        bias-free, a zero row contributes exactly zero to the network.
+        """
+        if not getattr(self.hparams, "context_mapping", False):
+            return None
+
+        C = int(getattr(self.hparams, "num_context_features", 0))
+        zeros = torch.zeros((int(batch.num_nodes), C), device=self.device, dtype=torch.float32)
+        if self.cond_table is None or C == 0:
+            return zeros
+
+        cids = getattr(batch, "compound_id", None)
+        if cids is None:
+            return zeros
+        if isinstance(cids, str):
+            cids = [cids]
+
+        g, _found = self.cond_table.lookup(list(cids))          # (G, C), zeros on miss
+        g = g.to(self.device)
+
+        if self._cond_shuffle and g.size(0) > 1:                # sensitivity probe
+            g = torch.roll(g, shifts=1, dims=0)
+
+        p = float(getattr(self.hparams, "cond_dropout", 0.0))   # CFG / unconditional branch
+        if self.training and p > 0.0:
+            keep = (torch.rand(g.size(0), device=g.device) >= p).float().unsqueeze(-1)
+            g = g * keep
+
+        ctx = g[batch.batch]                                    # graph -> node broadcast
+        sidechain = (batch.is_ligand - batch.is_backbone).clamp(min=0).float().unsqueeze(-1)
+        return ctx * sidechain
+
+    def _legacy_get_context_from_batch(self, batch: Batch):
         if not getattr(self.hparams, "context_mapping", False):
             return None
 

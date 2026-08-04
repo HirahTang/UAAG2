@@ -250,8 +250,12 @@ class DenoisingEdgeNetwork(nn.Module):
         self.context_mapping = context_mapping
         if self.context_mapping:
             context_latent_dim = max(1, hn_dim[0] // 2)
-            self.context_mapping = DenseLayer(num_context_features, context_latent_dim)
-            self.atom_context_mapping = DenseLayer(context_latent_dim, hn_dim[0])
+            # bias=False is load-bearing: a zeroed context row then contributes EXACTLY
+            # zero at all three injection points (input s, gnn layer 1, gnn last layer).
+            # That lets masking + condition-dropout live outside this module, and makes the
+            # unconditional branch bit-identical to the unconditional prior (needed for CFG).
+            self.context_mapping = DenseLayer(num_context_features, context_latent_dim, bias=False)
+            self.atom_context_mapping = DenseLayer(context_latent_dim, hn_dim[0], bias=False)
 
         assert fully_connected or local_global_model
 
