@@ -513,10 +513,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed",               default=42, type=int)
 
     # ---- Conditional UAAG2: static molecular-topology condition ----
-    parser.add_argument("--context-mapping", default=False, action="store_true",
-                        help="Enable the static topology condition (frozen GROVER latents)")
-    parser.add_argument("--num-context-features", default=0, type=int,
-                        help="Condition width; 3201 for GROVER-base mean||max||n_atoms")
+    # --context-mapping / --num-context-features already defined above
     parser.add_argument("--cond-table", type=str, default="",
                         help="Path to grover_base_condition_table.npz")
     parser.add_argument("--cond-dropout", default=0.5, type=float,
