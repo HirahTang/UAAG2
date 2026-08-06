@@ -11,7 +11,7 @@
 # Sampling output:  /scratch/project_465002574/ProteinGymSampling/runp0203_ctmc/
 # Aggregated:       /scratch/project_465002574/UNAAGI_result/results/p0203_ctmc/
 
-#SBATCH --account=project_465002574
+#SBATCH --account=project_465002988
 #SBATCH --partition=standard-g
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
