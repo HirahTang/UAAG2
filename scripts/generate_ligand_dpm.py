@@ -75,6 +75,16 @@ def _build_hparams(args, save_dir_override=None):
     saved["ddpm"] = args.ddpm
     saved["gpus"] = 1  # single-GPU inference
 
+    # Unconditional mode: clear the condition table so _get_context_from_batch
+    # returns zeros. The context layers still exist (and still load from the ckpt),
+    # but being bias-free they contribute exactly zero -- i.e. the unconditional
+    # branch this model was trained on for 50% of its samples.
+    if getattr(args, "no_condition", False):
+        saved["cond_table"] = ""
+        print("[eval] --no-condition: condition table cleared -> unconditional sampling")
+    elif saved.get("cond_table"):
+        print(f"[eval] conditional sampling with table {saved['cond_table']}")
+
     return Namespace(**saved)
 
 
@@ -261,6 +271,8 @@ if __name__ == "__main__":
                         help="Step spacing: 500/25=20 NFE. Use 1 for full 500 steps.")
     parser.add_argument("--dpm-solver-pp", action="store_true",
                         help="Use DPM-Solver++ 2nd-order multistep")
+    parser.add_argument("--no-condition", default=False, action="store_true",
+                        help="Force unconditional sampling from a conditional checkpoint")
     parser.add_argument("--ctmc", action="store_true",
                         help="Use CTMC tau-leaping for categorical variables")
     parser.add_argument("--ddpm", default=True, action="store_true",
