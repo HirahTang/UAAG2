@@ -12,7 +12,7 @@
 # Aggregated:       /scratch/project_465002574/UNAAGI_result/results/p0203_ctmc/
 
 #SBATCH --account=project_465002988
-#SBATCH --partition=standard-g
+#SBATCH --partition=small-g
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gpus-per-node=1
