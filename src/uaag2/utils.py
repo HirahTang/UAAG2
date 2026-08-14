@@ -209,8 +209,12 @@ def is_connected_molecule(atom_list, edge_list):
 
 def check_sanitize_connectivity(mol_file):
     # read the molecule and convert it to a list of atoms and bonds
-    # from IPython import embed; embed()
-    mol = Chem.MolFromMolFile(mol_file)
+    try:
+        mol = Chem.MolFromMolFile(mol_file)
+    except Exception:
+        # RDKit raises OSError on a malformed/empty .mol rather than returning None.
+        # An unreadable sample is invalid, not a reason to abort the whole run.
+        return False, False
     try:
         atoms = [atom.GetIdx() for atom in mol.GetAtoms()]
     except (AttributeError, TypeError):
