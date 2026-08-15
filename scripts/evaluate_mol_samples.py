@@ -115,8 +115,14 @@ def evaluate_with_bust(sdf_file, mol_file=None, max_workers=4):
         }
     
     try:
-        # Initialize PoseBusters
-        buster = PoseBusters(config='mol', max_workers=max_workers)
+        # Initialize PoseBusters. max_workers was added after 0.3.x; Hendrix's
+        # targetdiff env pins 0.3.1 while LUMI has 0.6.3, so only pass what the
+        # installed version accepts rather than failing every molecule.
+        import inspect as _inspect
+        _kw = {'config': 'mol'}
+        if 'max_workers' in _inspect.signature(PoseBusters.__init__).parameters:
+            _kw['max_workers'] = max_workers
+        buster = PoseBusters(**_kw)
         
         # Run evaluation
         results = buster.bust(mol_pred=sdf_file, mol_true=sdf_file, mol_cond=sdf_file)
