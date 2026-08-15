@@ -31,7 +31,8 @@ python ${SRCDIR}/scripts/generate_ligand_dpm.py \
     --ctmc --dpm-solver-pp \
     --batch-size 8 \
     --force-condition "$CODE" \
-    --force-condition-table "$COND_TABLE"
+    --force-condition-table "$COND_TABLE" \
+    ${EXTRA_ARGS:-}
 rc=$?
 rm -rf "$MIOPEN_USER_DB_PATH"
 [[ $rc -ne 0 ]] && { echo "[ERROR] condition ${CODE} failed: $rc" >&2; exit $rc; }
