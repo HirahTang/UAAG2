@@ -22,7 +22,7 @@ echo "[$(date)] rank ${SLURM_PROCID} gcd ${SLURM_LOCALID}: condition ${CODE}"
 
 python ${SRCDIR}/scripts/generate_ligand_dpm.py \
     --load-ckpt   "$CKPT" \
-    --id          "cp2_cond/${CODE}" \
+    --id          "${TAG:-cp2_cond}/${CODE}" \
     --benchmark-path "$BENCH_PT" \
     --save-dir    "$SAMPLE_BASE" \
     --num-samples 100 \

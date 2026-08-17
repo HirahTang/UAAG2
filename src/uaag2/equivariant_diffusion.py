@@ -163,6 +163,22 @@ class Trainer(pl.LightningModule):
         # DenoisingEdgeNetwork.reset_parameters() re-randomises these layers.
         self.cond_table = None
         self._cond_shuffle = False
+        self._cond_seen = 0
+        # Forced condition (evaluation only): pin every graph to one residue latent.
+        self._force_cond_vec = None
+        _fc = str(getattr(hparams, "force_condition", "") or "")
+        _fct = str(getattr(hparams, "force_condition_table", "") or "")
+        if _fc and _fct:
+            import numpy as _np
+            _z = _np.load(_fct, allow_pickle=True)
+            _codes = [str(c) for c in _z["codes"]]
+            if _fc not in _codes:
+                raise ValueError("--force-condition %s not in %s (%d codes)" % (_fc, _fct, len(_codes)))
+            _row = _codes.index(_fc)
+            self._force_cond_vec = torch.from_numpy(
+                _np.asarray(_z["emb"], dtype=_np.float32)[_row]).clone()
+            print("[cond] FORCED condition %s (row %d): %s"
+                  % (_fc, _row, str(_z["smiles"][_row])), flush=True)
         if getattr(hparams, "context_mapping", False):
             _acm = getattr(self.model, "atom_context_mapping", None)
             if _acm is not None:
@@ -540,16 +556,35 @@ class Trainer(pl.LightningModule):
 
         C = int(getattr(self.hparams, "num_context_features", 0))
         zeros = torch.zeros((int(batch.num_nodes), C), device=self.device, dtype=torch.float32)
+
+        if self._force_cond_vec is not None:
+            n_graphs = int(batch.batch.max()) + 1
+            g = self._force_cond_vec.to(self.device).unsqueeze(0).expand(n_graphs, -1)
+            ctx = g[batch.batch]
+            sc = (batch.is_ligand - batch.is_backbone).clamp(min=0).float().unsqueeze(-1)
+            return ctx * sc
+
         if self.cond_table is None or C == 0:
             return zeros
 
         cids = getattr(batch, "compound_id", None)
         if cids is None:
+            # _post_process_graph stores the compound id under `id`, not `compound_id`.
+            cids = getattr(batch, "id", None)
+        if cids is None or torch.is_tensor(cids):
             return zeros
         if isinstance(cids, str):
             cids = [cids]
 
         g, _found = self.cond_table.lookup(list(cids))          # (G, C), zeros on miss
+
+        # Loud on the first few batches: an all-miss here means the condition is inert
+        # and the run is silently unconditional. Cheap insurance against a wasted job.
+        if self._cond_seen < 3:
+            self._cond_seen += 1
+            print(f"[cond] batch {self._cond_seen}: table hit-rate "
+                  f"{float(_found.float().mean()):.1%} over {len(cids)} graphs "
+                  f"(e.g. {list(cids)[:2]})", flush=True)
         g = g.to(self.device)
 
         if self._cond_shuffle and g.size(0) > 1:                # sensitivity probe
@@ -1181,20 +1216,34 @@ class Trainer(pl.LightningModule):
             temb = t / self.hparams.timesteps
             temb = temb.unsqueeze(dim=1)
             
-            out = self.model(
-                x=atoms_feats_in_perturbed,
-                t=temb,
-                pos=compound_pos,
-                edge_index_local=None,
-                edge_index_global=edge_index_global,
-                edge_attr_global=edge_attr_full,
-                batch=batch.batch,
-                batch_edge_global=batch.edge_ligand.long(),
-                context=context,
-                pocket_mask=pocket_mask.unsqueeze(1),
-                edge_mask=batch.edge_ligand.long(),
-                batch_lig=batch.batch[pocket_mask==0],
-            )
+            def _denoise(_ctx):
+                return self.model(
+                    x=atoms_feats_in_perturbed,
+                    t=temb,
+                    pos=compound_pos,
+                    edge_index_local=None,
+                    edge_index_global=edge_index_global,
+                    edge_attr_global=edge_attr_full,
+                    batch=batch.batch,
+                    batch_edge_global=batch.edge_ligand.long(),
+                    context=_ctx,
+                    pocket_mask=pocket_mask.unsqueeze(1),
+                    edge_mask=batch.edge_ligand.long(),
+                    batch_lig=batch.batch[pocket_mask==0],
+                )
+
+            out = _denoise(context)
+
+            # ---- classifier-free guidance ----
+            # context=None reproduces the unconditional prior exactly (the two context
+            # layers are bias-free), so we can extrapolate away from it. Categorical
+            # heads are combined in LOGIT space -- the softmax happens below.
+            _cfg = float(getattr(self.hparams, "cfg_scale", 1.0) or 1.0)
+            if context is not None and abs(_cfg - 1.0) > 1e-6:
+                out_u = _denoise(None)
+                for _k in ("coords_pred", "atoms_pred", "bonds_pred"):
+                    if _k in out and _k in out_u and out[_k] is not None:
+                        out[_k] = out_u[_k] + _cfg * (out[_k] - out_u[_k])
             
             coords_pred = out["coords_pred"].squeeze()
             
