@@ -639,3 +639,118 @@ Writes to a **new run dir** `runFlagship_v4.1_prior_ncaapdb_only_8gpu_20260715/`
 | `no_pdbbind_pdbfull_ep11` | 27/27 complete, aggregated |
 | `pdb_only_pdb1k_ep21` | in progress (14 done + CCDB running + 12 resubmitted) |
 | `no_pdbbind_pdb1k_ep21` | full 27-target campaign launched |
+
+---
+
+## 16. Model family: `Conditional_v5.x` (GROVER topology-conditioned generation)
+
+First conditional UAAG2 line. A frozen GROVER-base embedding of the target residue's
+**molecular topology** is injected into the sidechain nodes being denoised, so generation
+can be steered toward a requested amino acid rather than sampled from the prior alone.
+
+### The condition
+
+- **Signal:** GROVER-base per-atom `atom_from_atom` (800) ‖ `atom_from_bond` (800), pooled
+  `mean ‖ max ‖ heavy-atom-count` = **3201 dims**, over the *whole residue* graph
+  (`is_ligand == 1`: backbone N/CA/C/O **plus** sidechain).
+- **Static lookup, never inference-time:** all 4,390 distinct topologies embedded offline into
+  `/scratch/project_465002574/condition_embeddings/grover_base_condition_table.npz`, keyed by
+  canonical SMILES, z-scored with that table's own stats. Lookup is by `compound_id`, with a
+  3-letter residue-code fallback (needed because CATH ids are per-occurrence). A miss returns
+  zeros, i.e. that record trains unconditionally rather than being dropped.
+- **Injection:** `3201 → 128 (sdim/2) → 256 (sdim)` through two `DenseLayer`s, **added** (not
+  concatenated) to the scalar node features at three points — input `s`, gnn layer 1, gnn last.
+- **Both context layers are `bias=False`.** Load-bearing: a zeroed row then contributes exactly
+  zero, so masking and dropout live outside the network and the unconditional branch is
+  bit-identical to the prior. Required for classifier-free guidance.
+- **Masking:** applied only to `is_ligand − is_backbone` (the denoised sidechain nodes). Pocket
+  and backbone atoms receive exact zeros.
+- **`--cond-dropout 0.5`:** per-graph, giving a CFG-ready unconditional branch.
+- **Warm start:** `atom_context_mapping` zero-initialised so **step 0 == the p0203 prior exactly**;
+  everything learned afterwards is measurably additive.
+
+### Shared settings (all three arms)
+
+| | |
+|---|---|
+| Backbone | unchanged from p0203 — `sdim 256`, `vdim 64`, `num_layers 7`, `timesteps 500` |
+| Optim | `lr 5e-4`, `grad_clip_val 1.0`, `batch_size 4 × accum 4` on 8 GCDs → **eff. batch 128** |
+| Data-side | `max_virtual_nodes 11`, `virtual_node 1`, `pocket_dropout_prob 0.5`, `mask_rate 0.0`, `seed 42` |
+| Condition | `context_mapping true`, `num_context_features 3201`, `cond_dropout 0.5` |
+| Hardware | 1 node × 8 GCDs, `standard-g`, account `project_465002988` |
+
+> ⚠️ Effective batch is **128**, but the p0203 prior these continue from was trained at **64**.
+> Same LR. v4.2 made the same jump and stayed competitive, so it is unlikely to dominate — but
+> it is an uncontrolled difference alongside the data change.
+
+### Per-arm matrix
+
+| Arm | Natural source | NCAA_PDB | Start | Epochs reached | Purpose |
+|---|---|---|---|---|---|
+| **v5.0** | CATH-1k (149,711 res) | ✅ 10× | p0203 prior, **weights only** | 199 | the reference conditional model |
+| **v5.1** | CATH-1k (149,711 res) | ❌ dropped | p0203 prior, **weights only** | 199 | isolate the corrupted-bond source |
+| **v5.2** | **CATH-full (2,526,225 res)** | ✅ 10× | **continued from v5.0 ep199** | **382** (TIMEOUT at 2 d) | cure drift from too-narrow natural data |
+
+All arms also carry `NCAA.lmdb` (19,216) @10×, `PDBBind.lmdb` (1,728) @10×.
+Checkpoint dirs: `3DcoordsAtomsBonds_0/runConditional_v5.<N>_*/`, every epoch saved (~19 GB each).
+
+- **v5.0 / v5.1 use `--load-prior-weights`** (weight-only, `strict=False`, fresh optimizer). The
+  ordinary `--load-ckpt` path is a **strict** load and rejects the prior once the context layers
+  exist. **v5.2 uses `--load-ckpt`** — legitimate there, because its source checkpoint already
+  contains those layers, so optimizer state and epoch counter carry over.
+- **Effective mix shifts a lot between arms.** v5.0: CATH 20% / NCAA 26% / NCAA_PDB 52% / PDBBind 2%.
+  v5.1 (no NCAA_PDB): CATH 42% / NCAA 53% / PDBBind 5%. v5.2: CATH ~86%. So v5.1 and v5.2 each
+  change *two* things — the named source **and** everyone else's share.
+
+### Results
+
+| | p0203 prior | v5.0 | v5.1 |
+|---|---|---|---|
+| ProteinGym (25) | **0.310** | 0.230 | 0.210 |
+| CP2 NCAA | **0.296** | 0.150 | 0.236 |
+| CP2 natural | **0.288** | −0.048 | 0.064 |
+| PUMA NCAA | **0.321** | 0.290 | 0.254 |
+| CP2 coverage, natural (per 100) | – | 10.6 | 10.4 |
+| CP2 coverage, NCAA unseen | – | 2.3 | 1.3 |
+| PoseBusters* (excl `no_radicals`) | – | 81.0% | 82.5% |
+
+**v5.2 evaluation in flight** (Hendrix jobs 11/12, 175 tasks).
+
+- **Neither conditional arm beats the prior on any benchmark.**
+- **v5.1 retired 2026-08-17.** Dropping NCAA_PDB clearly helped unconditional CP2 (+0.086 NCAA,
+  natural back above zero) but did **not** improve coverage, enrichment, geometry or chirality.
+  Corrupted bonds hurt *scoring*; they are not what limits *controllability*.
+
+### Conditional behaviour (v5.0)
+
+- **Coverage:** ~10% of samples are the requested natural residue, 1–3% for NCAAs. Enrichment
+  over background is the honest figure — **9.0× natural** — since raw hit rate mostly tracks the
+  model's size prior.
+- **CFG works and is worth using.** `w = 2.0` is the operating point: usable cells (≥1 hit per
+  condition×position) rise 50.2% → 56.1% while PoseBusters holds at 72.3%. `w = 3.0` buys 1.4
+  points more coverage for 10.6 points of geometry. Guidance unlocks `TRP` and `BZT`, unreachable
+  at w=1.
+- **The condition is doing real work.** Within-condition sample tightness in GROVER space is
+  0.401 vs **0.316** for unconditional sampling in the *same* pockets and 0.221 with no pocket at
+  all — the condition contributes +0.085, the pocket +0.095.
+- **But the condition space is degenerate on homologs.** `CHA`/`CPA` cos 0.996, `ILE`/`LEU` 0.995,
+  `ASP`/`GLU` 0.974, against a 0.38 background. Sum pooling makes this *worse*, so it is intrinsic
+  to GROVER, not to our pooling. Those targets are unreachable through this condition however well
+  the model aligns.
+- **8 of 40 CP2 targets never appear at any guidance scale.** These are **data/learning** failures,
+  not architectural: bonds are denoised across all ligand–ligand edges *including* to the backbone
+  N, so N-methylated residues and proline are representable. Proline's zero rate is in fact
+  **correct** — no CP2 or PUMA wild-type position is a proline, so the fixed backbone φ cannot
+  accommodate the ring.
+- **Chirality:** ~99.5% L, intrinsic and not steerable (the topology condition carries no stereo).
+  `DAL` is therefore indistinguishable from `ALA` and excluded from condition sets.
+
+### Known gaps
+
+- **Benchmark NCAA coverage in training is thin.** Of the 21 CP2/PUMA NCAAs, only 7 appear in any
+  arm's data — six via `NCAA_PDB` (all-single-bond) and `MEG` via `NCAA_indep`. The other 14 are
+  absent, so their coverage numbers are genuinely zero-shot.
+- **`NCAA_PDB` remains chemically corrupted** in v5.0 and v5.2 (0% double/aromatic bonds; see the
+  *ncaa-pdb-bond-orders* finding). Unfixed.
+- **`NCAA_BENCH.lmdb`** (1,390 ETKDG conformers of 20 benchmark NCAAs, isolated-molecule regime,
+  1390/1390 round-trip verified) is built but **not yet in any trained model** — the intended v5.3.
