@@ -115,10 +115,19 @@ def _build_datasets(hparams):
         datasets.append(ds)
         weights_per_item.extend([hparams.ncaa_pdb_weight] * len(ds))
 
+    # ---- 6. NCAA_BENCH LMDB: conformers of the CP2/PUMA benchmark NCAAs, in isolation ----
+    if getattr(hparams, "use_ncaa_bench", False):
+        if not hparams.ncaa_bench_lmdb:
+            raise ValueError("--use-ncaa-bench requires --ncaa-bench-lmdb")
+        ds = PDBBindDataset(hparams.ncaa_bench_lmdb, **common_kw)
+        print(f"[dataset] NCAA_BENCH: {len(ds):>6,} conformers  weight={hparams.ncaa_bench_weight}")
+        datasets.append(ds)
+        weights_per_item.extend([hparams.ncaa_bench_weight] * len(ds))
+
     if not datasets:
         raise ValueError(
             "No dataset source enabled. Pass at least one of: "
-            "--use-lmdb, --use-pdb, --use-pdbbind, --use-ncaa, --use-ncaa-pdb"
+            "--use-lmdb, --use-pdb, --use-pdbbind, --use-ncaa, --use-ncaa-pdb, --use-ncaa-bench"
         )
 
     all_data = ConcatDataset(datasets) if len(datasets) > 1 else datasets[0]
@@ -337,6 +346,12 @@ if __name__ == "__main__":
                         help="Train on PDBBind LMDB (PDBBindDataset)")
     parser.add_argument("--use-ncaa",    default=False, action="store_true",
                         help="Train on NCAA LMDB (PDBBindDataset)")
+    parser.add_argument("--use-ncaa-bench", default=False, action="store_true",
+                        help="Train on NCAA_BENCH LMDB - benchmark NCAA conformers in isolation")
+    parser.add_argument("--ncaa-bench-lmdb", type=str, default="",
+                        help="Path to the NCAA_BENCH LMDB (--use-ncaa-bench)")
+    parser.add_argument("--ncaa-bench-weight", default=1.0, type=float,
+                        help="Sampling weight for NCAA_BENCH")
     parser.add_argument("--use-ncaa-pdb", default=False, action="store_true",
                         help="Train on NCAA_PDB LMDB — NCAA-in-context graphs (PDBBindDataset)")
 
