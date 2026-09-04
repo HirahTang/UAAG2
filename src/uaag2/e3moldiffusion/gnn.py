@@ -94,8 +94,10 @@ class EQGATEdgeGNN(nn.Module):
         p1: bool = True,
         use_pos_norm: bool = True,
         ligand_pocket_interaction: bool = False,
+        additive_context: bool = True,
     ):
         super(EQGATEdgeGNN, self).__init__()
+        self.additive_context = additive_context
 
         assert fully_connected
         assert not local_global_model
@@ -202,6 +204,7 @@ class EQGATEdgeGNN(nn.Module):
         context: OptTensor = None,
         batch_lig: OptTensor = None,
         pocket_mask: OptTensor = None,
+        mod_mask: OptTensor = None,
     ) -> Dict:
         # edge_attr_xyz (distances, cosines, relative_positions, edge_features)
         # (E, E, E x 3, E x F)
@@ -210,11 +213,13 @@ class EQGATEdgeGNN(nn.Module):
             edge_index_in = edge_index_global
             edge_attr_in = edge_attr_global
 
-            if context is not None and (i == 1 or i == len(self.convs) - 1):
+            if context is not None and self.additive_context and (i == 1 or i == len(self.convs) - 1):
                 s = s + context
 
             # error shows up
-            s, v = self.norms[i](x={"s": s, "v": v, "z": z}, batch=batch)
+            s, v = self.norms[i](
+                x={"s": s, "v": v, "z": z, "mod_mask": mod_mask}, batch=batch
+            )
 
             out = self.convs[i](
                 x=(s, v, p),

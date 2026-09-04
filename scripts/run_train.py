@@ -310,6 +310,33 @@ def main(hparams):
     if getattr(hparams, "load_prior_weights", ""):
         _sd = torch.load(hparams.load_prior_weights, map_location="cpu")["state_dict"]
         _missing, _unexpected = model.load_state_dict(_sd, strict=False)
+
+        # adaLN renames the norm parameters, so a strict=False load would SILENTLY drop the
+        # prior gamma/beta and leave weight_bias randomly initialised -- i.e. not a warm start
+        # at all. Transplant them by hand and zero the projection, which makes the network
+        # bit-identical to the prior at step 0 for any conditioning vector.
+        if getattr(hparams, "adaln_context", False):
+            import re as _re
+            _n = 0
+            with torch.no_grad():
+                for _k, _v in _sd.items():
+                    _m = _re.match(r"^model\.gnn\.norms\.(\d+)\.(weight|bias)$", _k)
+                    if _m is None or _v.dim() != 1:
+                        continue
+                    _wb = model.model.gnn.norms[int(_m.group(1))].weight_bias
+                    _d = _v.numel()
+                    if _m.group(2) == "weight":
+                        _wb.bias[:_d].copy_(_v)      # gamma <- prior LayerNorm.weight
+                    else:
+                        _wb.bias[_d:].copy_(_v)      # beta  <- prior LayerNorm.bias
+                    _n += 1
+                for _nm in model.model.gnn.norms:
+                    _nm.weight_bias.weight.zero_()   # condition contributes nothing at step 0
+            print(f"[warm-start] adaLN: transplanted {_n} LayerNorm tensors, zeroed projections")
+            if _n == 0:
+                raise RuntimeError("adaLN transplant found no gnn.norms.* tensors in the prior; "
+                                   "check the checkpoint key prefix")
+
         print(f"[warm-start] {hparams.load_prior_weights}")
         print(f"[warm-start] missing={len(_missing)} unexpected={len(_unexpected)}")
         for _k in _missing:
@@ -496,6 +523,12 @@ if __name__ == "__main__":
     # ---- Context ----
     parser.add_argument("--context-mapping",           default=False, action="store_true")
     parser.add_argument("--num-context-features",      default=0,     type=int)
+    parser.add_argument("--adaln-context", default=False, action="store_true",
+                        help="condition through AdaptiveLayerNorm (scale+shift after the norm) "
+                             "instead of adding the context to node scalars")
+    parser.add_argument("--adaln-scope", type=str, default="graph",
+                        choices=["graph", "sidechain"],
+                        help="graph: modulate every node; sidechain: identity on pocket nodes")
     parser.add_argument("--use_protein_mpnn_context_128", default=False, action="store_true",
                         help="Enable 128-dim ProteinMPNN context conditioning")
     parser.add_argument("--properties-list",           default=[],    nargs="+", type=str)

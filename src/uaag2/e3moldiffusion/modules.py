@@ -208,7 +208,18 @@ class AdaptiveLayerNorm(nn.Module):
         sout = s / var[batch]
 
         weight, bias = self.weight_bias(z).chunk(2, dim=-1)
-        sout = sout * weight[batch] + bias[batch]
+        w_n, b_n = weight[batch], bias[batch]
+        mod_mask = x.get("mod_mask", None)
+        if mod_mask is not None:
+            # Scope the CONDITION-DRIVEN part only. weight_bias(z) = W z + bias, so `bias`
+            # is the layer`s unconditional affine (and, after a warm start, the prior`s own
+            # learned gamma/beta). Masking must fall back to THAT, not to gamma=1/beta=0,
+            # or the unconditioned nodes silently lose the pretrained normalisation.
+            m = mod_mask.view(-1, 1).to(w_n.dtype)
+            base_w, base_b = self.weight_bias.bias.detach().chunk(2, dim=-1)
+            w_n = base_w + (w_n - base_w) * m
+            b_n = base_b + (b_n - base_b) * m
+        sout = sout * w_n + b_n
 
         if v is not None:
             vmean = torch.pow(v, 2).sum(dim=1, keepdim=True).mean(dim=-1, keepdim=True)

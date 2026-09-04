@@ -156,6 +156,8 @@ class Trainer(pl.LightningModule):
                 bond_prediction=hparams.bond_prediction,
                 property_prediction=hparams.property_prediction,
                 coords_param=hparams.continuous_param,
+                adaln_context=bool(getattr(hparams, "adaln_context", False)),
+                adaln_scope=str(getattr(hparams, "adaln_scope", "graph")),
             )
         # ---- conditional UAAG2: static topology condition ----
         # Zero-init the context output projection so step 0 is bit-identical to the
@@ -181,6 +183,9 @@ class Trainer(pl.LightningModule):
                   % (_fc, _row, str(_z["smiles"][_row])), flush=True)
         if getattr(hparams, "context_mapping", False):
             _acm = getattr(self.model, "atom_context_mapping", None)
+            if bool(getattr(hparams, "adaln_context", False)):
+                _acm = None   # adaLN owns the conditioning; additive layers unused
+                print("[cond] adaLN conditioning active (additive injection disabled)")
             if _acm is not None:
                 torch.nn.init.zeros_(_acm.weight)
                 print("[cond] atom_context_mapping zero-initialised -> step 0 == prior")
@@ -551,15 +556,19 @@ class Trainer(pl.LightningModule):
         dropped graphs and table misses; because the two context layers are
         bias-free, a zero row contributes exactly zero to the network.
         """
+        self._ctx_graph = None
         if not getattr(self.hparams, "context_mapping", False):
             return None
 
         C = int(getattr(self.hparams, "num_context_features", 0))
         zeros = torch.zeros((int(batch.num_nodes), C), device=self.device, dtype=torch.float32)
+        self._ctx_graph = torch.zeros(
+            (int(batch.batch.max()) + 1, C), device=self.device, dtype=torch.float32)
 
         if self._force_cond_vec is not None:
             n_graphs = int(batch.batch.max()) + 1
             g = self._force_cond_vec.to(self.device).unsqueeze(0).expand(n_graphs, -1)
+            self._ctx_graph = g
             ctx = g[batch.batch]
             sc = (batch.is_ligand - batch.is_backbone).clamp(min=0).float().unsqueeze(-1)
             return ctx * sc
@@ -595,6 +604,7 @@ class Trainer(pl.LightningModule):
             keep = (torch.rand(g.size(0), device=g.device) >= p).float().unsqueeze(-1)
             g = g * keep
 
+        self._ctx_graph = g                                     # (G, C), consumed by adaLN
         ctx = g[batch.batch]                                    # graph -> node broadcast
         sidechain = (batch.is_ligand - batch.is_backbone).clamp(min=0).float().unsqueeze(-1)
         return ctx * sidechain
@@ -786,6 +796,7 @@ class Trainer(pl.LightningModule):
                 batch=data_batch,
                 batch_edge_global=batch.edge_ligand.long(),
                 context=context,
+                context_graph=getattr(self, "_ctx_graph", None),
                 pocket_mask=pocket_mask.unsqueeze(1),
                 edge_mask=batch.edge_ligand.long(),
                 batch_lig=batch.batch[pocket_mask==0],
@@ -1216,7 +1227,7 @@ class Trainer(pl.LightningModule):
             temb = t / self.hparams.timesteps
             temb = temb.unsqueeze(dim=1)
             
-            def _denoise(_ctx):
+            def _denoise(_ctx, _ctx_g=None):
                 return self.model(
                     x=atoms_feats_in_perturbed,
                     t=temb,
@@ -1227,12 +1238,13 @@ class Trainer(pl.LightningModule):
                     batch=batch.batch,
                     batch_edge_global=batch.edge_ligand.long(),
                     context=_ctx,
+                    context_graph=_ctx_g,
                     pocket_mask=pocket_mask.unsqueeze(1),
                     edge_mask=batch.edge_ligand.long(),
                     batch_lig=batch.batch[pocket_mask==0],
                 )
 
-            out = _denoise(context)
+            out = _denoise(context, getattr(self, "_ctx_graph", None))
 
             # ---- classifier-free guidance ----
             # context=None reproduces the unconditional prior exactly (the two context
@@ -1240,7 +1252,7 @@ class Trainer(pl.LightningModule):
             # heads are combined in LOGIT space -- the softmax happens below.
             _cfg = float(getattr(self.hparams, "cfg_scale", 1.0) or 1.0)
             if context is not None and abs(_cfg - 1.0) > 1e-6:
-                out_u = _denoise(None)
+                out_u = _denoise(None, None)
                 for _k in ("coords_pred", "atoms_pred", "bonds_pred"):
                     if _k in out and _k in out_u and out[_k] is not None:
                         out[_k] = out_u[_k] + _cfg * (out[_k] - out_u[_k])

@@ -220,6 +220,8 @@ class DenoisingEdgeNetwork(nn.Module):
         bond_prediction: bool = False,
         coords_param: str = "data",
         ligand_pocket_interaction: bool = False,
+        adaln_context: bool = False,
+        adaln_scope: str = "graph",
     ) -> None:
         super(DenoisingEdgeNetwork, self).__init__()
 
@@ -257,6 +259,21 @@ class DenoisingEdgeNetwork(nn.Module):
             self.context_mapping = DenseLayer(num_context_features, context_latent_dim, bias=False)
             self.atom_context_mapping = DenseLayer(context_latent_dim, hn_dim[0], bias=False)
 
+        # ---- adaLN conditioning (replaces the additive injection above) ----
+        # bias=False keeps zero-condition -> zero-contribution, so with adaLN`s
+        # identity init (gamma=1, beta=0) a dropped condition is EXACTLY the
+        # unconditional prior. That is what CFG needs, and it makes a warm start
+        # from p0203 bit-identical at step 0.
+        self.adaln_context = adaln_context
+        self.adaln_scope = adaln_scope
+        if self.adaln_context:
+            assert num_context_features > 0, "adaln_context needs num_context_features > 0"
+            self.cond_mlp = nn.Sequential(
+                DenseLayer(num_context_features, 2 * hn_dim[0], bias=False, activation=nn.SiLU()),
+                DenseLayer(2 * hn_dim[0], hn_dim[0], bias=False),
+            )
+            self.time_mapping_adaln = DenseLayer(1, hn_dim[0])
+
         assert fully_connected or local_global_model
 
         self.sdim, self.vdim = hn_dim
@@ -267,11 +284,10 @@ class DenoisingEdgeNetwork(nn.Module):
         assert fully_connected
         assert not local_global_model
 
-        if latent_dim:
-            if context_mapping:
-                latent_dim_ = None
-            else:
-                latent_dim_ = latent_dim
+        if adaln_context:
+            latent_dim_ = hn_dim[0]          # turns on AdaptiveLayerNorm in the GNN
+        elif latent_dim and not context_mapping:
+            latent_dim_ = latent_dim
         else:
             latent_dim_ = None
 
@@ -291,6 +307,7 @@ class DenoisingEdgeNetwork(nn.Module):
             p1=p1,
             use_pos_norm=use_pos_norm,
             ligand_pocket_interaction=ligand_pocket_interaction,
+            additive_context=not adaln_context,
         )
 
         if self.property_prediction:
@@ -363,6 +380,7 @@ class DenoisingEdgeNetwork(nn.Module):
         batch_edge_global: OptTensor = None,
         z: OptTensor = None,
         context: OptTensor = None,
+        context_graph: OptTensor = None,
         batch_lig: OptTensor = None,
         pocket_mask: OptTensor = None,
         edge_mask: OptTensor = None,
@@ -382,7 +400,15 @@ class DenoisingEdgeNetwork(nn.Module):
 
         s = self.atom_mapping(x)
         cemb = None
-        if context is not None and self.context_mapping:
+        mod_mask = None
+        if self.adaln_context:
+            # graph-level conditioning vector: c = temb + cond_mlp(context)
+            z = self.time_mapping_adaln(t)
+            if context_graph is not None:
+                z = z + self.cond_mlp(context_graph)
+            if self.adaln_scope == "sidechain" and pocket_mask is not None:
+                mod_mask = (pocket_mask.view(-1) == 0).float()
+        elif context is not None and self.context_mapping:
             cemb = self.context_mapping(context)
             cemb = self.atom_context_mapping(cemb)
             s = s + cemb
@@ -429,6 +455,7 @@ class DenoisingEdgeNetwork(nn.Module):
             context=cemb,
             batch_lig=batch_lig,
             pocket_mask=pocket_mask,
+            mod_mask=mod_mask,
         )
 
         out = self.prediction_head(
