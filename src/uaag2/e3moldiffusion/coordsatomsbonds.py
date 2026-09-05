@@ -249,7 +249,9 @@ class DenoisingEdgeNetwork(nn.Module):
         self.atom_time_mapping = DenseLayer(hn_dim[0], hn_dim[0])
         self.bond_time_mapping = DenseLayer(edge_dim, edge_dim)
 
-        self.context_mapping = context_mapping
+        # Under adaLN the additive layers would never be called, and DDP rejects
+        # parameters that take no part in the loss. Do not build them at all.
+        self.context_mapping = context_mapping and not adaln_context
         if self.context_mapping:
             context_latent_dim = max(1, hn_dim[0] // 2)
             # bias=False is load-bearing: a zeroed context row then contributes EXACTLY
