@@ -116,7 +116,15 @@ def evaluate_with_bust(sdf_file, mol_file=None, max_workers=4):
     
     try:
         # Initialize PoseBusters
-        buster = PoseBusters(config='mol', max_workers=max_workers)
+        # PoseBusters 0.3.1 (this env) has signature (config, top_n) -- no max_workers.
+        # Passing it raised TypeError for every molecule, so bust_evaluated was True but
+        # every geometry column was absent and pass_all_criteria read False. Probe with
+        # introspection so the call works on both the old and newer APIs.
+        import inspect as _inspect
+        if "max_workers" in _inspect.signature(PoseBusters.__init__).parameters:
+            buster = PoseBusters(config='mol', max_workers=max_workers)
+        else:
+            buster = PoseBusters(config='mol')
         
         # Run evaluation
         results = buster.bust(mol_pred=sdf_file, mol_true=sdf_file, mol_cond=sdf_file)

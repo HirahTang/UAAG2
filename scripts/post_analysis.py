@@ -77,6 +77,14 @@ args = parser.parse_args()
 
 analysis_path = args.analysis_path
 aa_list = os.listdir(analysis_path)
+# Keep only entries shaped like AAA_<int> (e.g. ALA_58) -- skip pre-existing CSVs,
+# log files, or anything else that may be sitting alongside the AA directories.
+aa_list = [
+    a for a in aa_list
+    if os.path.isdir(os.path.join(analysis_path, a))
+    and "_" in a
+    and a.split("_")[1].isdigit()
+]
 
 dataframe = pd.DataFrame(columns=['aa', 'pos', 'ALA', 'CYS', 'ASP', 'GLU', 'PHE', 'GLY', 'HIS', 'ILE', 'LYS', 'LEU', \
     'MET', 'ASN', 'PRO', 'GLN', 'ARG', \
@@ -84,7 +92,11 @@ dataframe = pd.DataFrame(columns=['aa', 'pos', 'ALA', 'CYS', 'ASP', 'GLU', 'PHE'
             'Abu', 'Nva', 'Nle', 'Ahp', 'Aoc', \
                 'Tme', 'hSM', 'tBu', 'Cpa', 'Aib', \
                     'MeG', 'MeA', 'MeB', 'MeF', '2th', \
-                        '3th', 'YMe', '2Np', 'Bzt', 'UNK', 'INV',
+                        '3th', 'YMe', '2Np', 'Bzt', \
+                        # NCAA benchmark residues (added 2026-06-29)
+                        '1OP', '81S', '823', '9R1', '9R7', 'AUX', 'BTK', 'DC0', 'DMT', \
+                        'DQK', 'EOE', 'MLZ', 'PH6', 'PRK', 'PUK', 'SLL', 'SRZ', 'U2X', 'U3X', \
+                        'UNK', 'INV',
                         'chir_L', 'chir_D', 'chir_achiral', 'chir_unknown'])
 
 
@@ -102,6 +114,8 @@ for aa in tqdm(aa_list):
         if not os.path.isdir(os.path.join(aa_path, sample_path)):
             continue
 
+        if not sample_path.startswith("iter_"):  # TRAJSKIP
+            continue
         iter_num = int(sample_path.split("_")[-1])
 
         sample_path = os.path.join(aa_path, sample_path)
@@ -109,6 +123,9 @@ for aa in tqdm(aa_list):
 
         batch_path_list = os.listdir(sample_path)
         for batch_path in batch_path_list:
+            # TRAJSKIP: --save-traj puts a traj/ dir alongside the batch_* dirs
+            if not batch_path.startswith("batch_"):
+                continue
             batch_num = int(batch_path.split("_")[-1])
             mol_path = os.path.join(sample_path, batch_path, 'final', 'ligand.mol')
             mol = Chem.MolFromMolFile(mol_path)

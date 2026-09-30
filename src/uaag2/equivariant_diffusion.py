@@ -893,6 +893,7 @@ class Trainer(pl.LightningModule):
                 eta_ddim=eta_ddim,
                 every_k_step=every_k_step,
                 iteration=i,
+                save_path=save_path,  # TRAJFIX
                 show_pocket=False,
                 dpm_solver_pp=dpm_solver_pp,
                 ctmc=ctmc,
@@ -937,6 +938,7 @@ class Trainer(pl.LightningModule):
         eta_ddim: float = 1.0,
         every_k_step: int = 1,
         iteration: int = 0,
+        save_path: str = None,  # TRAJFIX
         show_pocket: bool = False,
         dpm_solver_pp: bool = False,
         ctmc: bool = False,
@@ -1342,7 +1344,11 @@ class Trainer(pl.LightningModule):
                     atom_type=compound_atom_types,
                     batch=batch.batch,
                     atom_decoder=atom_decoder,
-                    path=os.path.join(self.save_dir, f"epoch_{self.current_epoch}", f"iter_{iteration}"),
+                    path=os.path.join(  # TRAJFIX: land under Samples/<res>_<pos>/
+                        self.save_dir,
+                        save_path if save_path else f"epoch_{self.current_epoch}",
+                        f"iter_{iteration}", "traj",
+                    ),
                     i=i,
                 )
         

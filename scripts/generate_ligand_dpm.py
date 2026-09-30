@@ -24,6 +24,7 @@ Usage (CTMC tau-leaping with 20 NFE):
       --ctmc
 """
 import argparse
+import csv
 import os
 import shutil
 import subprocess
@@ -105,6 +106,15 @@ def main(args):
             raise ValueError(f"split_index must be 0..{NUM_PARTITIONS - 1}, got {args.split_index}")
 
         index = partitions[args.split_index]
+        if getattr(args, "only_position", None) is not None:
+            def _pos_of(g):
+                # compound_id looks like <pdb>_<tidy>_<RES>_<pos>_<chain>_<seq>
+                try:
+                    return int(g.compound_id.split("_")[-3])
+                except Exception:
+                    return None
+            index = [i for i in index if _pos_of(data_file[i]) == args.only_position]
+            print(f"--only-position {args.only_position}: {len(index)} graphs kept")
         print(f"Processing partition {args.split_index}/{NUM_PARTITIONS - 1} with {len(index)} residues")
 
         dataset_info = Dataset_Info(hparams, args.data_info_path)
@@ -159,6 +169,7 @@ def main(args):
                 save_path=save_path,
                 verbose=True,
                 every_k_step=args.every_k_step,
+                save_traj=getattr(args, 'save_traj', False),
                 dpm_solver_pp=args.dpm_solver_pp,
                 ctmc=args.ctmc,
                 ddpm=args.ddpm,
@@ -172,6 +183,20 @@ def main(args):
 
         tmp_samples_dir = os.path.join(tmp_work, "Samples")
         scripts_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # The dataset (UAAG2Dataset_sampling.__init__) writes pocket_true.mol /
+        # ligand_true.mol under run<id>/Samples/<res>_<pos>/ — a different subtree than
+        # the generated samples in tmp_work/Samples/. Fold them in so they get archived
+        # (and are available for visualising each residue in its pocket context).
+        true_root = os.path.join(tmp_work, f"run{args.id}", "Samples")
+        if os.path.isdir(true_root):
+            for var in os.listdir(true_root):
+                for fn in ("ligand_true.mol", "pocket_true.mol"):
+                    s = os.path.join(true_root, var, fn)
+                    if os.path.isfile(s):
+                        d = os.path.join(tmp_samples_dir, var)
+                        os.makedirs(d, exist_ok=True)
+                        shutil.copy2(s, os.path.join(d, fn))
 
         # 3a. Post-analysis: amino acid identity / validity distribution
         #     post_analysis.py --analysis_path <dir>  writes aa_distribution.csv
@@ -191,6 +216,58 @@ def main(args):
         if os.path.isfile(aa_csv_tmp):
             shutil.copy2(aa_csv_tmp, aa_csv)
             print(f"[INFO] aa_distribution → {aa_csv}")
+
+        # 3a-bis. KEEPTRAJ: drop the trajectories we do not want to keep.
+        #     post_analysis has just written <RES>_<POS>_aa_table.csv, whose
+        #     (iter,batch) keys match the Samples/<RES>_<POS>/iter_*/batch_*/ tree.
+        #     At a ~0.1% hit rate the wanted draws are a handful out of thousands,
+        #     so pruning here is what makes --save-traj affordable at all.
+        if getattr(args, "keep_traj_identities", None):
+            wanted = {s.strip() for s in args.keep_traj_identities.split(",") if s.strip()}
+            print(f"[INFO] KEEPTRAJ: keeping trajectories for {sorted(wanted)}")
+            kept = dropped = 0
+            for var in sorted(os.listdir(tmp_samples_dir)):
+                var_dir = os.path.join(tmp_samples_dir, var)
+                table = os.path.join(var_dir, f"{var}_aa_table.csv")
+                if not (os.path.isdir(var_dir) and os.path.isfile(table)):
+                    continue
+                keep_keys = set()
+                with open(table) as fh:
+                    rdr = csv.DictReader(fh)
+                    for row in rdr:
+                        if row.get("identity") in wanted:
+                            keep_keys.add((row["iter"], row["batch"]))
+                print(f"[INFO] KEEPTRAJ: {var}: {len(keep_keys)} wanted draw(s)")
+                for it in os.listdir(var_dir):
+                    if not it.startswith("iter_"):
+                        continue
+                    # layout is iter_N/traj/batch_K/mol_<step>.xyz: the xyz writer
+                    # appends batch_{k} itself, so traj/ is a sibling of batch_*.
+                    traj_root = os.path.join(var_dir, it, "traj")
+                    if not os.path.isdir(traj_root):
+                        continue
+                    for bt in os.listdir(traj_root):
+                        if not bt.startswith("batch_"):
+                            continue
+                        bdir = os.path.join(traj_root, bt)
+                        key = (it.split("_", 1)[1], bt.split("_", 1)[1])
+                        if key in keep_keys:
+                            kept += 1
+                        else:
+                            shutil.rmtree(bdir, ignore_errors=True)
+                            dropped += 1
+                    # if nothing survived in this iter, drop the empty traj/ shell
+                    if os.path.isdir(traj_root) and not os.listdir(traj_root):
+                        os.rmdir(traj_root)
+                # record the winners for the demo pipeline
+                if keep_keys:
+                    with open(os.path.join(var_dir, "traj_kept.csv"), "w") as fh:
+                        fh.write("iter,batch,identity\n")
+                        with open(table) as th:
+                            for row in csv.DictReader(th):
+                                if (row["iter"], row["batch"]) in keep_keys:
+                                    fh.write(f"{row['iter']},{row['batch']},{row['identity']}\n")
+            print(f"[INFO] KEEPTRAJ: kept {kept} trajectories, dropped {dropped}")
 
         # 3b. PoseBusters structural validity evaluation
         #     Randomly subsample 100 mol files from the full set to keep
@@ -253,6 +330,14 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", default=8, type=int)
     parser.add_argument("--virtual_node_size", default=15, type=int)
     parser.add_argument("--split_index", default=0, type=int)
+    parser.add_argument("--keep-traj-identities", dest="keep_traj_identities",  # KEEPTRAJ
+                        default=None, type=str,
+                        help="Comma-separated identities (as spelled in aa_graph.json, e.g. 'hSM,Tme'). After sampling, every trajectory whose draw is NOT one of these is deleted "
+                             "before archiving. Omit to keep all trajectories.")
+    parser.add_argument("--save-traj", dest="save_traj", action="store_true",
+                        help="write the reverse-diffusion frames, not just the final molecule")
+    parser.add_argument("--only-position", dest="only_position", type=int, default=None,
+                        help="restrict sampling to benchmark graphs at this sequence position")
     parser.add_argument("--total_partition", default=10, type=int)
     parser.add_argument("--num-workers", default=4, type=int)
 
