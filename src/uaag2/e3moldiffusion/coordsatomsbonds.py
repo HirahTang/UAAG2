@@ -404,8 +404,20 @@ class DenoisingEdgeNetwork(nn.Module):
         cemb = None
         mod_mask = None
         if self.adaln_context:
-            # graph-level conditioning vector: c = temb + cond_mlp(context)
-            z = self.time_mapping_adaln(t)
+            # graph-level conditioning vector: c = temb + cond_mlp(context).
+            # `t` arrives PER-GRAPH from training forward(), but PER-LIGAND-NODE from the
+            # sampler (equivariant_diffusion.py:1076 sets n = pos_ligand.size(0)). The old
+            # time path tolerated that because every entry of t is the same timestep, so
+            # ta[batch] picks identical rows either way. adaLN does not tolerate it: z is
+            # added to a (n_graphs, C) condition vector. Reduce to per-graph explicitly.
+            n_graphs = int(batch.max()) + 1
+            if t.shape[0] == n_graphs:
+                t_g = t                                          # training: already per-graph
+            elif t.shape[0] == batch.shape[0]:
+                t_g = scatter_mean(t, batch, dim=0)              # per-node
+            else:
+                t_g = t[:1].expand(n_graphs, -1)                 # sampler: uniform timestep
+            z = self.time_mapping_adaln(t_g)
             if context_graph is not None:
                 z = z + self.cond_mlp(context_graph)
             if self.adaln_scope == "sidechain" and pocket_mask is not None:

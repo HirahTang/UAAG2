@@ -46,8 +46,26 @@ class ConditionTable:
             self.by_id.setdefault(bare, int(row))
         self.by_smiles = {s: i for i, s in enumerate(self.smiles)}
 
+        # Residue-code fallback. unaagi_whole_v1 has a distinct compound_id per residue
+        # occurrence ("1DY2_THR_213_A_130"), so direct id lookup misses almost everything
+        # there. Natural residues are chemically identical wherever they occur, so map
+        # 3-letter code -> row using the natural-20 rows, which are the only ones whose
+        # stored code is reliably the residue code.
+        first_source = [str(s) for s in z["first_source"]]
+        first_code = [str(s) for s in z["first_code"]]
+        self.by_code = {}
+        for i, (src, code) in enumerate(zip(first_source, first_code)):
+            if src == "natural20" and code not in self.by_code:
+                self.by_code[code] = i
+
         # zero vector shares storage; never written to
         self._zero = torch.zeros(self.dim, dtype=torch.float32)
+
+    @staticmethod
+    def _code_of(compound_id: str) -> Optional[str]:
+        """Residue code from a whole-PDB style compound_id: PDBID_CODE_num_chain_idx."""
+        parts = str(compound_id).split("_")
+        return parts[1] if len(parts) > 2 else None
 
     def __len__(self):
         return self.emb.shape[0]
@@ -57,6 +75,10 @@ class ConditionTable:
         rows, found = [], torch.zeros(len(compound_ids), dtype=torch.bool)
         for i, cid in enumerate(compound_ids):
             r = self.by_id.get(str(cid))
+            if r is None:                                   # residue-code fallback
+                code = self._code_of(cid)
+                if code is not None:
+                    r = self.by_code.get(code)
             if r is None:
                 rows.append(self._zero)
             else:

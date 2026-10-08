@@ -372,6 +372,7 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
     ):
         super(UAAG2Dataset_sampling, self).__init__()
         # self.statistics = Statistic()
+        self.hparams = hparams
         self.save_dir = os.path.join(hparams.save_dir, f'run{hparams.id}', f"{save_path}")
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
@@ -404,11 +405,15 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         with open(os.path.join(self.save_dir, 'ligand_true.mol'), 'w') as f:
             f.write(true_molblock)
         
-        pocket_pos_true = self.data.pos[self.data.is_ligand==0].cpu().detach()
-        pocket_atom_true = [self.atom_decoder[int(a)] for a in self.data.x[self.data.is_ligand==0]]
-        pocket_molblock = visualize_mol((pocket_pos_true, pocket_atom_true), val_check=False)
-        with open(os.path.join(self.save_dir, 'pocket_true.mol'), 'w') as f:
-            f.write(pocket_molblock)
+        # A pocket-free graph (every atom is ligand) has nothing to visualise here.
+        # pocket_centering already tolerates that case; keep this consistent instead
+        # of raising "stack expects a non-empty TensorList".
+        if int((self.data.is_ligand == 0).sum()) > 0:
+            pocket_pos_true = self.data.pos[self.data.is_ligand==0].cpu().detach()
+            pocket_atom_true = [self.atom_decoder[int(a)] for a in self.data.x[self.data.is_ligand==0]]
+            pocket_molblock = visualize_mol((pocket_pos_true, pocket_atom_true), val_check=False)
+            with open(os.path.join(self.save_dir, 'pocket_true.mol'), 'w') as f:
+                f.write(pocket_molblock)
         
         
     def __len__(self):
@@ -449,6 +454,12 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         graph_data.is_in_ring = graph_data.is_in_ring.float()
         graph_data.hybridization = graph_data.hybridization.float()
         graph_data.is_backbone = graph_data.is_backbone.float()
+        # v6 all-atom generation: training zeroed is_backbone so EVERY target atom
+        # (incl. N/CA/C/O) is denoised. Sampling must match, or the model is handed a
+        # fixed backbone it never saw as context. Driven by the ckpt hparam, so v5.x
+        # checkpoints (no such hparam) are unaffected.
+        if getattr(getattr(self, "hparams", None), "all_atom_generation", False):
+            graph_data.is_backbone = torch.zeros_like(graph_data.is_backbone)
         graph_data.is_ligand = graph_data.is_ligand.float()
 
         protein_mpnn_latent_node_128 = None
@@ -489,7 +500,15 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         # self.sample_size
         # sample sample size from a uniform distributino between 1 and self.sample_size
-        sample_size = torch.randint(1, self.sample_size + 1, (1,)).item()
+        # The node count was drawn U(1, sample_size) for every sample. When the
+        # requested residue is known its heavy-atom count is known too, so the draw
+        # is pure added difficulty -- and a hard ceiling for large residues, since a
+        # draw with fewer nodes than the target contains can never be the target
+        # (TRP needs 14, so only ~2/15 of draws could ever reach it).
+        if getattr(self.hparams, 'exact_node_count', False):
+            sample_size = int(self.sample_size)
+        else:
+            sample_size = torch.randint(1, self.sample_size + 1, (1,)).item()
         reconstruct_mask = self.data.is_ligand - self.data.is_backbone
         x = self.data.x[reconstruct_mask==0]
         pos = self.data.pos[reconstruct_mask==0]
@@ -545,7 +564,9 @@ class UAAG2Dataset_sampling(torch.utils.data.Dataset):
         ids_new_node = ids_new[-sample_size:]
         
         ids_backbone = ids_new[is_backbone_new==1]
-        ids_existed = torch.tensor([i for i in ids_new if i not in ids_new_node and i not in ids_backbone])
+        # dtype pinned: an empty list comprehension would default to float32 and
+        # break meshgrid against the int64 id tensors (pocket-free graphs hit this).
+        ids_existed = torch.tensor([i for i in ids_new if i not in ids_new_node and i not in ids_backbone], dtype=torch.long)
         # the ids_existed and ids_new_node are not quite clear to me
         # from IPython import embed; embed()
         
@@ -637,6 +658,7 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
     ):
         super(UAAG2Dataset_sampling_prior, self).__init__()
         # self.statistics = Statistic()
+        self.hparams = hparams
         self.save_dir = os.path.join(hparams.save_dir, f'run{hparams.id}', f"{save_path}")
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
@@ -751,7 +773,15 @@ class UAAG2Dataset_sampling_prior(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         # For prior sampling: sample molecules without pocket conditioning
         # Sample size from uniform distribution between 1 and self.sample_size
-        sample_size = torch.randint(1, self.sample_size + 1, (1,)).item()
+        # The node count was drawn U(1, sample_size) for every sample. When the
+        # requested residue is known its heavy-atom count is known too, so the draw
+        # is pure added difficulty -- and a hard ceiling for large residues, since a
+        # draw with fewer nodes than the target contains can never be the target
+        # (TRP needs 14, so only ~2/15 of draws could ever reach it).
+        if getattr(self.hparams, 'exact_node_count', False):
+            sample_size = int(self.sample_size)
+        else:
+            sample_size = torch.randint(1, self.sample_size + 1, (1,)).item()
         reconstruct_mask = 1 - self.data.is_backbone
 
         # Since this is PRIOR sampling (no pocket), we create molec ules from scratch

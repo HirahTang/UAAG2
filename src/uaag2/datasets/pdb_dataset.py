@@ -151,6 +151,22 @@ def _repair(pdb_path: str) -> str:
     return tmp
 
 
+
+# --- CCD bond-order repair -------------------------------------------------- _ccd_repair_hook
+# Same repair as scripts/build_eqgat_lmdb_from_pdb.py, so the on-the-fly loader and the
+# LMDB builder agree. No-op when the table is absent.
+from uaag2.datasets import ccd_bonds as _ccd_bonds
+_CCD_TBL = None
+def _ccd_table():
+    global _CCD_TBL
+    if _CCD_TBL is None:
+        try:
+            _CCD_TBL = _ccd_bonds.load_table() or {}
+        except Exception as e:
+            print("[ccd] repair DISABLED: %s" % e); _CCD_TBL = {}
+    return _CCD_TBL
+# ---------------------------------------------------------------------------
+
 def _read_mol_and_structure(pdb_path: str):
     parse_path = _repair(pdb_path) if _needs_repair(pdb_path) else pdb_path
     try:
@@ -160,7 +176,11 @@ def _read_mol_and_structure(pdb_path: str):
             mol = Chem.MolFromPDBFile(parse_path, removeHs=True, sanitize=False)
         if mol is None:
             raise ValueError(f"RDKit could not parse {pdb_path}")
-        Chem.SanitizeMol(mol)
+        _t = _ccd_table()
+        if _t:
+            mol, _ = _ccd_bonds.repair_and_sanitize(mol, _t)
+        else:
+            Chem.SanitizeMol(mol)
         Chem.AssignStereochemistry(mol)
         structure = PDBParser(QUIET=True).get_structure("mol", parse_path)
         return mol, structure
@@ -832,6 +852,17 @@ def _post_process_graph(
     graph_data.is_backbone   = graph_data.is_backbone.float()
     graph_data.is_ligand     = graph_data.is_ligand.float()
 
+    # ---- all-atom generation ----
+    # NCAA_indep records carry no backbone flag at all: every atom is is_ligand=1
+    # with is_backbone=0, so the whole molecule is denoised and the condition is
+    # applied to every atom. CATH residues instead keep N/CA/C/O as fixed context.
+    # Training on both therefore mixes two different tasks. Zeroing is_backbone
+    # here aligns CATH to the NCAA_indep convention:
+    #   pocket_mask = 1 - is_ligand + is_backbone -> 0 for every atom (all generated)
+    #   ligand_mask = is_ligand - is_backbone     -> 1 for every atom (all denoised)
+    # ligand_size must be recomputed after this, since it subtracts the backbone count.
+    if params is not None and getattr(params, 'all_atom_generation', False):
+        graph_data.is_backbone = torch.zeros_like(graph_data.is_backbone)
     num_nodes = graph_data.x.size(0)
     if lat128 is not None and lat128.size(0) != num_nodes:
         lat128 = lat128[0].unsqueeze(0).expand(num_nodes, -1)

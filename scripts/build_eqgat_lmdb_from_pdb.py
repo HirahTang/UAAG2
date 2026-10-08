@@ -96,6 +96,32 @@ class ResidueRecord:
     mass_center: np.ndarray
 
 
+
+# --- NCAA site filter ------------------------------------------------------ _sites_filter_hook
+# NCAA_PDB is a *site* dataset: one graph per non-standard residue, not one per residue.
+# sites.csv is the authoritative index (pdbid,category,code,chain,resnum,...). Without
+# this the builder emits every amino acid in every structure.
+_SITES = None
+def _load_sites(path):
+    global _SITES
+    if _SITES is not None or not path:
+        return _SITES
+    allowed = set()
+    with open(path) as fh:
+        for line in fh:
+            p = line.rstrip("\n").split(",")
+            if len(p) < 5 or p[0] == "pdb_id":
+                continue
+            allowed.add((p[0].upper(), p[2].strip().upper(), p[3].strip(), str(p[4]).strip()))
+    _SITES = allowed
+    print(f"[sites] {len(allowed)} NCAA/PTM/GLYCO sites loaded from {path}", flush=True)
+    return _SITES
+
+def _pdb_stem_id(pdb_name):
+    # multi-model splits are named <PDBID>_<something>.pdb
+    return os.path.splitext(pdb_name)[0].split("_")[0].upper()
+# ---------------------------------------------------------------------------
+
 def normalize_key(raw: str) -> str:
     return "".join(ch for ch in raw.upper() if ch.isalnum())
 
@@ -197,6 +223,31 @@ def _needs_pdb_repair(pdb_path: str) -> bool:
     return False
 
 
+
+# --- CCD bond-order repair -------------------------------------------------- _ccd_repair_hook
+# Chem.MolFromPDBFile only carries bond templates for the 20 standard residues, so every
+# non-standard residue is read back with all-SINGLE bonds: AIB becomes CC(C)(N)CO instead
+# of CC(C)(N)C=O, i.e. the backbone carbonyl is stored as a hydroxyl. Restore intra-residue
+# bond orders from the wwPDB Chemical Component Dictionary. Standard residues are skipped,
+# unmatched atom-name pairs are left untouched, and a missing table makes this a no-op.
+import importlib.util as _ilu
+_CCD_MOD = None
+_CCD_TBL = None
+def _ccd():
+    global _CCD_MOD, _CCD_TBL
+    if _CCD_MOD is None:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "..", "src", "uaag2", "datasets", "ccd_bonds.py")
+        try:
+            sp = _ilu.spec_from_file_location("ccd_bonds", p)
+            m = _ilu.module_from_spec(sp); sp.loader.exec_module(m)
+            _CCD_MOD, _CCD_TBL = m, m.load_table()
+        except Exception as e:
+            print("[ccd] repair DISABLED: %s" % e)
+            _CCD_MOD = False
+    return _CCD_MOD, _CCD_TBL
+# ---------------------------------------------------------------------------
+
 def read_structure_and_mol(pdb_path: str):
     parse_path = _repair_pdb_element_columns(pdb_path) if _needs_pdb_repair(pdb_path) else pdb_path
     try:
@@ -207,8 +258,12 @@ def read_structure_and_mol(pdb_path: str):
             rdkit_mol = Chem.MolFromPDBFile(parse_path, removeHs=True, sanitize=False)
         if rdkit_mol is None:
             raise ValueError(f"RDKit failed to parse {pdb_path}")
+        _m, _t = _ccd()
         try:
-            Chem.SanitizeMol(rdkit_mol)
+            if _m and _t:
+                rdkit_mol, _ = _m.repair_and_sanitize(rdkit_mol, _t)
+            else:
+                Chem.SanitizeMol(rdkit_mol)
             Chem.AssignStereochemistry(rdkit_mol)
         except Exception as exc:
             raise ValueError(f"RDKit sanitize/stereo failed: {exc}") from exc
@@ -521,9 +576,24 @@ def dictionary_to_data(
             if bt in BOND_ENCODER:
                 edge_type[i] = BOND_ENCODER[bt]
 
-    latent_128_tensor = torch.tensor(protein_mpnn_latent_128, dtype=torch.float)
-    latent_20_tensor = torch.tensor(protein_mpnn_latent_20, dtype=torch.float)
-    if latent_128_tensor.ndim != 1 or latent_20_tensor.ndim != 1:
+    # _latent_optional_data_hook -- see UAAG2_LATENTS_OPTIONAL above. When latents are
+    # absent the graph is built without the four protein_mpnn_* fields, which is exactly
+    # what the existing NCAA_PDB.lmdb contains (verified: no latent field in any record).
+    _lat_opt = os.environ.get("UAAG2_LATENTS_OPTIONAL", "") == "1"
+    _have_lat = protein_mpnn_latent_128 is not None and protein_mpnn_latent_20 is not None
+    _lat_kw = {}
+    if _have_lat:
+        latent_128_tensor = torch.tensor(protein_mpnn_latent_128, dtype=torch.float)
+        latent_20_tensor = torch.tensor(protein_mpnn_latent_20, dtype=torch.float)
+        if latent_128_tensor.ndim != 1 or latent_20_tensor.ndim != 1:
+            return None
+        _lat_kw = dict(
+            protein_mpnn_latent_128=latent_128_tensor,
+            protein_mpnn_latent_20=latent_20_tensor,
+            protein_mpnn_latent_node_128=latent_128_tensor.unsqueeze(0).repeat(num_atoms, 1),
+            protein_mpnn_latent_node_20=latent_20_tensor.unsqueeze(0).repeat(num_atoms, 1),
+        )
+    elif not _lat_opt:
         return None
 
     compound_graph = Data(
@@ -543,10 +613,7 @@ def dictionary_to_data(
         ids=torch.arange(len(all_ids), dtype=torch.long),
         compound_id=compound_id,
         # Keep both latent sizes in one graph to avoid duplicating LMDB content.
-        protein_mpnn_latent_128=latent_128_tensor,
-        protein_mpnn_latent_20=latent_20_tensor,
-        protein_mpnn_latent_node_128=latent_128_tensor.unsqueeze(0).repeat(num_atoms, 1),
-        protein_mpnn_latent_node_20=latent_20_tensor.unsqueeze(0).repeat(num_atoms, 1),
+        **_lat_kw,
         # Backward-compatible aliases used by existing consumers.
         # protein_mpnn_latent=latent_128_tensor,
         # protein_mpnn_latent_node=latent_128_tensor.unsqueeze(0).repeat(num_atoms, 1),
@@ -692,20 +759,39 @@ def process_pdb_to_writer(
         "ok": 0,
     }
 
+    _sites = _load_sites(os.environ.get("UAAG2_SITES_CSV", ""))
+
     for residue in residues:
-        if not residue.is_amino_acid:
+        # _site_trumps_isaa -- when a site index is supplied it is authoritative.
+        # Bio.PDB.is_aa() matches a fixed table that omits the rarer NCAA/PTM codes
+        # (and every glycosylation site), so gating on it silently dropped ~23% of
+        # listed sites. A position named in sites.csv IS the target residue.
+        if _sites is not None:
+            _k = (_pdb_stem_id(pdb_name), str(residue.res_name).strip().upper(),
+                  str(residue.chain_id).strip(), str(residue.resseq).strip())
+            if _k not in _sites:
+                continue
+        elif not residue.is_amino_acid:
             continue
 
         counters["total_aa"] += 1
 
+        # _latent_optional_hook -- NCAA_PDB.lmdb is latent-free (verified: no latent /
+        # latent_128 / latent_20 field in any record), so the original build used an
+        # adapted copy of this script that did not require ProteinMPNN latents. That copy
+        # was never saved. Setting UAAG2_LATENTS_OPTIONAL=1 reproduces it: a missing latent
+        # is counted but no longer drops the residue. Default behaviour is unchanged.
         latent_128 = latent_store_128.get_latent(pdb_name, residue)
         latent_20 = latent_store_20.get_latent(pdb_name, residue)
+        _lat_opt = os.environ.get("UAAG2_LATENTS_OPTIONAL", "") == "1"
         if latent_128 is None:
             counters["missing_latent_128"] += 1
-            continue
+            if not _lat_opt:
+                continue
         if latent_20 is None:
             counters["missing_latent_20"] += 1
-            continue
+            if not _lat_opt:
+                continue
 
         ligand_atoms, ligand_bonds = get_ligand_atoms_and_bonds(
             residue, atom_features, bond_features
@@ -714,7 +800,11 @@ def process_pdb_to_writer(
             residues, residue, atom_features, bond_features, radius=pocket_radius
         )
 
-        compound_id = f"{os.path.splitext(pdb_name)[0]}_{residue.identity}"
+        if _sites is not None:
+            compound_id = (f"{_pdb_stem_id(pdb_name)}_{residue.chain_id}"
+                           f"{residue.resseq}_{residue.res_name}")
+        else:
+            compound_id = f"{os.path.splitext(pdb_name)[0]}_{residue.identity}"
         graph = dictionary_to_data(
             ligand_atoms=ligand_atoms,
             ligand_bonds=ligand_bonds,

@@ -67,6 +67,7 @@ def _build_hparams(args, save_dir_override=None):
     saved["num_samples"] = args.num_samples
     saved["batch_size"] = args.batch_size
     saved["virtual_node_size"] = args.virtual_node_size
+    saved["exact_node_count"] = bool(getattr(args, "exact_node_count", False))
     saved["num_workers"] = args.num_workers
     saved["data_info_path"] = args.data_info_path
     saved["every_k_step"] = args.every_k_step
@@ -82,6 +83,10 @@ def _build_hparams(args, save_dir_override=None):
     saved["cfg_scale"] = getattr(args, "cfg_scale", 1.0)
     saved["force_condition"] = getattr(args, "force_condition", "")
     saved["force_condition_table"] = getattr(args, "force_condition_table", "")
+
+    if getattr(args, "cond_table", None) is not None:
+        saved["cond_table"] = args.cond_table
+        print("[eval] cond_table overridden -> " + repr(args.cond_table))
 
     if getattr(args, "no_condition", False):
         saved["cond_table"] = ""
@@ -260,12 +265,19 @@ if __name__ == "__main__":
     parser.add_argument("--id", required=True, type=str)
     parser.add_argument("--benchmark-path", required=True, type=str)
     parser.add_argument("--data_info_path", default="/flash/project_465002574/UAAG2_main/data/statistic.pkl", type=str)
+    parser.add_argument("--cond-table", dest="cond_table", default=None, type=str,
+                        help="override the condition-table path stored in the checkpoint; "
+                             "hparams carry an absolute path from the training machine")
     parser.add_argument("-s", "--save-dir", default=DEFAULT_SAVE_DIR, type=str)
 
     # Sampling
     parser.add_argument("--num-samples", default=100, type=int)
     parser.add_argument("--batch-size", default=8, type=int)
     parser.add_argument("--virtual_node_size", default=15, type=int)
+    parser.add_argument("--exact-node-count", dest="exact_node_count",
+                        default=False, action="store_true",
+                        help="use exactly --virtual_node_size nodes instead of drawing "
+                             "U(1, virtual_node_size); set it to the requested residue size")
     parser.add_argument("--split_index", default=0, type=int)
     parser.add_argument("--total_partition", default=10, type=int)
     parser.add_argument("--num-workers", default=4, type=int)

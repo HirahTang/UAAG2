@@ -523,6 +523,9 @@ if __name__ == "__main__":
     # ---- Context ----
     parser.add_argument("--context-mapping",           default=False, action="store_true")
     parser.add_argument("--num-context-features",      default=0,     type=int)
+    parser.add_argument("--all-atom-generation", default=False, action="store_true",
+                        help="zero is_backbone so every atom is generated, matching the "
+                             "NCAA_indep convention; removes the CATH backbone context")
     parser.add_argument("--adaln-context", default=False, action="store_true",
                         help="condition through AdaptiveLayerNorm (scale+shift after the norm) "
                              "instead of adding the context to node scalars")
